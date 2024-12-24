@@ -1,0 +1,83 @@
+# Postgres deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deployment
+spec: 
+  replicas: 1
+  selector:
+    matchLabels: 
+      app: postgres
+  template:
+    metadata:
+      labels: 
+        app: postgres
+    spec:
+      containers:
+      - name: postgres 
+        image: postgres
+        env:
+        - name: POSTGRES_PASSWORD
+          value: "12345abcd;;"
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - mountPath: /var/lib/postgresql/data
+          name: postgres-storage
+      volumes: 
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+
+
+---
+# Postgres ConfigMap
+apiVersion: v1
+kind: ConfigMap 
+metadata:
+  name: postgres-config
+data:
+  postgres.conf: |
+    listen_addresses = '*'
+
+---
+# Postgres service  
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+spec:
+  type: NodePort 
+  ports:
+  - port: 5432
+    targetPort: 5432
+    nodePort: 30432
+  selector:
+    app: postgres
+
+---
+# Postgres Persistent Volume Claim
+apiVersion: v1 
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce  
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+# Optional - Network policy to restrict access to Postgres
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-postgres-access
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  ingress:
+  - from:
+    - podSelector: {}
