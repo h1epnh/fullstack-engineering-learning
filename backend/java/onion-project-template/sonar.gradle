@@ -1,0 +1,11 @@
+apply plugin: "org.sonarqube"
+
+sonar {
+  properties {
+    // Insert other SonarQube properties here
+    // When we have UT, this need to be enabled
+    // property 'sonar.qualitygate.wait', 'true'
+    property "sonar.host.url", "https://sonarqube.nonprod.galaxyfinx.in"
+    // property "sonar.login", "my_sonar_token"
+  }
+}

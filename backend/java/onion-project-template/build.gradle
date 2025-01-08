@@ -1,0 +1,112 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath("org.springframework.boot:spring-boot-gradle-plugin:3.4.1")
+        classpath "io.spring.gradle:dependency-management-plugin:1.1.7"
+        classpath("com.diffplug.spotless:spotless-plugin-gradle:7.0.0")
+    }
+}
+
+plugins {
+    id 'java'
+    id 'jacoco'
+    id "org.sonarqube" version "4.0.0.2929"
+}
+
+allprojects {
+    group = 'com.finx.email_processor'
+    version = '1.0.0-SNAPSHOT'
+    allprojects {
+        afterEvaluate {
+            def spotless = tasks.findByName('spotlessApply')
+            if (spotless) {
+                tasks.withType(JavaCompile) {
+                    finalizedBy(spotless)
+                }
+            }
+        }
+    }
+}
+
+subprojects {
+    apply plugin: 'idea'
+    apply plugin: 'java'
+    apply plugin: 'org.springframework.boot'
+    apply plugin: 'io.spring.dependency-management'
+    apply plugin: 'com.diffplug.spotless'
+    apply plugin: 'org.sonarqube'
+
+    sonar {
+        properties {
+            property "sonar.sources", "src/main"
+        }
+    }
+
+    sourceCompatibility = JavaVersion.VERSION_21
+
+    project.allprojects.iterator().forEachRemaining {
+        pj -> {
+            println("Apply spotless configuration for project: " + pj.name)
+            spotless {
+                java {
+                    target(fileTree(pj.projectDir) {
+                        include '**/*.java'
+                        exclude 'build/generated/**/*.*'
+                    })
+                    importOrder()
+                    removeUnusedImports()
+                    googleJavaFormat('1.17.0')
+                    indentWithTabs(2)
+                    indentWithSpaces(4)
+                    endWithNewline()
+                }
+            }
+            tasks.named("spotlessJava").configure { dependsOn("processResources") }
+            tasks.named("compileJava").configure { dependsOn("spotlessJava") }
+
+        }
+    }
+
+    repositories {
+        mavenLocal()
+        maven {
+            url "https://nexus.nonprod.galaxyfinx.in/repository/gradle-artifacts"
+        }
+        mavenCentral()
+    }
+
+    ext {
+        set('springCloudVersion', "2022.0.0")
+    }
+
+    dependencyManagement {
+        imports {
+            mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+        }
+    }
+
+    bootJar { mainClass = 'NONE' }
+
+    configurations {
+        all {
+            exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+            exclude group: 'ch.qos.logback', module: 'logback-classic'
+            exclude group: 'org.apache.logging.log4j', module: 'log4j-to-slf4j'
+        }
+    }
+
+    dependencies {
+        implementation 'org.springframework.boot:spring-boot-starter-webflux'
+        implementation 'org.springframework.boot:spring-boot-starter-log4j2'
+
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+        testImplementation 'io.projectreactor:reactor-test'
+
+        compileOnly 'org.projectlombok:lombok'
+        annotationProcessor 'org.projectlombok:lombok'
+    }
+}
+
+apply from: "$project.rootDir/sonar.gradle"

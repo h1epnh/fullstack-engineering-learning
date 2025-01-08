@@ -1,0 +1,5 @@
+#spring.profiles.active=local
+spring:
+  r2dbc:
+    #    driverClass: org.postgresql.Driver
+    url: r2dbc:tc:postgresql:14-alpine///test

@@ -1,0 +1,7 @@
+springdoc:
+  api-docs:
+    enabled: false
+
+logging:
+  level:
+    com.finx.payment_execution: INFO

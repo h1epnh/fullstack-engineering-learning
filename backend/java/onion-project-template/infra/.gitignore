@@ -1,0 +1,3 @@
+### Default log directory when start project on local pc.
+logs/**
+*.log

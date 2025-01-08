@@ -1,0 +1,99 @@
+#spring.profiles.active=local
+spring:
+  application:
+    name: payment-execution-service
+  profiles:
+    active:
+      - prod
+  webflux:
+    base-path: /api/payment-execution
+
+  r2dbc:
+    url: r2dbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${DATABASE_NAME:paymentexecution}
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:postgres}
+
+  liquibase:
+    enabled: true
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${DATABASE_NAME:paymentexecution}
+    user: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:postgres}
+    changeLog: "classpath:db/changelog/changelog-main.xml"
+
+server:
+  port: ${APP_PORT:8080}
+
+springdoc:
+  swagger-ui:
+    path: /docs/swagger-ui
+  api-docs:
+    path: /docs/api-docs
+
+redis:
+  paymentExecution:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    ioThreadPoolSize: 4
+    connectionTimeout: 10000
+    readTimeout: 1500
+    password: ${REDIS_PASSWORD:}
+    sslEnabled: ${REDIS_SSL:false}
+
+idempotentFilter:
+  #  default PUT POST DELETE
+  redis:
+    hostname: ${REDIS_HOST:-localhost}
+    port: ${REDIS_PORT:-6379}
+    password: ${REDIS_PASSWORD:-}
+    sslEnabled: ${REDIS_SSL:-false}
+#    default 1h
+#    ttlInSecond: 3600
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+      path-mapping:
+        prometheus: /prometheus/metrics
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+
+kafka:
+  securityProtocol: ${THOUGHT_MACHINE_KAFKA_SECURITY_PROTOCOL:SSL}
+  sslProtocol: ${THOUGHT_MACHINE_KAFKA_SSL_PROTOCOL:TLSv1.2}
+  sslEndpointIdentificationAlgorithmConfig: ${THOUGHT_MACHINE_SSL_ENDPOINT_ALGORITHM:https}
+  groupId: payment-execution-service
+  thoughtMachine:
+    server: ${THOUGHT_MACHINE_KAFKA_SERVERS:localhost:9092}
+    groupId: ${KAFKA_TM_CONSUMER_GROUP_ID:card-payment-execution-consumer-local-test}
+    producers:
+      lowPriorityTopic: ${LOW_PRIORITY_TM_PRODUCER_TOPIC:vault.core.postings.requests.low_priority.v1}
+      highPriorityTopic: ${HIGH_PRIORITY_TM_PRODUCER_TOPIC:vault.core.postings.requests.v1}
+    consumers:
+      highPriorityTopic: ${HIGH_PRIORITY_TM_CONSUMER_TOPIC:integration.postings_api.card_transactions_high.response}
+#      deductFeeHighPriorityTopic: ${DEDUCT_FEE_HIGH_PRIORITY_TM_CONSUMER_TOPIC:integration.postings_api.sample_high.response}
+      interbankTransferHighPriorityTopic: ${HIGH_PRIORITY_INTERBANK_TRANSFER_POSTING_TOPIC:integration.postings_api.interbank_transfer_high.response}
+      intrabankTransferTopic: ${INTRABANK_TRANSFER_POSTING_TOPIC:integration.postings_api.internal_transfer.response}
+  settlementService:
+    server: ${KAFKA_PLAINTEXT_SERVERS:localhost:9092}
+    groupId: ${KAFKA_TM_CONSUMER_GROUP_ID:card-payment-execution-consumer-local}
+    consumers:
+      cardSettlementTopic: ${SETTLEMENT_TRANSACTION_EXECUTION_TOPIC:sit.settlement_service.execution_event}
+    producers:
+      cardSettlementDlqTopic: ${SETTLEMENT_TRANSACTION_EXECUTION_DLQ_TOPIC:sit.settlement_service.execution_event.dlq}
+
+cbsSyncAsyncConfigHighPriority:
+  preserveInterval: 10000 #ms
+  pollingInterval: 150 #ms
+  timeout: 4000 #ms
+cbsSyncAsyncConfigLowPriority:
+  preserveInterval: 10000 #ms
+  pollingInterval: 150 #ms
+  timeout: 4000 #ms
+
+local:
+  enabled: ${LOCAL_ENABLED:false}

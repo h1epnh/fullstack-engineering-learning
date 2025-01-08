@@ -1,0 +1,69 @@
+{
+  "groups": [
+    {
+      "name": "kafka",
+      "type": "com.finx.payment_execution.api.configuration.PaymentExecutionKafkaProperties",
+      "sourceType": "com.finx.payment_execution.api.configuration.PaymentExecutionKafkaProperties"
+    },
+    {
+      "name": "kafka.settlement-service",
+      "type": "com.finx.payment_execution.api.configuration.PaymentExecutionKafkaProperties$KafkaProperty",
+      "sourceType": "com.finx.payment_execution.api.configuration.PaymentExecutionKafkaProperties",
+      "sourceMethod": "public com.finx.payment_execution.api.configuration.PaymentExecutionKafkaProperties.KafkaProperty getSettlementService() "
+    },
+    {
+      "name": "kafka.thought-machine",
+      "type": "com.finx.payment_execution.api.configuration.PaymentExecutionKafkaProperties$KafkaProperty",
+      "sourceType": "com.finx.payment_execution.api.configuration.PaymentExecutionKafkaProperties",
+      "sourceMethod": "public com.finx.payment_execution.api.configuration.PaymentExecutionKafkaProperties.KafkaProperty getThoughtMachine() "
+    },
+    {
+      "name": "redis",
+      "type": "com.finx.payment_execution.api.configuration.PaymentExecutionRedisProperties",
+      "sourceType": "com.finx.payment_execution.api.configuration.PaymentExecutionRedisProperties"
+    }
+  ],
+  "properties": [
+    {
+      "name": "kafka.security-protocol",
+      "type": "java.lang.String",
+      "sourceType": "com.finx.payment_execution.api.configuration.PaymentExecutionKafkaProperties"
+    },
+    {
+      "name": "kafka.settlement-service.group-id",
+      "type": "java.lang.String",
+      "sourceType": "com.finx.payment_execution.api.configuration.PaymentExecutionKafkaProperties$KafkaProperty"
+    },
+    {
+      "name": "kafka.settlement-service.server",
+      "type": "java.lang.String",
+      "sourceType": "com.finx.payment_execution.api.configuration.PaymentExecutionKafkaProperties$KafkaProperty"
+    },
+    {
+      "name": "kafka.ssl-endpoint-identification-algorithm-config",
+      "type": "java.lang.String",
+      "sourceType": "com.finx.payment_execution.api.configuration.PaymentExecutionKafkaProperties"
+    },
+    {
+      "name": "kafka.ssl-protocol",
+      "type": "java.lang.String",
+      "sourceType": "com.finx.payment_execution.api.configuration.PaymentExecutionKafkaProperties"
+    },
+    {
+      "name": "kafka.thought-machine.group-id",
+      "type": "java.lang.String",
+      "sourceType": "com.finx.payment_execution.api.configuration.PaymentExecutionKafkaProperties$KafkaProperty"
+    },
+    {
+      "name": "kafka.thought-machine.server",
+      "type": "java.lang.String",
+      "sourceType": "com.finx.payment_execution.api.configuration.PaymentExecutionKafkaProperties$KafkaProperty"
+    },
+    {
+      "name": "redis.payment-execution",
+      "type": "com.finx.payment_execution.common.redis.config.RedisProperties",
+      "sourceType": "com.finx.payment_execution.api.configuration.PaymentExecutionRedisProperties"
+    }
+  ],
+  "hints": []
+}

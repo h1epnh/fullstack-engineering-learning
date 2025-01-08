@@ -1,0 +1,8 @@
+dependencies {
+    implementation project(':common')
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    implementation libs.cbsPojo
+    implementation libs.springWebUtil
+}

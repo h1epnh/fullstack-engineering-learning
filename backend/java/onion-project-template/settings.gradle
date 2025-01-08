@@ -1,0 +1,14 @@
+rootProject.name = 'email-processor-service'
+
+include 'common'
+include 'api'
+include 'core'
+include 'infra'
+
+dependencyResolutionManagement {
+    versionCatalogs {
+        libs {
+            from(files("./libs.versions.toml"))
+        }
+    }
+}

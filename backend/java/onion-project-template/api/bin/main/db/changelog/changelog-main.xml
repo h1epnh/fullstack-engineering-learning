@@ -1,0 +1,243 @@
+<databaseChangeLog
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.7.xsd"
+        xmlns:liquibasePercona="http://www.liquibase.org/xml/ns/dbchangelog-ext/liquibase-percona">
+
+    <changeSet id="country_master" author="XI4074-puneetswarup">
+        <sql>
+            CREATE TABLE IF NOT EXISTS country_master (
+            id bigserial NOT NULL PRIMARY KEY,
+            country_name varchar(70) NOT NULL,
+            iso_alpha_2_code varchar(2) NOT NULL,
+            iso_alpha_3_code varchar(3) NOT NULL,
+            numeric_code integer,
+            created_at timestamp without time zone NOT NULL DEFAULT now()
+            );
+        </sql>
+    </changeSet>
+
+    <changeSet id="load_country_master" author="XI4074-puneetswarup">
+        <loadData file="ISO_3166_country_codes.csv" tableName="country_master"/>
+    </changeSet>
+    <changeSet runInTransaction="false" id="PAY-130-Settlement-Account-Mapper-Table" author="XIC1141-Siddhant">
+        <sql>
+
+            CREATE TYPE transaction_mode_type AS ENUM('ATM', 'POS', 'E-COMM');
+
+            CREATE TABLE IF NOT EXISTS settlement_account_mapper
+            (
+            id bigserial NOT NULL PRIMARY KEY,
+            transaction_source_code smallint NOT NULL UNIQUE,
+            description varchar(50) NOT NULL,
+            transaction_mode transaction_mode_type,
+            account_number varchar(20) NOT NULL,
+            aml_check boolean NOT NULL DEFAULT TRUE,
+            callback_url varchar(100),
+            created_at timestamp without time zone NULL DEFAULT now(),
+            last_updated_at timestamp without time zone NULL
+            );
+            INSERT INTO settlement_account_mapper (transaction_source_code, description, transaction_mode,
+            account_number, aml_check)
+            VALUES (1, 'collection', 'POS', '245990053', TRUE);
+
+            INSERT INTO settlement_account_mapper (transaction_source_code, description, transaction_mode,
+            account_number, aml_check)
+            VALUES (2, 'refund', 'POS', '245990053', TRUE);
+
+            INSERT INTO settlement_account_mapper (transaction_source_code, description, transaction_mode,
+            account_number, aml_check)
+            VALUES (3, 'collection', 'ATM', '245990054', TRUE);
+
+            INSERT INTO settlement_account_mapper (transaction_source_code, description, transaction_mode,
+            account_number, aml_check)
+            VALUES (4, 'refund', 'ATM', '245990054', TRUE);
+
+            INSERT INTO settlement_account_mapper (transaction_source_code, description, transaction_mode,
+            account_number, aml_check)
+            VALUES (5, 'Online', 'E-COMM', '245990053', TRUE);
+
+
+        </sql>
+    </changeSet>
+
+    <changeSet runInTransaction="false" id="PAY-130-Alter-Settlement-Account-Mapper-Table" author="XIC1141-Siddhant">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="settlement_account_mapper"/>
+        </preConditions>
+        <sql>
+            ALTER TABLE settlement_account_mapper DROP COLUMN callback_url;
+        </sql>
+    </changeSet>
+    <changeSet id="PAY-145-Disabling-AML-Check" author="XIC1141-Siddhant">
+        <sql>
+            UPDATE settlement_account_mapper SET aml_check=FALSE;
+        </sql>
+    </changeSet>
+    <changeSet id="PAY-306-Enabling-AML-Check" author="XIC1141-Siddhant">
+        <sql>
+            UPDATE settlement_account_mapper SET aml_check=TRUE;
+        </sql>
+    </changeSet>
+    <changeSet runInTransaction="false" id="PAY-292" author="XI4082-narendra">
+        <sql>
+
+            alter table settlement_account_mapper
+            add column transaction_type_code smallint;
+
+            alter table settlement_account_mapper
+            drop constraint settlement_account_mapper_transaction_source_code_key;
+
+            alter table settlement_account_mapper
+            add constraint settlement_account_mapper_source_type_code_key unique(transaction_source_code,
+            transaction_type_code);
+
+            update settlement_account_mapper set transaction_type_code = 3, description = 'purchase' where
+            transaction_type_code is null;
+
+            INSERT INTO settlement_account_mapper (transaction_source_code, transaction_type_code, description,
+            transaction_mode, account_number, aml_check)
+            VALUES (1, 4, 'refund', 'POS', '245990053', FALSE);
+
+            INSERT INTO settlement_account_mapper (transaction_source_code, transaction_type_code, description,
+            transaction_mode, account_number, aml_check)
+            VALUES (2, 4, 'refund', 'POS', '245990053', FALSE);
+
+            INSERT INTO settlement_account_mapper (transaction_source_code, transaction_type_code, description,
+            transaction_mode, account_number, aml_check)
+            VALUES (3, 4, 'refund', 'ATM', '245990054', FALSE);
+
+            INSERT INTO settlement_account_mapper (transaction_source_code, transaction_type_code, description,
+            transaction_mode, account_number, aml_check)
+            VALUES (4, 4, 'refund', 'ATM', '245990054', FALSE);
+
+            INSERT INTO settlement_account_mapper (transaction_source_code, transaction_type_code, description,
+            transaction_mode, account_number, aml_check)
+            VALUES (5, 4, 'refund', 'E-COMM', '245990053', FALSE);
+
+            INSERT INTO settlement_account_mapper (transaction_source_code, transaction_type_code, description,
+            transaction_mode, account_number, aml_check)
+            VALUES (1, 13, 'refund', 'POS', '245990053', FALSE);
+
+            INSERT INTO settlement_account_mapper (transaction_source_code, transaction_type_code, description,
+            transaction_mode, account_number, aml_check)
+            VALUES (2, 13, 'refund', 'POS', '245990053', FALSE);
+
+            INSERT INTO settlement_account_mapper (transaction_source_code, transaction_type_code, description,
+            transaction_mode, account_number, aml_check)
+            VALUES (3, 13, 'refund', 'ATM', '245990054', FALSE);
+
+            INSERT INTO settlement_account_mapper (transaction_source_code, transaction_type_code, description,
+            transaction_mode, account_number, aml_check)
+            VALUES (4, 13, 'refund', 'ATM', '245990054', FALSE);
+
+            INSERT INTO settlement_account_mapper (transaction_source_code, transaction_type_code, description,
+            transaction_mode, account_number, aml_check)
+            VALUES (5, 13, 'refund', 'E-COMM', '245990053', FALSE);
+
+            INSERT INTO settlement_account_mapper (transaction_source_code, transaction_type_code, description,
+            transaction_mode, account_number, aml_check)
+            VALUES (5, 5, 'account funding', 'E-COMM', '245990031', FALSE);
+
+        </sql>
+    </changeSet>
+    <changeSet id="PAY-239-Enabling-AML-Check" author="XI4082-narendra">
+        <sql>
+            UPDATE settlement_account_mapper SET aml_check=TRUE;
+        </sql>
+    </changeSet>
+
+    <changeSet id="ATM" author="Thanh Nham">
+        <sql>
+            insert into settlement_account_mapper (transaction_source_code, description, transaction_mode, account_number,
+                                                   aml_check, created_at, last_updated_at, transaction_type_code)
+            values (3, 'withdraw', 'ATM', '245990054', true, now(), null, 6);
+
+            insert into settlement_account_mapper (transaction_source_code, description, transaction_mode, account_number,
+                                                   aml_check, created_at, last_updated_at, transaction_type_code)
+            values (4, 'withdraw', 'ATM', '245990054', true, now(), null, 6);
+        </sql>
+    </changeSet>
+
+    <changeSet id="VWCP-46-Disable-Check-AML-For-Card-payment" author="Quan-Nguyen-FinX">
+        <sql>
+            UPDATE settlement_account_mapper
+            SET aml_check = false
+            WHERE transaction_source_code = 5 AND transaction_type_code = 3;
+
+            UPDATE settlement_account_mapper
+            SET aml_check = false
+            WHERE transaction_source_code = 5 AND transaction_type_code = 4;
+        </sql>
+    </changeSet>
+
+    <changeSet id="VWCP-146-add-btc-code" author="Quan-Nguyen-FinX">
+        <sql>
+            CREATE TABLE IF NOT EXISTS internal_account_mapping
+            (
+                id bigserial NOT NULL PRIMARY KEY,
+                domain varchar(4) NOT NULL,
+                family varchar(4) NOT NULL,
+                sub_family varchar(4) NOT NULL,
+                description varchar(50) NOT NULL,
+                channel varchar(50) NOT NULL,
+                account_number varchar(20) NOT NULL,
+                client_id varchar(100) NOT NULL,
+                aml_check boolean NOT NULL DEFAULT TRUE,
+                created_at timestamp without time zone NULL DEFAULT now(),
+                last_updated_at timestamp without time zone null default now()
+            );
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (1, 'PMNT', 'CCRD', 'ECOM', 'DOMESTIC_ECOM_CARD_PAYMENT', 'ECOM', '245990053.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (2, 'PMNT', 'IRCT', 'BOOK', 'INTRA_TRANSFER', 'INTRA', '','internal_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (3, 'PMNT', 'IRCT', 'DMCT', 'VIKKI-TO-NAPAS 24/7', 'IBFT', '245990031.00','interbank_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (4, 'PMNT', 'IRCT', 'HDBA', 'VIKKI-TO-HDBANK', 'IBFT', '251990004.00','interbank_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (5, 'PMNT', 'IRCT', 'OTHR', 'VIKKI-TO-NAPAS QR', 'IBFT', '245990013.00','interbank_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (6, 'PMNT', 'RRCT', 'RHDB', 'REVERSAL: VIKKI-TO-HDBANK', 'IBFT', '251990004.00','interbank_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (7, 'PMNT', 'RRCT', 'RDCT', 'REVERSAL: VIKKI-TO-NAPAS 24/7', 'IBFT', '245990031.00','interbank_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (8, 'PMNT', 'RRCT', 'RQRT', 'REVERSAL: VIKKI-TO-NAPAS QR', 'IBFT', '245990013.00','interbank_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (9, 'PMNT', 'IRCT', 'RRTN', 'REVERSAL: VIKKI-TO-VIKKI', 'INTRA', '','interbank_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (10, 'PMNT', 'RRCT', 'HDBA', 'HDBANK TO VIKKI CURRENT ACC', 'INTRA', '251990004.00','interbank_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (11, 'PMNT', 'RRCT', 'DMCT', 'NAPAS TO VIKKI CURRENT ACC', 'INTRA', '135920096.00','interbank_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (12, 'PMNT', 'CCRD', 'XBCP', 'FOREIGN ONLINE CARD PAYMENT', 'ECOM', '245990053.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (13, 'PMNT', 'CCRD', 'FEES', 'FOREIGN ONLINE CARD PAYMENT FEE', 'ECOM', '371109017.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (14, 'PMNT', 'CCRD', 'TAXE', 'FOREIGN ONLINE CARD PAYMENT VAT', 'ECOM', '245310000.00','card_transactions', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="VWCP-146-add-more-btc-code" author="Quan-Nguyen-FinX">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (15, 'PMNT', 'RCDT', 'RRTN', 'REFUND (DOMESTIC/FOREIGN)', 'ECOM', '245990053.01','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (16, 'PMNT', 'CCRD', 'MARK', 'FOREIGN ONLINE CARD MARKUP AMOUNT', 'ECOM', '245990053.00','card_transactions', FALSE);
+        </sql>
+    </changeSet>
+</databaseChangeLog>

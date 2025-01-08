@@ -1,0 +1,20 @@
+spring:
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        '[spring.json.add.type.headers]': false
+    consumer:
+      value-deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
+      properties:
+        '[allow.auto.create.topics]': ${KAFKA_AUTO_CREATE_TOPICS:false}
+
+kafka:
+  consumer:
+    properties:
+      '[bootstrap.servers]': ${KAFKA_PLAINTEXT_SERVERS}
+      '[group.id]': ${KAFKA_TM_CONSUMER_GROUP_ID}
+    manual-posting:
+      topics: ${KAFKA_MANUAL_POSTING_TOPICS}
+

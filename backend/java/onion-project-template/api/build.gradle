@@ -1,0 +1,62 @@
+plugins {
+    id 'application'
+    id "com.google.cloud.tools.jib" version "3.3.0"
+}
+
+apply plugin: 'com.google.cloud.tools.jib'
+
+dependencies {
+    implementation project(':common')
+    implementation project(':core')
+    implementation project(':infra')
+
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-data-r2dbc'
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.kafka:spring-kafka'
+
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    implementation 'org.postgresql:r2dbc-postgresql'
+    implementation 'org.liquibase:liquibase-core'
+    implementation 'org.postgresql:postgresql'
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+
+    //Tracing
+    implementation 'io.micrometer:micrometer-tracing'
+    implementation 'io.micrometer:micrometer-tracing-bridge-otel'
+
+    implementation(libs.springWebUtil) {
+        exclude group: 'org.springframework.security'
+    }
+
+    implementation libs.cbsPojo
+    implementation libs.reactorKafka
+    implementation libs.mapstruct
+    implementation libs.springDoc
+    annotationProcessor libs.mapstructProcessor
+}
+
+application {
+    mainClass = 'com.finx.email_processor.api.EmailProcessorApplication'
+}
+
+bootJar {
+    mainClass = 'com.finx.email_processor.api.EmailProcessorApplication'
+}
+
+jib {
+    from.image = '340396142553.dkr.ecr.ap-southeast-1.amazonaws.com/distroless/java17-debian11:1.0'
+    to.image = 'com.finx.email_processor'
+    container.mainClass = 'com.finx.email_processor.api.EmailProcessorApplication'
+    // container.jvmFlags = ['-Dspring.profiles.active=staging']
+    container.creationTime = "USE_CURRENT_TIMESTAMP"
+}
+
+test {
+    useJUnitPlatform()
+}
