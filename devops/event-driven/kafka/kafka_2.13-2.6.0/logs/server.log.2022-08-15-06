@@ -1,0 +1,3 @@
+[2022-08-15 06:00:03,579] INFO Expiring session 0x10008dc13470006, timeout of 18000ms exceeded (org.apache.zookeeper.server.ZooKeeperServer)
+[2022-08-15 06:00:04,542] WARN Unable to read additional data from client sessionid 0x10008dc13470006, likely client has closed socket (org.apache.zookeeper.server.NIOServerCnxn)
+[2022-08-15 06:00:06,657] INFO Invalid session 0x10008dc13470006 for client /0:0:0:0:0:0:0:1:62287, probably expired (org.apache.zookeeper.server.ZooKeeperServer)

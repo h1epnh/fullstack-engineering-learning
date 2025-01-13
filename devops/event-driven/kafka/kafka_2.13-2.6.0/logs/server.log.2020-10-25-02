@@ -1,0 +1,2 @@
+[2020-10-25 05:30:03,410] INFO Expiring session 0x100595d79520002, timeout of 18000ms exceeded (org.apache.zookeeper.server.ZooKeeperServer)
+[2020-10-25 05:30:05,777] INFO Invalid session 0x100595d79520002 for client /127.0.0.1:57667, probably expired (org.apache.zookeeper.server.ZooKeeperServer)

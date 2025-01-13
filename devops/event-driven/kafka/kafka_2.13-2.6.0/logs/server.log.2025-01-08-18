@@ -1,0 +1,3 @@
+[2025-01-08 18:16:15,456] INFO [GroupCoordinator 0]: Member consumer-console-consumer-42582-1-fbd98bf0-999e-4baf-8301-edaad29df619 in group console-consumer-42582 has failed, removing it from the group (kafka.coordinator.group.GroupCoordinator)
+[2025-01-08 18:16:15,459] INFO [GroupCoordinator 0]: Preparing to rebalance group console-consumer-42582 in state PreparingRebalance with old generation 1 (__consumer_offsets-12) (reason: removing member consumer-console-consumer-42582-1-fbd98bf0-999e-4baf-8301-edaad29df619 on heartbeat expiration) (kafka.coordinator.group.GroupCoordinator)
+[2025-01-08 18:16:15,460] INFO [GroupCoordinator 0]: Group console-consumer-42582 with generation 2 is now empty (__consumer_offsets-12) (kafka.coordinator.group.GroupCoordinator)
