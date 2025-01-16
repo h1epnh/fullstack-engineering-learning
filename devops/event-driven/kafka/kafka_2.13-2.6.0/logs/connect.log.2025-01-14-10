@@ -1,0 +1,1735 @@
+[2025-01-14 10:37:32,515] INFO WorkerInfo values: 
+	jvm.args = -Xms256M, -Xmx2G, -XX:+UseG1GC, -XX:MaxGCPauseMillis=20, -XX:InitiatingHeapOccupancyPercent=35, -XX:+ExplicitGCInvokesConcurrent, -XX:MaxInlineLevel=15, -Djava.awt.headless=true, -Dcom.sun.management.jmxremote, -Dcom.sun.management.jmxremote.authenticate=false, -Dcom.sun.management.jmxremote.ssl=false, -Dkafka.logs.dir=/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../logs, -Dlog4j.configuration=file:bin/../config/connect-log4j.properties
+	jvm.spec = Amazon.com Inc., OpenJDK 64-Bit Server VM, 21.0.5, 21.0.5+11-LTS
+	jvm.classpath = /Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/activation-1.1.1.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/aopalliance-repackaged-2.5.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/argparse4j-0.7.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/audience-annotations-0.5.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/commons-cli-1.4.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/commons-lang3-3.8.1.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/connect-api-2.6.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/connect-basic-auth-extension-2.6.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/connect-file-2.6.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/connect-json-2.6.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/connect-mirror-2.6.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/connect-mirror-client-2.6.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/connect-runtime-2.6.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/connect-transforms-2.6.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/hk2-api-2.5.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/hk2-locator-2.5.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/hk2-utils-2.5.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jackson-annotations-2.10.2.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jackson-core-2.10.2.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jackson-databind-2.10.2.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jackson-dataformat-csv-2.10.2.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jackson-datatype-jdk8-2.10.2.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jackson-jaxrs-base-2.10.2.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jackson-jaxrs-json-provider-2.10.2.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jackson-module-jaxb-annotations-2.10.2.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jackson-module-paranamer-2.10.2.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jackson-module-scala_2.13-2.10.2.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jakarta.activation-api-1.2.1.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jakarta.annotation-api-1.3.4.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jakarta.inject-2.5.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jakarta.ws.rs-api-2.1.5.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jakarta.xml.bind-api-2.3.2.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/javassist-3.22.0-CR2.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/javassist-3.26.0-GA.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/javax.servlet-api-3.1.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/javax.ws.rs-api-2.1.1.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jaxb-api-2.3.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jersey-client-2.28.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jersey-common-2.28.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jersey-container-servlet-2.28.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jersey-container-servlet-core-2.28.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jersey-hk2-2.28.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jersey-media-jaxb-2.28.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jersey-server-2.28.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jetty-client-9.4.24.v20191120.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jetty-continuation-9.4.24.v20191120.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jetty-http-9.4.24.v20191120.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jetty-io-9.4.24.v20191120.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jetty-security-9.4.24.v20191120.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jetty-server-9.4.24.v20191120.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jetty-servlet-9.4.24.v20191120.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jetty-servlets-9.4.24.v20191120.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jetty-util-9.4.24.v20191120.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/jopt-simple-5.0.4.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/kafka-clients-2.6.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/kafka-log4j-appender-2.6.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/kafka-streams-2.6.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/kafka-streams-examples-2.6.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/kafka-streams-scala_2.13-2.6.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/kafka-streams-test-utils-2.6.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/kafka-tools-2.6.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/kafka_2.13-2.6.0-sources.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/kafka_2.13-2.6.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/log4j-1.2.17.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/lz4-java-1.7.1.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/maven-artifact-3.6.3.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/metrics-core-2.2.0.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/netty-buffer-4.1.50.Final.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/netty-codec-4.1.50.Final.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/netty-common-4.1.50.Final.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/netty-handler-4.1.50.Final.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/netty-resolver-4.1.50.Final.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/netty-transport-4.1.50.Final.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/netty-transport-native-epoll-4.1.50.Final.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/netty-transport-native-unix-common-4.1.50.Final.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/osgi-resource-locator-1.0.1.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/paranamer-2.8.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/plexus-utils-3.2.1.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/reflections-0.9.12.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/rocksdbjni-5.18.4.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/scala-collection-compat_2.13-2.1.6.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/scala-java8-compat_2.13-0.9.1.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/scala-library-2.13.2.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/scala-logging_2.13-3.9.2.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/scala-reflect-2.13.2.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/slf4j-api-1.7.30.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/slf4j-log4j12-1.7.30.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/snappy-java-1.1.7.3.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/validation-api-2.0.1.Final.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/zookeeper-3.5.8.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/zookeeper-jute-3.5.8.jar:/Users/admin/@Programming/GitHub/fullstack-engineering-learning/devops/event-driven/kafka/kafka_2.13-2.6.0/bin/../libs/zstd-jni-1.4.4-7.jar
+	os.spec = Mac OS X, x86_64, 13.6.6
+	os.vcpus = 4
+ (org.apache.kafka.connect.runtime.WorkerInfo:71)
+[2025-01-14 10:37:32,526] INFO Scanning for plugin classes. This might take a moment ... (org.apache.kafka.connect.cli.ConnectDistributed:90)
+[2025-01-14 10:37:35,414] INFO Registered loader: jdk.internal.loader.ClassLoaders$AppClassLoader@76ed5528 (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:269)
+[2025-01-14 10:37:35,415] INFO Added plugin 'org.apache.kafka.connect.mirror.MirrorSourceConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,415] INFO Added plugin 'org.apache.kafka.connect.file.FileStreamSinkConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,415] INFO Added plugin 'org.apache.kafka.connect.file.FileStreamSourceConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,416] INFO Added plugin 'org.apache.kafka.connect.tools.SchemaSourceConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,416] INFO Added plugin 'org.apache.kafka.connect.tools.MockSourceConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,416] INFO Added plugin 'org.apache.kafka.connect.mirror.MirrorCheckpointConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,416] INFO Added plugin 'org.apache.kafka.connect.tools.VerifiableSinkConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,417] INFO Added plugin 'org.apache.kafka.connect.tools.VerifiableSourceConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,417] INFO Added plugin 'org.apache.kafka.connect.tools.MockSinkConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,417] INFO Added plugin 'org.apache.kafka.connect.mirror.MirrorHeartbeatConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,418] INFO Added plugin 'org.apache.kafka.connect.tools.MockConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,419] INFO Added plugin 'org.apache.kafka.connect.converters.FloatConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,419] INFO Added plugin 'org.apache.kafka.connect.converters.DoubleConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,420] INFO Added plugin 'org.apache.kafka.connect.converters.ByteArrayConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,422] INFO Added plugin 'org.apache.kafka.connect.converters.LongConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,423] INFO Added plugin 'org.apache.kafka.connect.converters.IntegerConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,424] INFO Added plugin 'org.apache.kafka.connect.json.JsonConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,424] INFO Added plugin 'org.apache.kafka.connect.storage.StringConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,425] INFO Added plugin 'org.apache.kafka.connect.converters.ShortConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,427] INFO Added plugin 'org.apache.kafka.connect.storage.SimpleHeaderConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,427] INFO Added plugin 'org.apache.kafka.connect.transforms.ReplaceField$Value' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,428] INFO Added plugin 'org.apache.kafka.connect.transforms.SetSchemaMetadata$Value' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,428] INFO Added plugin 'org.apache.kafka.connect.transforms.ReplaceField$Key' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,428] INFO Added plugin 'org.apache.kafka.connect.transforms.Filter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,429] INFO Added plugin 'org.apache.kafka.connect.transforms.InsertField$Value' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,440] INFO Added plugin 'org.apache.kafka.connect.transforms.TimestampConverter$Key' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,441] INFO Added plugin 'org.apache.kafka.connect.transforms.MaskField$Value' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,444] INFO Added plugin 'org.apache.kafka.connect.transforms.TimestampRouter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,445] INFO Added plugin 'org.apache.kafka.connect.transforms.RegexRouter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,446] INFO Added plugin 'org.apache.kafka.connect.transforms.HoistField$Value' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,447] INFO Added plugin 'org.apache.kafka.connect.transforms.ValueToKey' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,448] INFO Added plugin 'org.apache.kafka.connect.transforms.MaskField$Key' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,449] INFO Added plugin 'org.apache.kafka.connect.transforms.Cast$Key' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,454] INFO Added plugin 'org.apache.kafka.connect.transforms.Cast$Value' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,455] INFO Added plugin 'org.apache.kafka.connect.runtime.PredicatedTransformation' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,455] INFO Added plugin 'org.apache.kafka.connect.transforms.ExtractField$Key' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,455] INFO Added plugin 'org.apache.kafka.connect.transforms.Flatten$Value' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,456] INFO Added plugin 'org.apache.kafka.connect.transforms.InsertField$Key' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,457] INFO Added plugin 'org.apache.kafka.connect.transforms.Flatten$Key' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,457] INFO Added plugin 'org.apache.kafka.connect.transforms.SetSchemaMetadata$Key' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,458] INFO Added plugin 'org.apache.kafka.connect.transforms.ExtractField$Value' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,459] INFO Added plugin 'org.apache.kafka.connect.transforms.TimestampConverter$Value' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,459] INFO Added plugin 'org.apache.kafka.connect.transforms.HoistField$Key' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,460] INFO Added plugin 'org.apache.kafka.connect.transforms.predicates.HasHeaderKey' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,462] INFO Added plugin 'org.apache.kafka.connect.transforms.predicates.RecordIsTombstone' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,462] INFO Added plugin 'org.apache.kafka.connect.transforms.predicates.TopicNameMatches' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,463] INFO Added plugin 'org.apache.kafka.common.config.provider.FileConfigProvider' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,464] INFO Added plugin 'org.apache.kafka.connect.rest.basic.auth.extension.BasicAuthSecurityRestExtension' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,464] INFO Added plugin 'org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,465] INFO Added plugin 'org.apache.kafka.connect.connector.policy.PrincipalConnectorClientConfigOverridePolicy' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,465] INFO Added plugin 'org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:198)
+[2025-01-14 10:37:35,478] INFO Added aliases 'FileStreamSinkConnector' and 'FileStreamSink' to plugin 'org.apache.kafka.connect.file.FileStreamSinkConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,478] INFO Added aliases 'FileStreamSourceConnector' and 'FileStreamSource' to plugin 'org.apache.kafka.connect.file.FileStreamSourceConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,479] INFO Added aliases 'MirrorCheckpointConnector' and 'MirrorCheckpoint' to plugin 'org.apache.kafka.connect.mirror.MirrorCheckpointConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,479] INFO Added aliases 'MirrorHeartbeatConnector' and 'MirrorHeartbeat' to plugin 'org.apache.kafka.connect.mirror.MirrorHeartbeatConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,480] INFO Added aliases 'MirrorSourceConnector' and 'MirrorSource' to plugin 'org.apache.kafka.connect.mirror.MirrorSourceConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,481] INFO Added aliases 'MockConnector' and 'Mock' to plugin 'org.apache.kafka.connect.tools.MockConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,482] INFO Added aliases 'MockSinkConnector' and 'MockSink' to plugin 'org.apache.kafka.connect.tools.MockSinkConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,482] INFO Added aliases 'MockSourceConnector' and 'MockSource' to plugin 'org.apache.kafka.connect.tools.MockSourceConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,483] INFO Added aliases 'SchemaSourceConnector' and 'SchemaSource' to plugin 'org.apache.kafka.connect.tools.SchemaSourceConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,483] INFO Added aliases 'VerifiableSinkConnector' and 'VerifiableSink' to plugin 'org.apache.kafka.connect.tools.VerifiableSinkConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,487] INFO Added aliases 'VerifiableSourceConnector' and 'VerifiableSource' to plugin 'org.apache.kafka.connect.tools.VerifiableSourceConnector' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,488] INFO Added aliases 'ByteArrayConverter' and 'ByteArray' to plugin 'org.apache.kafka.connect.converters.ByteArrayConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,488] INFO Added aliases 'DoubleConverter' and 'Double' to plugin 'org.apache.kafka.connect.converters.DoubleConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,489] INFO Added aliases 'FloatConverter' and 'Float' to plugin 'org.apache.kafka.connect.converters.FloatConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,489] INFO Added aliases 'IntegerConverter' and 'Integer' to plugin 'org.apache.kafka.connect.converters.IntegerConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,490] INFO Added aliases 'LongConverter' and 'Long' to plugin 'org.apache.kafka.connect.converters.LongConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,491] INFO Added aliases 'ShortConverter' and 'Short' to plugin 'org.apache.kafka.connect.converters.ShortConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,491] INFO Added aliases 'JsonConverter' and 'Json' to plugin 'org.apache.kafka.connect.json.JsonConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,495] INFO Added aliases 'StringConverter' and 'String' to plugin 'org.apache.kafka.connect.storage.StringConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,495] INFO Added aliases 'ByteArrayConverter' and 'ByteArray' to plugin 'org.apache.kafka.connect.converters.ByteArrayConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,496] INFO Added aliases 'DoubleConverter' and 'Double' to plugin 'org.apache.kafka.connect.converters.DoubleConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,498] INFO Added aliases 'FloatConverter' and 'Float' to plugin 'org.apache.kafka.connect.converters.FloatConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,499] INFO Added aliases 'IntegerConverter' and 'Integer' to plugin 'org.apache.kafka.connect.converters.IntegerConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,507] INFO Added aliases 'LongConverter' and 'Long' to plugin 'org.apache.kafka.connect.converters.LongConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,507] INFO Added aliases 'ShortConverter' and 'Short' to plugin 'org.apache.kafka.connect.converters.ShortConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,507] INFO Added aliases 'JsonConverter' and 'Json' to plugin 'org.apache.kafka.connect.json.JsonConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,508] INFO Added alias 'SimpleHeaderConverter' to plugin 'org.apache.kafka.connect.storage.SimpleHeaderConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:427)
+[2025-01-14 10:37:35,508] INFO Added aliases 'StringConverter' and 'String' to plugin 'org.apache.kafka.connect.storage.StringConverter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,508] INFO Added aliases 'PredicatedTransformation' and 'Predicated' to plugin 'org.apache.kafka.connect.runtime.PredicatedTransformation' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,511] INFO Added alias 'Filter' to plugin 'org.apache.kafka.connect.transforms.Filter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:427)
+[2025-01-14 10:37:35,513] INFO Added alias 'RegexRouter' to plugin 'org.apache.kafka.connect.transforms.RegexRouter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:427)
+[2025-01-14 10:37:35,514] INFO Added alias 'TimestampRouter' to plugin 'org.apache.kafka.connect.transforms.TimestampRouter' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:427)
+[2025-01-14 10:37:35,514] INFO Added alias 'ValueToKey' to plugin 'org.apache.kafka.connect.transforms.ValueToKey' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:427)
+[2025-01-14 10:37:35,515] INFO Added alias 'HasHeaderKey' to plugin 'org.apache.kafka.connect.transforms.predicates.HasHeaderKey' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:427)
+[2025-01-14 10:37:35,522] INFO Added alias 'RecordIsTombstone' to plugin 'org.apache.kafka.connect.transforms.predicates.RecordIsTombstone' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:427)
+[2025-01-14 10:37:35,523] INFO Added alias 'TopicNameMatches' to plugin 'org.apache.kafka.connect.transforms.predicates.TopicNameMatches' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:427)
+[2025-01-14 10:37:35,524] INFO Added alias 'BasicAuthSecurityRestExtension' to plugin 'org.apache.kafka.connect.rest.basic.auth.extension.BasicAuthSecurityRestExtension' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:427)
+[2025-01-14 10:37:35,524] INFO Added aliases 'AllConnectorClientConfigOverridePolicy' and 'All' to plugin 'org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,524] INFO Added aliases 'NoneConnectorClientConfigOverridePolicy' and 'None' to plugin 'org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,527] INFO Added aliases 'PrincipalConnectorClientConfigOverridePolicy' and 'Principal' to plugin 'org.apache.kafka.connect.connector.policy.PrincipalConnectorClientConfigOverridePolicy' (org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader:430)
+[2025-01-14 10:37:35,631] INFO DistributedConfig values: 
+	access.control.allow.methods = 
+	access.control.allow.origin = 
+	admin.listeners = null
+	bootstrap.servers = [localhost:9092]
+	client.dns.lookup = use_all_dns_ips
+	client.id = 
+	config.providers = []
+	config.storage.replication.factor = 1
+	config.storage.topic = connect-configs
+	connect.protocol = sessioned
+	connections.max.idle.ms = 540000
+	connector.client.config.override.policy = None
+	group.id = connect-cluster
+	header.converter = class org.apache.kafka.connect.storage.SimpleHeaderConverter
+	heartbeat.interval.ms = 3000
+	inter.worker.key.generation.algorithm = HmacSHA256
+	inter.worker.key.size = null
+	inter.worker.key.ttl.ms = 3600000
+	inter.worker.signature.algorithm = HmacSHA256
+	inter.worker.verification.algorithms = [HmacSHA256]
+	internal.key.converter = class org.apache.kafka.connect.json.JsonConverter
+	internal.value.converter = class org.apache.kafka.connect.json.JsonConverter
+	key.converter = class org.apache.kafka.connect.json.JsonConverter
+	listeners = null
+	metadata.max.age.ms = 300000
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	offset.flush.interval.ms = 10000
+	offset.flush.timeout.ms = 5000
+	offset.storage.partitions = 25
+	offset.storage.replication.factor = 1
+	offset.storage.topic = connect-offsets
+	plugin.path = null
+	rebalance.timeout.ms = 60000
+	receive.buffer.bytes = 32768
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 40000
+	response.http.headers.config = 
+	rest.advertised.host.name = null
+	rest.advertised.listener = null
+	rest.advertised.port = null
+	rest.extension.classes = []
+	rest.host.name = null
+	rest.port = 8083
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.mechanism = GSSAPI
+	scheduled.rebalance.max.delay.ms = 300000
+	security.protocol = PLAINTEXT
+	send.buffer.bytes = 131072
+	session.timeout.ms = 10000
+	ssl.cipher.suites = null
+	ssl.client.auth = none
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+	status.storage.partitions = 5
+	status.storage.replication.factor = 1
+	status.storage.topic = connect-status
+	task.shutdown.graceful.timeout.ms = 5000
+	topic.creation.enable = true
+	topic.tracking.allow.reset = true
+	topic.tracking.enable = true
+	value.converter = class org.apache.kafka.connect.json.JsonConverter
+	worker.sync.timeout.ms = 3000
+	worker.unsync.backoff.ms = 300000
+ (org.apache.kafka.connect.runtime.distributed.DistributedConfig:354)
+[2025-01-14 10:37:35,632] WARN Variables cannot be used in the 'plugin.path' property, since the property is used by plugin scanning before the config providers that replace the variables are initialized. The raw value 'null' was used for plugin scanning, as opposed to the transformed value 'null', and this may cause unexpected results. (org.apache.kafka.connect.runtime.WorkerConfig:420)
+[2025-01-14 10:37:35,635] INFO Creating Kafka admin client (org.apache.kafka.connect.util.ConnectUtils:49)
+[2025-01-14 10:37:35,638] INFO AdminClientConfig values: 
+	bootstrap.servers = [localhost:9092]
+	client.dns.lookup = use_all_dns_ips
+	client.id = 
+	connections.max.idle.ms = 300000
+	default.api.timeout.ms = 60000
+	metadata.max.age.ms = 300000
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	receive.buffer.bytes = 65536
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retries = 2147483647
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.mechanism = GSSAPI
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+ (org.apache.kafka.clients.admin.AdminClientConfig:354)
+[2025-01-14 10:37:35,900] WARN The configuration 'offset.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,901] WARN The configuration 'config.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,901] WARN The configuration 'offset.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,901] WARN The configuration 'group.id' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,901] WARN The configuration 'config.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,901] WARN The configuration 'offset.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,901] WARN The configuration 'status.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,902] WARN The configuration 'status.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,902] WARN The configuration 'status.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,902] WARN The configuration 'config.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,902] WARN The configuration 'offset.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,903] WARN The configuration 'value.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,903] WARN The configuration 'status.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,903] WARN The configuration 'key.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,903] WARN The configuration 'config.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,903] WARN The configuration 'config.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,903] WARN The configuration 'status.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,903] WARN The configuration 'config.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,904] WARN The configuration 'offset.flush.interval.ms' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,904] WARN The configuration 'key.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,904] WARN The configuration 'value.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,904] WARN The configuration 'offset.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,905] WARN The configuration 'status.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,905] WARN The configuration 'offset.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:35,906] INFO Kafka version: 2.6.0 (org.apache.kafka.common.utils.AppInfoParser:117)
+[2025-01-14 10:37:35,906] INFO Kafka commitId: 62abe01bee039651 (org.apache.kafka.common.utils.AppInfoParser:118)
+[2025-01-14 10:37:35,906] INFO Kafka startTimeMs: 1736825855905 (org.apache.kafka.common.utils.AppInfoParser:119)
+[2025-01-14 10:37:36,262] INFO Kafka cluster ID: rRB5SbEmTAOiqJlK_cc3zw (org.apache.kafka.connect.util.ConnectUtils:65)
+[2025-01-14 10:37:36,294] INFO Logging initialized @4805ms to org.eclipse.jetty.util.log.Slf4jLog (org.eclipse.jetty.util.log:169)
+[2025-01-14 10:37:36,341] INFO Added connector for http://:8083 (org.apache.kafka.connect.runtime.rest.RestServer:132)
+[2025-01-14 10:37:36,343] INFO Initializing REST server (org.apache.kafka.connect.runtime.rest.RestServer:204)
+[2025-01-14 10:37:36,356] INFO jetty-9.4.24.v20191120; built: 2019-11-20T21:37:49.771Z; git: 363d5f2df3a8a28de40604320230664b9c793c16; jvm 21.0.5+11-LTS (org.eclipse.jetty.server.Server:359)
+[2025-01-14 10:37:36,387] INFO Started http_8083@5be82d43{HTTP/1.1,[http/1.1]}{0.0.0.0:8083} (org.eclipse.jetty.server.AbstractConnector:330)
+[2025-01-14 10:37:36,388] INFO Started @4898ms (org.eclipse.jetty.server.Server:399)
+[2025-01-14 10:37:36,411] INFO Advertised URI: http://172.18.72.55:8083/ (org.apache.kafka.connect.runtime.rest.RestServer:371)
+[2025-01-14 10:37:36,411] INFO REST server listening at http://172.18.72.55:8083/, advertising URL http://172.18.72.55:8083/ (org.apache.kafka.connect.runtime.rest.RestServer:219)
+[2025-01-14 10:37:36,412] INFO Advertised URI: http://172.18.72.55:8083/ (org.apache.kafka.connect.runtime.rest.RestServer:371)
+[2025-01-14 10:37:36,412] INFO REST admin endpoints at http://172.18.72.55:8083/ (org.apache.kafka.connect.runtime.rest.RestServer:220)
+[2025-01-14 10:37:36,412] INFO Advertised URI: http://172.18.72.55:8083/ (org.apache.kafka.connect.runtime.rest.RestServer:371)
+[2025-01-14 10:37:36,413] INFO Creating Kafka admin client (org.apache.kafka.connect.util.ConnectUtils:49)
+[2025-01-14 10:37:36,413] INFO AdminClientConfig values: 
+	bootstrap.servers = [localhost:9092]
+	client.dns.lookup = use_all_dns_ips
+	client.id = 
+	connections.max.idle.ms = 300000
+	default.api.timeout.ms = 60000
+	metadata.max.age.ms = 300000
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	receive.buffer.bytes = 65536
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retries = 2147483647
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.mechanism = GSSAPI
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+ (org.apache.kafka.clients.admin.AdminClientConfig:354)
+[2025-01-14 10:37:36,425] WARN The configuration 'offset.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,425] WARN The configuration 'config.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,425] WARN The configuration 'offset.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,425] WARN The configuration 'group.id' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,425] WARN The configuration 'config.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,425] WARN The configuration 'offset.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,426] WARN The configuration 'status.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,426] WARN The configuration 'status.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,426] WARN The configuration 'status.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,426] WARN The configuration 'config.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,426] WARN The configuration 'offset.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,426] WARN The configuration 'value.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,427] WARN The configuration 'status.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,427] WARN The configuration 'key.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,427] WARN The configuration 'config.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,427] WARN The configuration 'config.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,427] WARN The configuration 'status.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,427] WARN The configuration 'config.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,428] WARN The configuration 'offset.flush.interval.ms' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,428] WARN The configuration 'key.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,428] WARN The configuration 'value.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,428] WARN The configuration 'offset.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,428] WARN The configuration 'status.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,428] WARN The configuration 'offset.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,429] INFO Kafka version: 2.6.0 (org.apache.kafka.common.utils.AppInfoParser:117)
+[2025-01-14 10:37:36,429] INFO Kafka commitId: 62abe01bee039651 (org.apache.kafka.common.utils.AppInfoParser:118)
+[2025-01-14 10:37:36,431] INFO Kafka startTimeMs: 1736825856429 (org.apache.kafka.common.utils.AppInfoParser:119)
+[2025-01-14 10:37:36,465] INFO Kafka cluster ID: rRB5SbEmTAOiqJlK_cc3zw (org.apache.kafka.connect.util.ConnectUtils:65)
+[2025-01-14 10:37:36,480] INFO Setting up None Policy for ConnectorClientConfigOverride. This will disallow any client configuration to be overridden (org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy:45)
+[2025-01-14 10:37:36,489] INFO Creating Kafka admin client (org.apache.kafka.connect.util.ConnectUtils:49)
+[2025-01-14 10:37:36,490] INFO AdminClientConfig values: 
+	bootstrap.servers = [localhost:9092]
+	client.dns.lookup = use_all_dns_ips
+	client.id = 
+	connections.max.idle.ms = 300000
+	default.api.timeout.ms = 60000
+	metadata.max.age.ms = 300000
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	receive.buffer.bytes = 65536
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retries = 2147483647
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.mechanism = GSSAPI
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+ (org.apache.kafka.clients.admin.AdminClientConfig:354)
+[2025-01-14 10:37:36,497] WARN The configuration 'offset.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,497] WARN The configuration 'config.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,497] WARN The configuration 'offset.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,497] WARN The configuration 'group.id' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,497] WARN The configuration 'config.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,498] WARN The configuration 'offset.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,498] WARN The configuration 'status.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,501] WARN The configuration 'status.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,502] WARN The configuration 'status.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,502] WARN The configuration 'config.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,502] WARN The configuration 'offset.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,502] WARN The configuration 'value.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,502] WARN The configuration 'status.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,503] WARN The configuration 'key.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,503] WARN The configuration 'config.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,503] WARN The configuration 'config.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,503] WARN The configuration 'status.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,505] WARN The configuration 'config.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,505] WARN The configuration 'offset.flush.interval.ms' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,506] WARN The configuration 'key.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,506] WARN The configuration 'value.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,506] WARN The configuration 'offset.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,507] WARN The configuration 'status.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,507] WARN The configuration 'offset.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,507] INFO Kafka version: 2.6.0 (org.apache.kafka.common.utils.AppInfoParser:117)
+[2025-01-14 10:37:36,507] INFO Kafka commitId: 62abe01bee039651 (org.apache.kafka.common.utils.AppInfoParser:118)
+[2025-01-14 10:37:36,507] INFO Kafka startTimeMs: 1736825856507 (org.apache.kafka.common.utils.AppInfoParser:119)
+[2025-01-14 10:37:36,526] INFO Kafka cluster ID: rRB5SbEmTAOiqJlK_cc3zw (org.apache.kafka.connect.util.ConnectUtils:65)
+[2025-01-14 10:37:36,540] INFO Kafka version: 2.6.0 (org.apache.kafka.common.utils.AppInfoParser:117)
+[2025-01-14 10:37:36,541] INFO Kafka commitId: 62abe01bee039651 (org.apache.kafka.common.utils.AppInfoParser:118)
+[2025-01-14 10:37:36,541] INFO Kafka startTimeMs: 1736825856540 (org.apache.kafka.common.utils.AppInfoParser:119)
+[2025-01-14 10:37:36,650] INFO JsonConverterConfig values: 
+	converter.type = key
+	decimal.format = BASE64
+	schemas.cache.size = 1000
+	schemas.enable = false
+ (org.apache.kafka.connect.json.JsonConverterConfig:354)
+[2025-01-14 10:37:36,651] INFO JsonConverterConfig values: 
+	converter.type = value
+	decimal.format = BASE64
+	schemas.cache.size = 1000
+	schemas.enable = false
+ (org.apache.kafka.connect.json.JsonConverterConfig:354)
+[2025-01-14 10:37:36,652] INFO Creating Kafka admin client (org.apache.kafka.connect.util.ConnectUtils:49)
+[2025-01-14 10:37:36,653] INFO AdminClientConfig values: 
+	bootstrap.servers = [localhost:9092]
+	client.dns.lookup = use_all_dns_ips
+	client.id = 
+	connections.max.idle.ms = 300000
+	default.api.timeout.ms = 60000
+	metadata.max.age.ms = 300000
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	receive.buffer.bytes = 65536
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retries = 2147483647
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.mechanism = GSSAPI
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+ (org.apache.kafka.clients.admin.AdminClientConfig:354)
+[2025-01-14 10:37:36,656] WARN The configuration 'offset.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,661] WARN The configuration 'config.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,661] WARN The configuration 'offset.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,662] WARN The configuration 'group.id' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,662] WARN The configuration 'config.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,662] WARN The configuration 'offset.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,662] WARN The configuration 'status.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,662] WARN The configuration 'status.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,662] WARN The configuration 'status.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,662] WARN The configuration 'config.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,662] WARN The configuration 'offset.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,662] WARN The configuration 'value.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,663] WARN The configuration 'status.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,663] WARN The configuration 'key.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,663] WARN The configuration 'config.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,663] WARN The configuration 'config.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,664] WARN The configuration 'status.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,664] WARN The configuration 'config.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,664] WARN The configuration 'offset.flush.interval.ms' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,664] WARN The configuration 'key.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,664] WARN The configuration 'value.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,664] WARN The configuration 'offset.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,664] WARN The configuration 'status.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,665] WARN The configuration 'offset.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,665] INFO Kafka version: 2.6.0 (org.apache.kafka.common.utils.AppInfoParser:117)
+[2025-01-14 10:37:36,665] INFO Kafka commitId: 62abe01bee039651 (org.apache.kafka.common.utils.AppInfoParser:118)
+[2025-01-14 10:37:36,665] INFO Kafka startTimeMs: 1736825856665 (org.apache.kafka.common.utils.AppInfoParser:119)
+[2025-01-14 10:37:36,706] INFO Kafka cluster ID: rRB5SbEmTAOiqJlK_cc3zw (org.apache.kafka.connect.util.ConnectUtils:65)
+[2025-01-14 10:37:36,722] INFO Creating Kafka admin client (org.apache.kafka.connect.util.ConnectUtils:49)
+[2025-01-14 10:37:36,722] INFO AdminClientConfig values: 
+	bootstrap.servers = [localhost:9092]
+	client.dns.lookup = use_all_dns_ips
+	client.id = 
+	connections.max.idle.ms = 300000
+	default.api.timeout.ms = 60000
+	metadata.max.age.ms = 300000
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	receive.buffer.bytes = 65536
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retries = 2147483647
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.mechanism = GSSAPI
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+ (org.apache.kafka.clients.admin.AdminClientConfig:354)
+[2025-01-14 10:37:36,724] WARN The configuration 'offset.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,725] WARN The configuration 'config.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,725] WARN The configuration 'offset.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,726] WARN The configuration 'group.id' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,729] WARN The configuration 'config.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,729] WARN The configuration 'offset.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,729] WARN The configuration 'status.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,730] WARN The configuration 'status.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,730] WARN The configuration 'status.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,730] WARN The configuration 'config.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,730] WARN The configuration 'offset.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,730] WARN The configuration 'value.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,730] WARN The configuration 'status.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,731] WARN The configuration 'key.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,731] WARN The configuration 'config.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,731] WARN The configuration 'config.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,731] WARN The configuration 'status.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,731] WARN The configuration 'config.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,732] WARN The configuration 'offset.flush.interval.ms' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,732] WARN The configuration 'key.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,732] WARN The configuration 'value.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,733] WARN The configuration 'offset.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,733] WARN The configuration 'status.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,740] WARN The configuration 'offset.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,740] INFO Kafka version: 2.6.0 (org.apache.kafka.common.utils.AppInfoParser:117)
+[2025-01-14 10:37:36,740] INFO Kafka commitId: 62abe01bee039651 (org.apache.kafka.common.utils.AppInfoParser:118)
+[2025-01-14 10:37:36,741] INFO Kafka startTimeMs: 1736825856740 (org.apache.kafka.common.utils.AppInfoParser:119)
+[2025-01-14 10:37:36,755] INFO Kafka cluster ID: rRB5SbEmTAOiqJlK_cc3zw (org.apache.kafka.connect.util.ConnectUtils:65)
+[2025-01-14 10:37:36,763] INFO Creating Kafka admin client (org.apache.kafka.connect.util.ConnectUtils:49)
+[2025-01-14 10:37:36,764] INFO AdminClientConfig values: 
+	bootstrap.servers = [localhost:9092]
+	client.dns.lookup = use_all_dns_ips
+	client.id = 
+	connections.max.idle.ms = 300000
+	default.api.timeout.ms = 60000
+	metadata.max.age.ms = 300000
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	receive.buffer.bytes = 65536
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retries = 2147483647
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.mechanism = GSSAPI
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+ (org.apache.kafka.clients.admin.AdminClientConfig:354)
+[2025-01-14 10:37:36,766] WARN The configuration 'offset.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,767] WARN The configuration 'config.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,768] WARN The configuration 'offset.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,772] WARN The configuration 'group.id' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,772] WARN The configuration 'config.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,772] WARN The configuration 'offset.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,773] WARN The configuration 'status.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,773] WARN The configuration 'status.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,773] WARN The configuration 'status.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,773] WARN The configuration 'config.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,773] WARN The configuration 'offset.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,773] WARN The configuration 'value.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,773] WARN The configuration 'status.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,773] WARN The configuration 'key.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,774] WARN The configuration 'config.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,774] WARN The configuration 'config.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,774] WARN The configuration 'status.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,774] WARN The configuration 'config.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,774] WARN The configuration 'offset.flush.interval.ms' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,774] WARN The configuration 'key.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,774] WARN The configuration 'value.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,774] WARN The configuration 'offset.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,774] WARN The configuration 'status.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,774] WARN The configuration 'offset.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,775] INFO Kafka version: 2.6.0 (org.apache.kafka.common.utils.AppInfoParser:117)
+[2025-01-14 10:37:36,775] INFO Kafka commitId: 62abe01bee039651 (org.apache.kafka.common.utils.AppInfoParser:118)
+[2025-01-14 10:37:36,775] INFO Kafka startTimeMs: 1736825856775 (org.apache.kafka.common.utils.AppInfoParser:119)
+[2025-01-14 10:37:36,790] INFO Kafka cluster ID: rRB5SbEmTAOiqJlK_cc3zw (org.apache.kafka.connect.util.ConnectUtils:65)
+[2025-01-14 10:37:36,813] INFO Creating Kafka admin client (org.apache.kafka.connect.util.ConnectUtils:49)
+[2025-01-14 10:37:36,813] INFO AdminClientConfig values: 
+	bootstrap.servers = [localhost:9092]
+	client.dns.lookup = use_all_dns_ips
+	client.id = 
+	connections.max.idle.ms = 300000
+	default.api.timeout.ms = 60000
+	metadata.max.age.ms = 300000
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	receive.buffer.bytes = 65536
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retries = 2147483647
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.mechanism = GSSAPI
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+ (org.apache.kafka.clients.admin.AdminClientConfig:354)
+[2025-01-14 10:37:36,816] WARN The configuration 'offset.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,816] WARN The configuration 'config.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,816] WARN The configuration 'offset.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,816] WARN The configuration 'group.id' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,816] WARN The configuration 'config.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,817] WARN The configuration 'offset.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,817] WARN The configuration 'status.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,817] WARN The configuration 'status.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,817] WARN The configuration 'status.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,817] WARN The configuration 'config.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,818] WARN The configuration 'offset.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,820] WARN The configuration 'value.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,820] WARN The configuration 'status.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,820] WARN The configuration 'key.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,821] WARN The configuration 'config.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,821] WARN The configuration 'config.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,822] WARN The configuration 'status.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,822] WARN The configuration 'config.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,822] WARN The configuration 'offset.flush.interval.ms' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,823] WARN The configuration 'key.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,823] WARN The configuration 'value.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,823] WARN The configuration 'offset.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,823] WARN The configuration 'status.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,824] WARN The configuration 'offset.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,824] INFO Kafka version: 2.6.0 (org.apache.kafka.common.utils.AppInfoParser:117)
+[2025-01-14 10:37:36,824] INFO Kafka commitId: 62abe01bee039651 (org.apache.kafka.common.utils.AppInfoParser:118)
+[2025-01-14 10:37:36,824] INFO Kafka startTimeMs: 1736825856824 (org.apache.kafka.common.utils.AppInfoParser:119)
+[2025-01-14 10:37:36,841] INFO Kafka cluster ID: rRB5SbEmTAOiqJlK_cc3zw (org.apache.kafka.connect.util.ConnectUtils:65)
+[2025-01-14 10:37:36,874] INFO Kafka version: 2.6.0 (org.apache.kafka.common.utils.AppInfoParser:117)
+[2025-01-14 10:37:36,875] INFO Kafka commitId: 62abe01bee039651 (org.apache.kafka.common.utils.AppInfoParser:118)
+[2025-01-14 10:37:36,877] INFO Kafka startTimeMs: 1736825856874 (org.apache.kafka.common.utils.AppInfoParser:119)
+[2025-01-14 10:37:36,881] INFO Kafka Connect distributed worker initialization took 4354ms (org.apache.kafka.connect.cli.ConnectDistributed:128)
+[2025-01-14 10:37:36,881] INFO Kafka Connect starting (org.apache.kafka.connect.runtime.Connect:51)
+[2025-01-14 10:37:36,882] INFO Initializing REST resources (org.apache.kafka.connect.runtime.rest.RestServer:224)
+[2025-01-14 10:37:36,882] INFO [Worker clientId=connect-1, groupId=connect-cluster] Herder starting (org.apache.kafka.connect.runtime.distributed.DistributedHerder:286)
+[2025-01-14 10:37:36,883] INFO Worker starting (org.apache.kafka.connect.runtime.Worker:195)
+[2025-01-14 10:37:36,883] INFO Starting KafkaOffsetBackingStore (org.apache.kafka.connect.storage.KafkaOffsetBackingStore:127)
+[2025-01-14 10:37:36,883] INFO Starting KafkaBasedLog with topic connect-offsets (org.apache.kafka.connect.util.KafkaBasedLog:127)
+[2025-01-14 10:37:36,884] INFO AdminClientConfig values: 
+	bootstrap.servers = [localhost:9092]
+	client.dns.lookup = use_all_dns_ips
+	client.id = 
+	connections.max.idle.ms = 300000
+	default.api.timeout.ms = 60000
+	metadata.max.age.ms = 300000
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	receive.buffer.bytes = 65536
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retries = 2147483647
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.mechanism = GSSAPI
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+ (org.apache.kafka.clients.admin.AdminClientConfig:354)
+[2025-01-14 10:37:36,891] WARN The configuration 'offset.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,892] WARN The configuration 'config.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,892] WARN The configuration 'offset.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,892] WARN The configuration 'group.id' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,907] WARN The configuration 'config.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,907] WARN The configuration 'offset.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,907] WARN The configuration 'status.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,907] WARN The configuration 'status.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,908] WARN The configuration 'metrics.context.connect.kafka.cluster.id' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,912] WARN The configuration 'status.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,912] WARN The configuration 'config.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,912] WARN The configuration 'offset.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,912] WARN The configuration 'value.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,912] WARN The configuration 'status.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,912] WARN The configuration 'key.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,912] WARN The configuration 'config.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,923] WARN The configuration 'config.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,923] WARN The configuration 'metrics.context.connect.group.id' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,923] WARN The configuration 'status.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,923] WARN The configuration 'config.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,924] WARN The configuration 'offset.flush.interval.ms' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,924] WARN The configuration 'key.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,924] WARN The configuration 'value.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,924] WARN The configuration 'offset.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,924] WARN The configuration 'status.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,924] WARN The configuration 'offset.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:36,924] INFO Kafka version: 2.6.0 (org.apache.kafka.common.utils.AppInfoParser:117)
+[2025-01-14 10:37:36,924] INFO Kafka commitId: 62abe01bee039651 (org.apache.kafka.common.utils.AppInfoParser:118)
+[2025-01-14 10:37:36,935] INFO Kafka startTimeMs: 1736825856924 (org.apache.kafka.common.utils.AppInfoParser:119)
+[2025-01-14 10:37:36,979] INFO Adding admin resources to main listener (org.apache.kafka.connect.runtime.rest.RestServer:241)
+[2025-01-14 10:37:37,041] INFO ProducerConfig values: 
+	acks = -1
+	batch.size = 16384
+	bootstrap.servers = [localhost:9092]
+	buffer.memory = 33554432
+	client.dns.lookup = use_all_dns_ips
+	client.id = producer-1
+	compression.type = none
+	connections.max.idle.ms = 540000
+	delivery.timeout.ms = 2147483647
+	enable.idempotence = false
+	interceptor.classes = []
+	internal.auto.downgrade.txn.commit = false
+	key.serializer = class org.apache.kafka.common.serialization.ByteArraySerializer
+	linger.ms = 0
+	max.block.ms = 60000
+	max.in.flight.requests.per.connection = 1
+	max.request.size = 1048576
+	metadata.max.age.ms = 300000
+	metadata.max.idle.ms = 300000
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	partitioner.class = class org.apache.kafka.clients.producer.internals.DefaultPartitioner
+	receive.buffer.bytes = 32768
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retries = 2147483647
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.mechanism = GSSAPI
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+	transaction.timeout.ms = 60000
+	transactional.id = null
+	value.serializer = class org.apache.kafka.common.serialization.ByteArraySerializer
+ (org.apache.kafka.clients.producer.ProducerConfig:354)
+[2025-01-14 10:37:37,066] WARN The configuration 'offset.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,066] WARN The configuration 'config.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,070] WARN The configuration 'offset.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,070] WARN The configuration 'group.id' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,070] WARN The configuration 'config.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,071] WARN The configuration 'offset.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,077] WARN The configuration 'status.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,078] WARN The configuration 'status.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,078] WARN The configuration 'metrics.context.connect.kafka.cluster.id' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,079] WARN The configuration 'status.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,080] WARN The configuration 'config.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,080] WARN The configuration 'offset.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,081] WARN The configuration 'value.converter' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,081] WARN The configuration 'status.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,082] WARN The configuration 'key.converter' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,082] INFO [Producer clientId=producer-1] Cluster ID: rRB5SbEmTAOiqJlK_cc3zw (org.apache.kafka.clients.Metadata:279)
+[2025-01-14 10:37:37,082] WARN The configuration 'config.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,083] WARN The configuration 'config.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,083] WARN The configuration 'metrics.context.connect.group.id' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,083] WARN The configuration 'status.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,084] WARN The configuration 'config.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,084] WARN The configuration 'offset.flush.interval.ms' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,084] WARN The configuration 'key.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,085] WARN The configuration 'value.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,085] WARN The configuration 'offset.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,086] WARN The configuration 'status.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,089] WARN The configuration 'offset.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,089] INFO Kafka version: 2.6.0 (org.apache.kafka.common.utils.AppInfoParser:117)
+[2025-01-14 10:37:37,089] INFO Kafka commitId: 62abe01bee039651 (org.apache.kafka.common.utils.AppInfoParser:118)
+[2025-01-14 10:37:37,090] INFO Kafka startTimeMs: 1736825857089 (org.apache.kafka.common.utils.AppInfoParser:119)
+[2025-01-14 10:37:37,099] INFO ConsumerConfig values: 
+	allow.auto.create.topics = true
+	auto.commit.interval.ms = 5000
+	auto.offset.reset = earliest
+	bootstrap.servers = [localhost:9092]
+	check.crcs = true
+	client.dns.lookup = use_all_dns_ips
+	client.id = consumer-connect-cluster-1
+	client.rack = 
+	connections.max.idle.ms = 540000
+	default.api.timeout.ms = 60000
+	enable.auto.commit = false
+	exclude.internal.topics = true
+	fetch.max.bytes = 52428800
+	fetch.max.wait.ms = 500
+	fetch.min.bytes = 1
+	group.id = connect-cluster
+	group.instance.id = null
+	heartbeat.interval.ms = 3000
+	interceptor.classes = []
+	internal.leave.group.on.close = true
+	internal.throw.on.fetch.stable.offset.unsupported = false
+	isolation.level = read_uncommitted
+	key.deserializer = class org.apache.kafka.common.serialization.ByteArrayDeserializer
+	max.partition.fetch.bytes = 1048576
+	max.poll.interval.ms = 300000
+	max.poll.records = 500
+	metadata.max.age.ms = 300000
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	partition.assignment.strategy = [class org.apache.kafka.clients.consumer.RangeAssignor]
+	receive.buffer.bytes = 65536
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.mechanism = GSSAPI
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	session.timeout.ms = 10000
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+	value.deserializer = class org.apache.kafka.common.serialization.ByteArrayDeserializer
+ (org.apache.kafka.clients.consumer.ConsumerConfig:354)
+[2025-01-14 10:37:37,132] WARN The configuration 'offset.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,132] WARN The configuration 'config.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,132] WARN The configuration 'offset.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,132] WARN The configuration 'config.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,133] WARN The configuration 'offset.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,133] WARN The configuration 'status.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,133] WARN The configuration 'status.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,133] WARN The configuration 'metrics.context.connect.kafka.cluster.id' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,134] WARN The configuration 'status.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,134] WARN The configuration 'config.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,134] WARN The configuration 'offset.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,134] WARN The configuration 'value.converter' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,135] WARN The configuration 'status.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,136] WARN The configuration 'key.converter' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,136] WARN The configuration 'config.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,136] WARN The configuration 'config.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,137] WARN The configuration 'metrics.context.connect.group.id' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,137] WARN The configuration 'status.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,137] WARN The configuration 'config.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,139] WARN The configuration 'offset.flush.interval.ms' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,140] WARN The configuration 'key.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,140] WARN The configuration 'value.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,140] WARN The configuration 'offset.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,140] WARN The configuration 'status.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,140] WARN The configuration 'offset.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,140] INFO Kafka version: 2.6.0 (org.apache.kafka.common.utils.AppInfoParser:117)
+[2025-01-14 10:37:37,141] INFO Kafka commitId: 62abe01bee039651 (org.apache.kafka.common.utils.AppInfoParser:118)
+[2025-01-14 10:37:37,142] INFO Kafka startTimeMs: 1736825857140 (org.apache.kafka.common.utils.AppInfoParser:119)
+[2025-01-14 10:37:37,155] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Cluster ID: rRB5SbEmTAOiqJlK_cc3zw (org.apache.kafka.clients.Metadata:279)
+[2025-01-14 10:37:37,198] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Subscribed to partition(s): connect-offsets-0, connect-offsets-5, connect-offsets-10, connect-offsets-20, connect-offsets-15, connect-offsets-9, connect-offsets-11, connect-offsets-4, connect-offsets-16, connect-offsets-17, connect-offsets-3, connect-offsets-24, connect-offsets-23, connect-offsets-13, connect-offsets-18, connect-offsets-22, connect-offsets-8, connect-offsets-2, connect-offsets-12, connect-offsets-19, connect-offsets-14, connect-offsets-1, connect-offsets-6, connect-offsets-7, connect-offsets-21 (org.apache.kafka.clients.consumer.KafkaConsumer:1120)
+[2025-01-14 10:37:37,203] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-0 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,208] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-5 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,209] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-10 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,209] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-20 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,209] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-15 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,213] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-9 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,215] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-11 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,215] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-4 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,215] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-16 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,216] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-17 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,216] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-3 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,216] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-24 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,216] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-23 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,216] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-13 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,217] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-18 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,217] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-22 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,217] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-8 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,217] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-2 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,218] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-12 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,219] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-19 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,219] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-14 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,219] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-1 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,220] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-6 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,221] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-7 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,224] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-offsets-21 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,278] INFO DefaultSessionIdManager workerName=node0 (org.eclipse.jetty.server.session:333)
+[2025-01-14 10:37:37,279] INFO No SessionScavenger set, using defaults (org.eclipse.jetty.server.session:338)
+[2025-01-14 10:37:37,280] INFO node0 Scavenging every 660000ms (org.eclipse.jetty.server.session:140)
+[2025-01-14 10:37:37,307] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-10 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,309] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-8 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,309] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-14 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,310] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-12 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,310] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-2 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,311] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-0 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,311] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-6 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,311] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-4 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,312] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-24 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,319] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-18 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,320] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-16 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,323] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-22 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,323] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-20 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,323] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-9 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,324] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-7 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,324] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-13 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,326] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-11 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,327] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-1 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,328] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-5 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,328] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-3 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,329] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-23 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,329] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-17 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,329] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-15 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,330] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-21 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,330] INFO [Consumer clientId=consumer-connect-cluster-1, groupId=connect-cluster] Resetting offset for partition connect-offsets-19 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,406] INFO Finished reading KafkaBasedLog for topic connect-offsets (org.apache.kafka.connect.util.KafkaBasedLog:161)
+[2025-01-14 10:37:37,407] INFO Started KafkaBasedLog for topic connect-offsets (org.apache.kafka.connect.util.KafkaBasedLog:163)
+[2025-01-14 10:37:37,409] INFO Finished reading offsets topic and starting KafkaOffsetBackingStore (org.apache.kafka.connect.storage.KafkaOffsetBackingStore:129)
+[2025-01-14 10:37:37,418] INFO Worker started (org.apache.kafka.connect.runtime.Worker:202)
+[2025-01-14 10:37:37,418] INFO Starting KafkaBasedLog with topic connect-status (org.apache.kafka.connect.util.KafkaBasedLog:127)
+[2025-01-14 10:37:37,418] INFO AdminClientConfig values: 
+	bootstrap.servers = [localhost:9092]
+	client.dns.lookup = use_all_dns_ips
+	client.id = 
+	connections.max.idle.ms = 300000
+	default.api.timeout.ms = 60000
+	metadata.max.age.ms = 300000
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	receive.buffer.bytes = 65536
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retries = 2147483647
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.mechanism = GSSAPI
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+ (org.apache.kafka.clients.admin.AdminClientConfig:354)
+[2025-01-14 10:37:37,422] WARN The configuration 'offset.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,429] WARN The configuration 'config.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,429] WARN The configuration 'offset.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,429] WARN The configuration 'group.id' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,431] WARN The configuration 'config.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,433] WARN The configuration 'offset.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,433] WARN The configuration 'status.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,433] WARN The configuration 'status.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,434] WARN The configuration 'metrics.context.connect.kafka.cluster.id' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,434] WARN The configuration 'status.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,434] WARN The configuration 'config.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,434] WARN The configuration 'offset.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,434] WARN The configuration 'value.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,450] WARN The configuration 'status.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,451] WARN The configuration 'key.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,451] WARN The configuration 'config.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,451] WARN The configuration 'config.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,452] WARN The configuration 'metrics.context.connect.group.id' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,452] WARN The configuration 'status.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,453] WARN The configuration 'config.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,454] WARN The configuration 'offset.flush.interval.ms' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,455] WARN The configuration 'key.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,455] WARN The configuration 'value.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,456] WARN The configuration 'offset.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,456] WARN The configuration 'status.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,456] WARN The configuration 'offset.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,457] INFO Kafka version: 2.6.0 (org.apache.kafka.common.utils.AppInfoParser:117)
+[2025-01-14 10:37:37,457] INFO Kafka commitId: 62abe01bee039651 (org.apache.kafka.common.utils.AppInfoParser:118)
+[2025-01-14 10:37:37,464] INFO Kafka startTimeMs: 1736825857456 (org.apache.kafka.common.utils.AppInfoParser:119)
+[2025-01-14 10:37:37,498] INFO ProducerConfig values: 
+	acks = -1
+	batch.size = 16384
+	bootstrap.servers = [localhost:9092]
+	buffer.memory = 33554432
+	client.dns.lookup = use_all_dns_ips
+	client.id = producer-2
+	compression.type = none
+	connections.max.idle.ms = 540000
+	delivery.timeout.ms = 120000
+	enable.idempotence = false
+	interceptor.classes = []
+	internal.auto.downgrade.txn.commit = false
+	key.serializer = class org.apache.kafka.common.serialization.StringSerializer
+	linger.ms = 0
+	max.block.ms = 60000
+	max.in.flight.requests.per.connection = 1
+	max.request.size = 1048576
+	metadata.max.age.ms = 300000
+	metadata.max.idle.ms = 300000
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	partitioner.class = class org.apache.kafka.clients.producer.internals.DefaultPartitioner
+	receive.buffer.bytes = 32768
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retries = 0
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.mechanism = GSSAPI
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+	transaction.timeout.ms = 60000
+	transactional.id = null
+	value.serializer = class org.apache.kafka.common.serialization.ByteArraySerializer
+ (org.apache.kafka.clients.producer.ProducerConfig:354)
+[2025-01-14 10:37:37,529] WARN The configuration 'offset.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,533] INFO [Producer clientId=producer-2] Cluster ID: rRB5SbEmTAOiqJlK_cc3zw (org.apache.kafka.clients.Metadata:279)
+[2025-01-14 10:37:37,537] WARN The configuration 'config.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,538] WARN The configuration 'offset.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,541] WARN The configuration 'group.id' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,570] WARN The configuration 'config.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,571] WARN The configuration 'offset.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,571] WARN The configuration 'status.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,571] WARN The configuration 'status.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,571] WARN The configuration 'metrics.context.connect.kafka.cluster.id' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,573] WARN The configuration 'status.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,574] WARN The configuration 'config.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,574] WARN The configuration 'offset.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,574] WARN The configuration 'value.converter' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,574] WARN The configuration 'status.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,574] WARN The configuration 'key.converter' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,575] WARN The configuration 'config.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,577] WARN The configuration 'config.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,578] WARN The configuration 'metrics.context.connect.group.id' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,578] WARN The configuration 'status.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,578] WARN The configuration 'config.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,578] WARN The configuration 'offset.flush.interval.ms' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,578] WARN The configuration 'key.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,578] WARN The configuration 'value.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,579] WARN The configuration 'offset.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,579] WARN The configuration 'status.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,579] WARN The configuration 'offset.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,579] INFO Kafka version: 2.6.0 (org.apache.kafka.common.utils.AppInfoParser:117)
+[2025-01-14 10:37:37,579] INFO Kafka commitId: 62abe01bee039651 (org.apache.kafka.common.utils.AppInfoParser:118)
+[2025-01-14 10:37:37,580] INFO Kafka startTimeMs: 1736825857579 (org.apache.kafka.common.utils.AppInfoParser:119)
+[2025-01-14 10:37:37,581] INFO ConsumerConfig values: 
+	allow.auto.create.topics = true
+	auto.commit.interval.ms = 5000
+	auto.offset.reset = earliest
+	bootstrap.servers = [localhost:9092]
+	check.crcs = true
+	client.dns.lookup = use_all_dns_ips
+	client.id = consumer-connect-cluster-2
+	client.rack = 
+	connections.max.idle.ms = 540000
+	default.api.timeout.ms = 60000
+	enable.auto.commit = false
+	exclude.internal.topics = true
+	fetch.max.bytes = 52428800
+	fetch.max.wait.ms = 500
+	fetch.min.bytes = 1
+	group.id = connect-cluster
+	group.instance.id = null
+	heartbeat.interval.ms = 3000
+	interceptor.classes = []
+	internal.leave.group.on.close = true
+	internal.throw.on.fetch.stable.offset.unsupported = false
+	isolation.level = read_uncommitted
+	key.deserializer = class org.apache.kafka.common.serialization.StringDeserializer
+	max.partition.fetch.bytes = 1048576
+	max.poll.interval.ms = 300000
+	max.poll.records = 500
+	metadata.max.age.ms = 300000
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	partition.assignment.strategy = [class org.apache.kafka.clients.consumer.RangeAssignor]
+	receive.buffer.bytes = 65536
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.mechanism = GSSAPI
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	session.timeout.ms = 10000
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+	value.deserializer = class org.apache.kafka.common.serialization.ByteArrayDeserializer
+ (org.apache.kafka.clients.consumer.ConsumerConfig:354)
+[2025-01-14 10:37:37,589] WARN The configuration 'offset.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,589] WARN The configuration 'config.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,589] WARN The configuration 'offset.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,589] WARN The configuration 'config.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,589] WARN The configuration 'offset.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,589] WARN The configuration 'status.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,595] WARN The configuration 'status.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,597] WARN The configuration 'metrics.context.connect.kafka.cluster.id' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,597] WARN The configuration 'status.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,598] WARN The configuration 'config.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,598] WARN The configuration 'offset.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,598] WARN The configuration 'value.converter' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,598] WARN The configuration 'status.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,598] WARN The configuration 'key.converter' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,599] WARN The configuration 'config.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,599] WARN The configuration 'config.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,599] WARN The configuration 'metrics.context.connect.group.id' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,599] WARN The configuration 'status.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,600] WARN The configuration 'config.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,600] WARN The configuration 'offset.flush.interval.ms' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,600] WARN The configuration 'key.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,600] WARN The configuration 'value.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,600] WARN The configuration 'offset.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,601] WARN The configuration 'status.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,601] WARN The configuration 'offset.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,601] INFO Kafka version: 2.6.0 (org.apache.kafka.common.utils.AppInfoParser:117)
+[2025-01-14 10:37:37,601] INFO Kafka commitId: 62abe01bee039651 (org.apache.kafka.common.utils.AppInfoParser:118)
+[2025-01-14 10:37:37,601] INFO Kafka startTimeMs: 1736825857601 (org.apache.kafka.common.utils.AppInfoParser:119)
+[2025-01-14 10:37:37,617] INFO [Consumer clientId=consumer-connect-cluster-2, groupId=connect-cluster] Cluster ID: rRB5SbEmTAOiqJlK_cc3zw (org.apache.kafka.clients.Metadata:279)
+[2025-01-14 10:37:37,636] INFO [Consumer clientId=consumer-connect-cluster-2, groupId=connect-cluster] Subscribed to partition(s): connect-status-0, connect-status-4, connect-status-1, connect-status-2, connect-status-3 (org.apache.kafka.clients.consumer.KafkaConsumer:1120)
+[2025-01-14 10:37:37,637] INFO [Consumer clientId=consumer-connect-cluster-2, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-status-0 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,637] INFO [Consumer clientId=consumer-connect-cluster-2, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-status-4 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,637] INFO [Consumer clientId=consumer-connect-cluster-2, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-status-1 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,637] INFO [Consumer clientId=consumer-connect-cluster-2, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-status-2 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,637] INFO [Consumer clientId=consumer-connect-cluster-2, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-status-3 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,665] INFO [Consumer clientId=consumer-connect-cluster-2, groupId=connect-cluster] Resetting offset for partition connect-status-1 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,666] INFO [Consumer clientId=consumer-connect-cluster-2, groupId=connect-cluster] Resetting offset for partition connect-status-2 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,666] INFO [Consumer clientId=consumer-connect-cluster-2, groupId=connect-cluster] Resetting offset for partition connect-status-0 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,666] INFO [Consumer clientId=consumer-connect-cluster-2, groupId=connect-cluster] Resetting offset for partition connect-status-3 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,667] INFO [Consumer clientId=consumer-connect-cluster-2, groupId=connect-cluster] Resetting offset for partition connect-status-4 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,670] INFO Finished reading KafkaBasedLog for topic connect-status (org.apache.kafka.connect.util.KafkaBasedLog:161)
+[2025-01-14 10:37:37,674] INFO Started KafkaBasedLog for topic connect-status (org.apache.kafka.connect.util.KafkaBasedLog:163)
+[2025-01-14 10:37:37,676] INFO Starting KafkaConfigBackingStore (org.apache.kafka.connect.storage.KafkaConfigBackingStore:265)
+[2025-01-14 10:37:37,678] INFO Starting KafkaBasedLog with topic connect-configs (org.apache.kafka.connect.util.KafkaBasedLog:127)
+[2025-01-14 10:37:37,679] INFO AdminClientConfig values: 
+	bootstrap.servers = [localhost:9092]
+	client.dns.lookup = use_all_dns_ips
+	client.id = 
+	connections.max.idle.ms = 300000
+	default.api.timeout.ms = 60000
+	metadata.max.age.ms = 300000
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	receive.buffer.bytes = 65536
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retries = 2147483647
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.mechanism = GSSAPI
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+ (org.apache.kafka.clients.admin.AdminClientConfig:354)
+[2025-01-14 10:37:37,681] WARN The configuration 'offset.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,682] WARN The configuration 'config.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,682] WARN The configuration 'offset.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,682] WARN The configuration 'group.id' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,683] WARN The configuration 'config.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,683] WARN The configuration 'offset.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,683] WARN The configuration 'status.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,684] WARN The configuration 'status.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,684] WARN The configuration 'metrics.context.connect.kafka.cluster.id' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,684] WARN The configuration 'status.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,687] WARN The configuration 'config.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,687] WARN The configuration 'offset.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,688] WARN The configuration 'value.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,688] WARN The configuration 'status.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,688] WARN The configuration 'key.converter' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,688] WARN The configuration 'config.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,689] WARN The configuration 'config.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,689] WARN The configuration 'metrics.context.connect.group.id' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,689] WARN The configuration 'status.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,690] WARN The configuration 'config.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,690] WARN The configuration 'offset.flush.interval.ms' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,690] WARN The configuration 'key.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,690] WARN The configuration 'value.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,691] WARN The configuration 'offset.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,691] WARN The configuration 'status.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,691] WARN The configuration 'offset.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.admin.AdminClientConfig:362)
+[2025-01-14 10:37:37,693] INFO Kafka version: 2.6.0 (org.apache.kafka.common.utils.AppInfoParser:117)
+[2025-01-14 10:37:37,694] INFO Kafka commitId: 62abe01bee039651 (org.apache.kafka.common.utils.AppInfoParser:118)
+[2025-01-14 10:37:37,694] INFO Kafka startTimeMs: 1736825857691 (org.apache.kafka.common.utils.AppInfoParser:119)
+[2025-01-14 10:37:37,731] INFO ProducerConfig values: 
+	acks = -1
+	batch.size = 16384
+	bootstrap.servers = [localhost:9092]
+	buffer.memory = 33554432
+	client.dns.lookup = use_all_dns_ips
+	client.id = producer-3
+	compression.type = none
+	connections.max.idle.ms = 540000
+	delivery.timeout.ms = 2147483647
+	enable.idempotence = false
+	interceptor.classes = []
+	internal.auto.downgrade.txn.commit = false
+	key.serializer = class org.apache.kafka.common.serialization.StringSerializer
+	linger.ms = 0
+	max.block.ms = 60000
+	max.in.flight.requests.per.connection = 1
+	max.request.size = 1048576
+	metadata.max.age.ms = 300000
+	metadata.max.idle.ms = 300000
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	partitioner.class = class org.apache.kafka.clients.producer.internals.DefaultPartitioner
+	receive.buffer.bytes = 32768
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retries = 2147483647
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.mechanism = GSSAPI
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+	transaction.timeout.ms = 60000
+	transactional.id = null
+	value.serializer = class org.apache.kafka.common.serialization.ByteArraySerializer
+ (org.apache.kafka.clients.producer.ProducerConfig:354)
+[2025-01-14 10:37:37,747] WARN The configuration 'offset.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,748] WARN The configuration 'config.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,748] WARN The configuration 'offset.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,751] INFO [Producer clientId=producer-3] Cluster ID: rRB5SbEmTAOiqJlK_cc3zw (org.apache.kafka.clients.Metadata:279)
+[2025-01-14 10:37:37,757] WARN The configuration 'group.id' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,758] WARN The configuration 'config.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,758] WARN The configuration 'offset.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,758] WARN The configuration 'status.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,758] WARN The configuration 'status.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,759] WARN The configuration 'metrics.context.connect.kafka.cluster.id' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,761] WARN The configuration 'status.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,762] WARN The configuration 'config.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,762] WARN The configuration 'offset.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,762] WARN The configuration 'value.converter' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,762] WARN The configuration 'status.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,762] WARN The configuration 'key.converter' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,762] WARN The configuration 'config.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,763] WARN The configuration 'config.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,763] WARN The configuration 'metrics.context.connect.group.id' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,763] WARN The configuration 'status.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,763] WARN The configuration 'config.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,763] WARN The configuration 'offset.flush.interval.ms' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,763] WARN The configuration 'key.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,770] WARN The configuration 'value.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,771] WARN The configuration 'offset.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,771] WARN The configuration 'status.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,771] WARN The configuration 'offset.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.producer.ProducerConfig:362)
+[2025-01-14 10:37:37,771] INFO Kafka version: 2.6.0 (org.apache.kafka.common.utils.AppInfoParser:117)
+[2025-01-14 10:37:37,771] INFO Kafka commitId: 62abe01bee039651 (org.apache.kafka.common.utils.AppInfoParser:118)
+[2025-01-14 10:37:37,771] INFO Kafka startTimeMs: 1736825857771 (org.apache.kafka.common.utils.AppInfoParser:119)
+[2025-01-14 10:37:37,772] INFO ConsumerConfig values: 
+	allow.auto.create.topics = true
+	auto.commit.interval.ms = 5000
+	auto.offset.reset = earliest
+	bootstrap.servers = [localhost:9092]
+	check.crcs = true
+	client.dns.lookup = use_all_dns_ips
+	client.id = consumer-connect-cluster-3
+	client.rack = 
+	connections.max.idle.ms = 540000
+	default.api.timeout.ms = 60000
+	enable.auto.commit = false
+	exclude.internal.topics = true
+	fetch.max.bytes = 52428800
+	fetch.max.wait.ms = 500
+	fetch.min.bytes = 1
+	group.id = connect-cluster
+	group.instance.id = null
+	heartbeat.interval.ms = 3000
+	interceptor.classes = []
+	internal.leave.group.on.close = true
+	internal.throw.on.fetch.stable.offset.unsupported = false
+	isolation.level = read_uncommitted
+	key.deserializer = class org.apache.kafka.common.serialization.StringDeserializer
+	max.partition.fetch.bytes = 1048576
+	max.poll.interval.ms = 300000
+	max.poll.records = 500
+	metadata.max.age.ms = 300000
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	partition.assignment.strategy = [class org.apache.kafka.clients.consumer.RangeAssignor]
+	receive.buffer.bytes = 65536
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.mechanism = GSSAPI
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	session.timeout.ms = 10000
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+	value.deserializer = class org.apache.kafka.common.serialization.ByteArrayDeserializer
+ (org.apache.kafka.clients.consumer.ConsumerConfig:354)
+[2025-01-14 10:37:37,783] WARN The configuration 'offset.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,783] WARN The configuration 'config.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,783] WARN The configuration 'offset.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,783] WARN The configuration 'config.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,783] WARN The configuration 'offset.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,783] WARN The configuration 'status.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,784] WARN The configuration 'status.storage.jdbc.password' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,784] WARN The configuration 'metrics.context.connect.kafka.cluster.id' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,784] WARN The configuration 'status.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,784] WARN The configuration 'config.storage.jdbc.driver' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,784] WARN The configuration 'offset.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,784] WARN The configuration 'value.converter' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,785] WARN The configuration 'status.storage.jdbc.url' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,785] WARN The configuration 'key.converter' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,786] WARN The configuration 'config.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,786] WARN The configuration 'config.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,786] WARN The configuration 'metrics.context.connect.group.id' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,787] WARN The configuration 'status.storage.topic' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,788] WARN The configuration 'config.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,788] WARN The configuration 'offset.flush.interval.ms' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,788] WARN The configuration 'key.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,788] WARN The configuration 'value.converter.schemas.enable' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,788] WARN The configuration 'offset.storage.replication.factor' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,789] WARN The configuration 'status.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,789] WARN The configuration 'offset.storage.jdbc.user' was supplied but isn't a known config. (org.apache.kafka.clients.consumer.ConsumerConfig:362)
+[2025-01-14 10:37:37,790] INFO Kafka version: 2.6.0 (org.apache.kafka.common.utils.AppInfoParser:117)
+[2025-01-14 10:37:37,791] INFO Kafka commitId: 62abe01bee039651 (org.apache.kafka.common.utils.AppInfoParser:118)
+[2025-01-14 10:37:37,792] INFO Kafka startTimeMs: 1736825857790 (org.apache.kafka.common.utils.AppInfoParser:119)
+[2025-01-14 10:37:37,821] INFO [Consumer clientId=consumer-connect-cluster-3, groupId=connect-cluster] Cluster ID: rRB5SbEmTAOiqJlK_cc3zw (org.apache.kafka.clients.Metadata:279)
+[2025-01-14 10:37:37,856] INFO [Consumer clientId=consumer-connect-cluster-3, groupId=connect-cluster] Subscribed to partition(s): connect-configs-0 (org.apache.kafka.clients.consumer.KafkaConsumer:1120)
+[2025-01-14 10:37:37,857] INFO [Consumer clientId=consumer-connect-cluster-3, groupId=connect-cluster] Seeking to EARLIEST offset of partition connect-configs-0 (org.apache.kafka.clients.consumer.internals.SubscriptionState:614)
+[2025-01-14 10:37:37,873] INFO [Consumer clientId=consumer-connect-cluster-3, groupId=connect-cluster] Resetting offset for partition connect-configs-0 to offset 0. (org.apache.kafka.clients.consumer.internals.SubscriptionState:397)
+[2025-01-14 10:37:37,959] INFO Finished reading KafkaBasedLog for topic connect-configs (org.apache.kafka.connect.util.KafkaBasedLog:161)
+[2025-01-14 10:37:37,959] INFO Started KafkaBasedLog for topic connect-configs (org.apache.kafka.connect.util.KafkaBasedLog:163)
+[2025-01-14 10:37:37,959] INFO Started KafkaConfigBackingStore (org.apache.kafka.connect.storage.KafkaConfigBackingStore:280)
+[2025-01-14 10:37:37,960] INFO [Worker clientId=connect-1, groupId=connect-cluster] Herder started (org.apache.kafka.connect.runtime.distributed.DistributedHerder:290)
+[2025-01-14 10:37:37,972] INFO [Worker clientId=connect-1, groupId=connect-cluster] Cluster ID: rRB5SbEmTAOiqJlK_cc3zw (org.apache.kafka.clients.Metadata:279)
+[2025-01-14 10:37:37,973] INFO [Worker clientId=connect-1, groupId=connect-cluster] Discovered group coordinator 172.18.72.55:9092 (id: 2147483647 rack: null) (org.apache.kafka.clients.consumer.internals.AbstractCoordinator:815)
+[2025-01-14 10:37:37,976] INFO [Worker clientId=connect-1, groupId=connect-cluster] Rebalance started (org.apache.kafka.connect.runtime.distributed.WorkerCoordinator:225)
+[2025-01-14 10:37:37,976] INFO [Worker clientId=connect-1, groupId=connect-cluster] (Re-)joining group (org.apache.kafka.clients.consumer.internals.AbstractCoordinator:553)
+[2025-01-14 10:37:38,003] INFO [Worker clientId=connect-1, groupId=connect-cluster] Join group failed with org.apache.kafka.common.errors.MemberIdRequiredException: The group member needs to have a valid member id before actually entering a consumer group. (org.apache.kafka.clients.consumer.internals.AbstractCoordinator:456)
+[2025-01-14 10:37:38,004] INFO [Worker clientId=connect-1, groupId=connect-cluster] (Re-)joining group (org.apache.kafka.clients.consumer.internals.AbstractCoordinator:553)
+[2025-01-14 10:37:38,130] INFO [Worker clientId=connect-1, groupId=connect-cluster] Successfully joined group with generation 1 (org.apache.kafka.clients.consumer.internals.AbstractCoordinator:504)
+[2025-01-14 10:37:38,131] INFO [Worker clientId=connect-1, groupId=connect-cluster] Joined group at generation 1 with protocol version 2 and got assignment: Assignment{error=0, leader='connect-1-eeb655d0-cff6-43f2-9be7-455cf71ed947', leaderUrl='http://172.18.72.55:8083/', offset=5, connectorIds=[], taskIds=[], revokedConnectorIds=[], revokedTaskIds=[], delay=0} with rebalance delay: 0 (org.apache.kafka.connect.runtime.distributed.DistributedHerder:1681)
+[2025-01-14 10:37:38,132] WARN [Worker clientId=connect-1, groupId=connect-cluster] Catching up to assignment's config offset. (org.apache.kafka.connect.runtime.distributed.DistributedHerder:1089)
+[2025-01-14 10:37:38,132] INFO [Worker clientId=connect-1, groupId=connect-cluster] Current config state offset -1 is behind group assignment 5, reading to end of config log (org.apache.kafka.connect.runtime.distributed.DistributedHerder:1150)
+[2025-01-14 10:37:38,412] INFO Started o.e.j.s.ServletContextHandler@7159139f{/,null,AVAILABLE} (org.eclipse.jetty.server.handler.ContextHandler:825)
+[2025-01-14 10:37:38,412] INFO REST resources initialized; server is started and ready to handle requests (org.apache.kafka.connect.runtime.rest.RestServer:319)
+[2025-01-14 10:37:38,412] INFO Kafka Connect started (org.apache.kafka.connect.runtime.Connect:57)
+[2025-01-14 10:37:38,439] INFO [Worker clientId=connect-1, groupId=connect-cluster] Finished reading to end of log and updated config snapshot, new config log offset: 5 (org.apache.kafka.connect.runtime.distributed.DistributedHerder:1154)
+[2025-01-14 10:37:38,440] INFO [Worker clientId=connect-1, groupId=connect-cluster] Starting connectors and tasks using config offset 5 (org.apache.kafka.connect.runtime.distributed.DistributedHerder:1208)
+[2025-01-14 10:37:38,440] INFO [Worker clientId=connect-1, groupId=connect-cluster] Finished starting connectors and tasks (org.apache.kafka.connect.runtime.distributed.DistributedHerder:1236)
+[2025-01-14 10:37:38,489] INFO [Worker clientId=connect-1, groupId=connect-cluster] Session key updated (org.apache.kafka.connect.runtime.distributed.DistributedHerder:1570)
