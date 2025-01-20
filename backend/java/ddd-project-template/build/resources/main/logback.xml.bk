@@ -1,0 +1,17 @@
+<configuration>
+
+    <appenders>
+        <SocketAppender name="logstash" host="localhost" port="50000">
+            <encoder>
+                <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            </encoder>
+        </SocketAppender>
+    </appenders>
+
+    <loggers>
+        <root level="info">
+            <appender-ref ref="logstash"/>
+        </root>
+    </loggers>
+
+</configuration>

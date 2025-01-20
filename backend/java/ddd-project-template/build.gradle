@@ -1,0 +1,98 @@
+
+
+
+// 2. For build using Dedicated Plugins
+//buildscript {
+//	repositories {
+//		mavenCentral()
+//		gradlePluginPortal()
+//	}
+//	dependencies {
+//		classpath "gradle.plugin.com.github.johnrengelman:shadow:7.1.2"
+//	}
+//}
+
+
+
+
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '3.2.5'
+	id 'io.spring.dependency-management' version '1.1.4'
+	id("io.freefair.lombok") version "8.6"
+//	id "org.hibernate.orm" version "7.0.0.Alpha2"   //--> conflicted with dependency spring-boot-starter-data-jpa
+	id 'com.github.johnrengelman.shadow' version '7.1.2' // for build use Dedicated Plugins
+}
+
+group = 'com.example'
+version = '0.0.1-SNAPSHOT'
+
+java {
+	sourceCompatibility = '17'
+}
+
+repositories {
+	mavenCentral()
+	maven { url "https://jitpack.io" }
+}
+
+dependencies {
+
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'com.google.code.gson:gson:2.11.0'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+
+	//Databases
+	implementation 'org.postgresql:postgresql' // Add the PostgreSQL JDBC driver
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	implementation 'redis.clients:jedis:4.2.3'
+	implementation 'mysql:mysql-connector-java:8.0.30'
+
+	implementation 'app.cash.wisp:bucket4j:2024.05.22.145031-7698e93'
+	implementation 'com.bucket4j:bucket4j-core:8.7.0'
+
+	implementation 'net.logstash.logback:logstash-logback-encoder:4.1'
+
+//	implementation 'org.springdoc:springdoc-openapi-ui:1.7.0'
+
+	testImplementation 'org.mockito:mockito-core:3.5.13'
+	testImplementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	compileOnly 'org.projectlombok:lombok:latest'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
+
+//
+//task buildFatJar(type: ShadowJar) {
+//	archiveFileName = 'dddsample-0.0.1.jar' // Customize the output filename
+//	from sourceSets.main.compileClasspath
+//	exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA' // Exclude common conflicts
+//}
+
+// 1. For build using Jar Task
+jar {
+	archiveBaseName = 'DDDSample'
+	manifest {
+		attributes "Main-Class": "com.example.DDDSample.DddSampleApplication"
+	}
+
+//	from {
+//		configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+//	}
+}
+
+task customFatJar(type: Jar) {
+	manifest {
+		attributes 'Main-Class': 'com.example.DDDSample.DddSampleApplication'
+	}
+	archiveBaseName = 'all-in-one-jar'
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+	from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+	with jar
+}
