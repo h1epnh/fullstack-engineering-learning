@@ -25,26 +25,26 @@ public class UserIntegrationTest {
 
     @Test
     void createUser() throws Exception {
-        User user = new User("testuser", "password");
+        User user = new User("NGUYEN VAN C", "c@example.com");
         mockMvc.perform(MockMvcRequestBuilders.post("/users")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(user)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.username").value("testuser"));
+                .andExpect(jsonPath("$.name").value("NGUYEN VAN C"));
     }
     @Test
-    void getUserByUsername() throws Exception {
+    void getUserById() throws Exception {
         // Create a user first (Assuming the creation works correctly)
-        User user = new User("name", "email");
+        User user = new User("NGUYEN VAN B", "b@example.com");
         mockMvc.perform(MockMvcRequestBuilders.post("/users")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(user)))
                 .andExpect(status().isCreated());
 
         // Retrieve the user
-        mockMvc.perform(MockMvcRequestBuilders.get("/users/testuser2")
+        mockMvc.perform(MockMvcRequestBuilders.get("/users/6")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.username").value("testuser2"));
+                .andExpect(jsonPath("$.name").value("NGUYEN VAN B"));
     }
 }
