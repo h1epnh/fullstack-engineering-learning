@@ -29,8 +29,8 @@ dependencies {
 	implementation 'org.postgresql:postgresql'
 	runtimeOnly 'com.h2database:h2' // H2 Database dependency
 
-	implementation 'org.projectlombok:lombok:1.18.24' // Use the latest version
-	annotationProcessor 'org.projectlombok:lombok:1.18.24'
+	implementation 'org.projectlombok:lombok:1.18.30' // Use the latest version
+	annotationProcessor 'org.projectlombok:lombok:1.18.30'
 }
 
 tasks.named('test') {
