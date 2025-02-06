@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: circleci-server
+  namespace: circleci
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: circleci-server
+  template:
+    metadata:
+      labels:
+        app: circleci-server
+    spec:
+      containers:
+        - name: circleci-server
+          image: circleci/build-agent:latest
+          env:
+            - name: DATABASE_URL
+              value: postgres://postgres:postgres@postgres/circleci
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: circleci-server
+  namespace: circleci
+spec:
+  ports:
+    - port: 80
+      targetPort: 8080
+  selector:
+    app: circleci-server
