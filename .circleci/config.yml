@@ -22,6 +22,9 @@ jobs:
       - run:
           name: Run App
           command: node ./devops/projects/simple-lab/app/server.js
+      - run:
+          name: Stop App
+          command: fuser -k 3000/tcp
 
 workflows:
   version: 2
