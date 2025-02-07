@@ -1,0 +1,33 @@
+name: Run Node App
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  run-node-app:
+    runs-on: ubuntu-latest
+
+    # Set a default working directory for all run steps in this job
+    defaults:
+      run:
+        working-directory: ./devops/projects/simple-lab/app  # Change this to your desired directory
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'  # Adjust the version as needed
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run Node application
+        run: node server.js
