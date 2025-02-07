@@ -14,7 +14,7 @@ jobs:
       - setup_remote_docker
       - run:
           name: Change directory to project path
-          command: cd ./devops/projects/simple-lab/app
+          command: cd ./devops/projects/simple-lab/app & ls
       - run:
           name: Install dependencies
           command: npm install
