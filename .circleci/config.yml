@@ -14,13 +14,14 @@ jobs:
       - setup_remote_docker
       - run:
           name: Change directory to project path
-          command: cd ./devops/projects/simple-lab/app & ls
+          command: ls
       - run:
           name: Install dependencies
           command: npm install
+          working_directory: ~/repo/devops/projects/simple-lab/app
       - run:
           name: Run App
-          command: node server.js
+          command: node ./devops/projects/simple-lab/app/server.js
 
 workflows:
   version: 2
