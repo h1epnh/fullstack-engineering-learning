@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>My Simple Blog</title>
+</head>
+<body>
+  <h1>My Blog</h1>
+  <div id="articles"></div>
+
+  <script>
+    async function getArticles() {
+      const response = await fetch('http://localhost:1337/api/articles?populate=*');
+      const data = await response.json();
+      return data.data; // Access the 'data' property, as Strapi wraps the results
+    }
+
+    async function displayArticles() {
+      const articles = await getArticles();
+      const articlesDiv = document.getElementById('articles');
+
+      console.log(articles);
+
+      articles.forEach(article => {
+        const articleDiv = document.createElement('div');
+        articleDiv.innerHTML = `
+          <h2>${article.title}</h2>
+          <p>${article.description}</p>
+          <a href="article.html?id=${article.id}">Read More</a>
+        `;
+        articlesDiv.appendChild(articleDiv);
+      });
+    }
+
+    displayArticles();
+  </script>
+</body>
+</html>

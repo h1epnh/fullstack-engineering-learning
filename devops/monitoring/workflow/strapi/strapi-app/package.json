@@ -9,7 +9,8 @@
     "develop": "strapi develop",
     "seed:example": "node ./scripts/seed.js",
     "start": "strapi start",
-    "strapi": "strapi"
+    "strapi": "strapi",
+    "test": "jest --forceExit --detectOpenHandles"
   },
   "dependencies": {
     "@strapi/plugin-cloud": "5.9.0",
@@ -39,6 +40,14 @@
     "npm": ">=6.0.0"
   },
   "strapi": {
-    "uuid": "7d088fab-146b-4441-ba56-2eb3ca8d2869"
+    "uuid": "7,d088fab-146b-4441-ba56-2eb3ca8d2869"
+  },
+  "jest": {
+    "testPathIgnormnePatterns": [
+      "/node_modules/",
+      ".tmp",
+      ".cache"
+    ],
+    "testEnvironment": "node"
   }
 }

@@ -8,3 +8,7 @@ GRANT ALL PRIVILEGES ON DATABASE strapi TO strapi;
 
 
 ALTER USER strapi WITH SUPERUSER; -- be careful
+
+
+# Create customer API
+yarn strapi generate

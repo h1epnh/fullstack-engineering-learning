@@ -1,0 +1,26 @@
+{
+  "kind": "singleType",
+  "collectionName": "terms_and_conditions",
+  "info": {
+    "singularName": "tnc",
+    "pluralName": "terms-and-conditions",
+    "displayName": "Terms And Conditions"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "Title": {
+      "type": "string",
+      "required": true
+    },
+    "Content": {
+      "type": "blocks",
+      "required": true
+    },
+    "LastUpdated": {
+      "type": "date"
+    }
+  }
+}
