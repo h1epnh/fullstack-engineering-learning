@@ -15,7 +15,7 @@ def get_db_connection():
         print(f"Database connection error: {e}")
         return None
 
-def insert_data_into_db(conn, api_data, ma_phuong_xa):
+def insert_data_into_db(conn, api_data, ma_phuong_xa, ma_quan_huyen, ma_tinh_thanh, ma_thua_dat):
   """Inserts API data into the PostgreSQL database"""
   from app.services import data_service
   if not data_service.validate_quy_hoach_data(api_data):
@@ -35,13 +35,13 @@ def insert_data_into_db(conn, api_data, ma_phuong_xa):
 
 
     cur.execute("""
-            INSERT INTO ttqh_chi_tiet (ThongTinChung, LoGioi, QHPK, CTXD, DCCB, QHNganh, QHChiTiet, VatGoc, blocked, maphuongxa)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-        """, (ThongTinChung, LoGioi, QHPK, CTXD, DCCB, QHNganh, QHChiTiet, VatGoc, blocked, ma_phuong_xa))
+            INSERT INTO ttqh_chi_tiet (ThongTinChung, LoGioi, QHPK, CTXD, DCCB, QHNganh, QHChiTiet, VatGoc, blocked, maphuongxa, maquanhuyen, matinhthanh, mathuadat)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+        """, (ThongTinChung, LoGioi, QHPK, CTXD, DCCB, QHNganh, QHChiTiet, VatGoc, blocked, ma_phuong_xa, ma_quan_huyen, ma_tinh_thanh, ma_thua_dat))
     conn.commit()
     cur.close()
-    print("Data inserted successfully into the database.")
-
+    # print("Data inserted successfully into the database.")
+    print(f"Data inserted successfully into the database. ma_phuong_xa: {ma_phuong_xa}, ma_quan_huyen: {ma_quan_huyen}, -> ma_thua_dat: {ma_thua_dat}")
 
   except Exception as e:
     print(f"Error inserting data into database: {e}")
@@ -74,11 +74,11 @@ def fetch_quy_hoach_data(conn, ma_thua_dat):
         return None
     
     
-def fetch_mathuadat_from_ttqh_phuong_xa(conn):
+def fetch_mathuadat_from_ttqh_phuong_xa(conn, ma_quan_huyen):
     """Fetches maphuongxa and maquanhuyen from ttqh_phuong_xa table."""
     try:
         cur = conn.cursor()
-        cur.execute("SELECT maphuongxa, maquanhuyen FROM ttqh_phuong_xa;")
+        cur.execute("SELECT maphuongxa, maquanhuyen FROM ttqh_phuong_xa where maquanhuyen = %s and maphuongxa = '26815';", (ma_quan_huyen,))
         results = cur.fetchall()  # Fetch all rows
         cur.close()
         return results  # Return list of (maphuongxa, maquanhuyen) tuples
