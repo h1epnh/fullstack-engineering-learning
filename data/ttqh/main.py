@@ -17,7 +17,7 @@ def main():
     try:
         # Fetch maphuongxa and maquanhuyen from ttqh_phuong_xa
         
-        ma_quan_huyen = "762" # Quận 9
+        ma_quan_huyen = "762" 
         
         phuong_xa_data = db.fetch_mathuadat_from_ttqh_phuong_xa(conn, ma_quan_huyen)
 
@@ -27,14 +27,13 @@ def main():
                 
                 try:
                     print("Starting data retrieval and insertion...")
-                    for i in range(47, 250):                        
+                    for i in range(250, 500):                        
                         count_fail = 1                        
-                        for j in range(16, 500):                           
+                        for j in range(548, 550):                           
                            
                             ma_thua_dat = maphuongxa + str(i).zfill(3) + str(j).zfill(4)
                             api_data = api_service.get_quy_hoach_data(ma_thua_dat, api_url)
                             if api_data:
-                                # print(f"API data retrieved for maphuongxa: {maphuongxa}, maquanhuyen: {maquanhuyen}, -> ma_thua_dat: {ma_thua_dat}")
                                 # Process or insert the api_data here
                                 existing_data = db.fetch_quy_hoach_data(conn, ma_thua_dat)
                                 if not existing_data:
@@ -50,7 +49,7 @@ def main():
                                 if count_fail > 3:
                                     break
                                 
-                            time.sleep(0.1)
+                            # time.sleep(0.1)
 
                 except Exception as e:
                     print(f"An error occurred: {e}")
