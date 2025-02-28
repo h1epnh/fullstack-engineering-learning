@@ -78,7 +78,19 @@ def fetch_mathuadat_from_ttqh_phuong_xa(conn, ma_quan_huyen):
     """Fetches maphuongxa and maquanhuyen from ttqh_phuong_xa table."""
     try:
         cur = conn.cursor()
-        cur.execute("SELECT maphuongxa, maquanhuyen FROM ttqh_phuong_xa where maquanhuyen = %s and maphuongxa = '26803';", (ma_quan_huyen,))
+        cur.execute("SELECT maphuongxa, maquanhuyen FROM ttqh_phuong_xa where maquanhuyen = %s and maphuongxa = '26851';", (ma_quan_huyen,))
+        results = cur.fetchall()  # Fetch all rows
+        cur.close()
+        return results  # Return list of (maphuongxa, maquanhuyen) tuples
+    except psycopg2.Error as e:
+        print(f"Database query error: {e}")
+        return []
+    
+def fetch_mathuadat_exist(conn, ma_thua_dat):
+    """Fetches maphuongxa and maquanhuyen from ttqh_phuong_xa table."""
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM ttqh_chi_tiet where mathuadat = %s;", (ma_thua_dat,))
         results = cur.fetchall()  # Fetch all rows
         cur.close()
         return results  # Return list of (maphuongxa, maquanhuyen) tuples

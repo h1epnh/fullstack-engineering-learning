@@ -17,7 +17,7 @@ def main():
     try:
         # Fetch maphuongxa and maquanhuyen from ttqh_phuong_xa
         
-        ma_quan_huyen = "762" 
+        ma_quan_huyen = "777" 
         
         phuong_xa_data = db.fetch_mathuadat_from_ttqh_phuong_xa(conn, ma_quan_huyen)
 
@@ -27,9 +27,9 @@ def main():
                 
                 try:
                     print("Starting data retrieval and insertion...")
-                    for i in range(250, 500):                        
+                    for i in range(50, 500):                        
                         count_fail = 1                        
-                        for j in range(548, 550):                           
+                        for j in range(1, 500):                           
                            
                             ma_thua_dat = maphuongxa + str(i).zfill(3) + str(j).zfill(4)
                             api_data = api_service.get_quy_hoach_data(ma_thua_dat, api_url)
