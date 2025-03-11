@@ -17,7 +17,7 @@ def main():
     try:
         # Fetch maphuongxa and maquanhuyen from ttqh_phuong_xa
         
-        ma_quan_huyen = "777" 
+        ma_quan_huyen = "767" 
         
         phuong_xa_data = db.fetch_mathuadat_from_ttqh_phuong_xa(conn, ma_quan_huyen)
 
@@ -27,7 +27,7 @@ def main():
                 
                 try:
                     print("Starting data retrieval and insertion...")
-                    for i in range(50, 500):                        
+                    for i in range(22, 500):                        
                         count_fail = 1                        
                         for j in range(1, 500):                           
                            
