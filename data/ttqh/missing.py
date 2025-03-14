@@ -17,9 +17,9 @@ def main():
     try:
         # Fetch maphuongxa and maquanhuyen from ttqh_phuong_xa
         
-        ma_quan_huyen = "763" 
+        ma_quan_huyen = "762" 
         
-        phuong_xa_data = db.fetch_mathuadat_from_ttqh_phuong_xa(conn, ma_quan_huyen)
+        phuong_xa_data = db.fetch_mathuadat_from_ttqh_maquanhuyen(conn, ma_quan_huyen)
 
         if phuong_xa_data:
             print("Fetching data for maphuongxa values...", "Length: ", len(phuong_xa_data))
@@ -27,8 +27,16 @@ def main():
                 
                 try:
                     print("Starting data retrieval and insertion...")
+                    count = 1 
+                    
+                    if count > 3:
+                            i = 500 
+                            
                     for i in range(1, 500):
                         count_fail = 1 
+                        
+                        
+                            
                         for j in range(1, 500):
                             # Check if the ma_thua_dat already exists in the database
                             ma_thua_dat = maphuongxa + str(i).zfill(3) + str(j).zfill(4)
@@ -45,9 +53,13 @@ def main():
                                     
                                     count_fail += 1
                                     if count_fail > 3:
+                                        count += 1 
                                         break
                             else:
                                 print(f"Data for ma_thua_dat {ma_thua_dat} already exists in the database.")
+                                
+                        
+                            
                 except Exception as e:
                     print(f"An error occurred: {e}")
 
