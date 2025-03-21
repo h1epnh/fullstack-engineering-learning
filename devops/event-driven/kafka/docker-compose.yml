@@ -1,0 +1,70 @@
+version: "3.9"
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9094:9094"  # for external access (outside the Docker network)
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_RETENTION_HOURS: 168 # Default 7 days retention.  Adjust as needed.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true" # IMPORTANT: Consider disabling in production environments!  See notes below.
+      # For testing, you can add the following line to enable automatic topic creation.  **Do NOT use this in production!**
+      # KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka_data:/var/lib/kafka/data # Persist Kafka data
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8080:8080"
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      # If you have authentication enabled on Kafka, configure it here.
+      #  Example for SASL/PLAIN:
+      #  KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: SASL_PLAIN
+      #  KAFKA_CLUSTERS_0_PROPERTIES_SASL_MECHANISM: PLAIN
+      #  KAFKA_CLUSTERS_0_PROPERTIES_SASL_JAAS_CONFIG: org.apache.kafka.common.security.plain.PlainLoginModule required username="<your_username>" password="<your_password>";
+
+  # Optional:  A simple Kafka client for testing.
+  kafka-client:
+    image: wurstmeister/kafka
+    container_name: kafka-client
+    depends_on:
+      - kafka
+    entrypoint:
+      [
+        "sh",
+        "-c",
+        "kafka-console-consumer --bootstrap-server kafka:9092 --topic test-topic --from-beginning",
+      ]
+    tty: true # Keep the container running in the background
+
+volumes:
+  kafka_data:
