@@ -1,0 +1,18 @@
+spec:
+  name: unleash
+  services:
+    - name: unleash-server
+      image:
+        registry_type: DOCKER_HUB
+        registry: unleashorg
+        repository: unleash-server
+        tag: latest
+      envs:
+        - key: DATABASE_URL
+          scope: RUN_TIME
+          value: ${unleash-db.DATABASE_URL}
+        - key: UNLEASH_URL
+          scope: RUN_TIME
+          value: ${APP_URL}
+  databases:
+    - name: unleash-db

@@ -1,0 +1,104 @@
+{
+  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "a11y": {
+        "useSemanticElements": "off"
+      },
+      "correctness": {
+        "noUnsafeOptionalChaining": "off",
+        "useExhaustiveDependencies": "off",
+        "noUnusedImports": "warn",
+        "useJsxKeyInIterable": "off"
+      },
+      "complexity": {
+        "noBannedTypes": "off",
+        "noUselessConstructor": "off",
+        "useOptionalChain": "warn",
+        "noStaticOnlyClass": "off",
+        "noForEach": "off",
+        "noUselessFragments": "off"
+      },
+      "style": {
+        "noNonNullAssertion": "off",
+        "noInferrableTypes": "off",
+        "noUnusedTemplateLiteral": "off",
+        "useSingleVarDeclarator": "off",
+        "noUselessElse": "off",
+        "useNodejsImportProtocol": "off"
+      },
+      "suspicious": {
+        "noExplicitAny": "off",
+        "noExtraNonNullAssertion": "off",
+        "noRedeclare": "off",
+        "noPrototypeBuiltins": "off",
+        "noConfusingVoidType": "off",
+        "noArrayIndexKey": "off",
+        "noThenProperty": "off",
+        "noExportsInTest": "off"
+      },
+      "performance": {
+        "noAccumulatingSpread": "off",
+        "noDelete": "off"
+      }
+    },
+    "ignore": [
+      "node_modules",
+      "docker",
+      "bundle.js",
+      "website/build",
+      "website/docs/generated",
+      "website/global.js",
+      "setupJest.js",
+      "dist",
+      "build",
+      "src/migrations/*.js",
+      "src/test/examples/*.json",
+      ".docusaurus",
+      "coverage",
+      "CHANGELOG.md",
+      "./package.json",
+      "./frontend/package.json"
+    ]
+  },
+  "organizeImports": {
+    "enabled": false
+  },
+  "formatter": {
+    "indentStyle": "space",
+    "ignore": [
+      "node_modules",
+      "docker",
+      "bundle.js",
+      "setupJest.js",
+      "dist",
+      "build",
+      "src/migrations/*.js",
+      "src/migrations/*.json",
+      "src/test/examples/*.json",
+      "coverage",
+      "website/build",
+      "website/docs/generated",
+      "website/global.js",
+      ".docusaurus",
+      "./package.json",
+      "./frontend/package.json"
+    ],
+    "indentWidth": 4
+  },
+  "javascript": {
+    "formatter": {
+      "semicolons": "always",
+      "quoteStyle": "single",
+      "jsxQuoteStyle": "single",
+      "indentWidth": 4
+    }
+  },
+  "json": {
+    "formatter": {
+      "indentWidth": 2
+    }
+  }
+}

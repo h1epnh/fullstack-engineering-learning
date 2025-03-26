@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+yarn dlx lint-staged
+
+node .husky/update-openapi-spec-list.js
+
+# Check if the src/lib/openapi/spec/index.ts file was modified and if so, add it to the commit
+if git ls-files -m | grep -q "src/lib/openapi/spec/index.ts"; then
+  git add src/lib/openapi/spec/index.ts
+fi
