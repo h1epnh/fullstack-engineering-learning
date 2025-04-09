@@ -1,0 +1,32 @@
+version: '3'
+
+services:
+  n8n:
+    # image: n8nio/n8n:latest
+    build:
+      context: .
+    ports:
+      - "5678:5678"
+    volumes:
+      - ~/.n8n:/home/node/.n8n
+    environment:
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - NODE_ENV=production
+      - NODE_PATH=/home/node/node_modules
+      - GENERIC_TIMEZONE=Europe/Paris
+      - NODE_FUNCTION_ALLOW_BUILTIN=*
+      - NODE_FUNCTION_ALLOW_EXTERNAL=lodash
+    restart: unless-stopped
+    networks:
+      - n8n-network
+
+  node-upgrade:
+    image: node:18
+    command: node --version
+    volumes:
+      - ~/.n8n:/home/node/.n8n
+      # Add additional volumes if necessary
+
+networks:
+  n8n-network:
