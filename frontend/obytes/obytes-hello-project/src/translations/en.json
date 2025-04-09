@@ -1,12 +1,13 @@
 {
   "onboarding": {
-    "message": "Welcome to obytes app site"
+    "message": "Welcome to Nail Salon app"
   },
   "settings": {
     "about": "About",
     "app_name": "App Name",
     "arabic": "Arabic",
     "english": "English",
+    "vietnamese": "Vietnamese",
     "generale": "General",
     "github": "Github",
     "language": "Language",
@@ -29,5 +30,35 @@
     "version": "Version",
     "website": "Website"
   },
-  "welcome": "Welcome to obytes app site"
+  "welcome": "Welcome to Nail Salon app",
+  "auth": {
+    "signIn": "Sign In",
+    "signUp": "Sign Up",
+    "welcome": "Welcome! 👋",
+    "signInMessage": "Sign in to your account using email, phone number, and password.",
+    "signUpMessage": "Create a new account using email, phone number, and password.",
+    "name": "Full Name",
+    "namePlaceholder": "John Doe",
+    "email": "Email",
+    "emailPlaceholder": "example@email.com",
+    "phone": "Phone Number",
+    "phonePlaceholder": "+1234567890",
+    "password": "Password",
+    "passwordPlaceholder": "***",
+    "confirmPassword": "Confirm Password",
+    "haveAccount": "Already have an account? Sign In",
+    "noAccount": "Don't have an account? Sign Up",
+    "salonName": "Nail Salon Pro",
+    "salonTagline": "Your Beauty, Our Passion"
+  },
+  "validation": {
+    "nameRequired": "Name must be at least 2 characters",
+    "emailInvalid": "Invalid email format",
+    "phoneInvalid": "Invalid phone number format",
+    "passwordRequired": "Password is required",
+    "passwordMinLength": "Password must be at least 6 characters",
+    "confirmPasswordRequired": "Please confirm your password",
+    "passwordsDontMatch": "Passwords don't match",
+    "emailOrPhoneRequired": "Either email or phone number is required"
+  }
 }

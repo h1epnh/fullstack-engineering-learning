@@ -58,12 +58,24 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     bundler: 'metro',
   },
   plugins: [
+    // [
+    //   'expo-splash-screen',
+    //   {
+    //     backgroundColor: '#2E3C4B',
+    //     image: './assets/splash-icon.png',
+    //     imageWidth: 150,
+    //   },
+    // ],
     [
       'expo-splash-screen',
       {
-        backgroundColor: '#2E3C4B',
-        image: './assets/splash-icon.png',
-        imageWidth: 150,
+        backgroundColor: '#232323',
+        image: './assets/images/splash-icon.png',
+        dark: {
+          image: './assets/images/splash-icon-dark.png',
+          backgroundColor: '#000000',
+        },
+        imageWidth: 200,
       },
     ],
     [

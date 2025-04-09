@@ -41,6 +41,7 @@
     "e2e-test": "maestro test .maestro/ -e APP_ID=com.obytes.development"
   },
   "dependencies": {
+    "@dgreasi/react-native-time-slot-picker": "^0.2.0",
     "@expo/metro-runtime": "^4.0.1",
     "@gorhom/bottom-sheet": "^5.0.5",
     "@hookform/resolvers": "^3.9.0",
@@ -48,6 +49,7 @@
     "@tanstack/react-query": "^5.52.1",
     "app-icon-badge": "^0.1.2",
     "axios": "^1.7.5",
+    "date-fns": "^4.1.0",
     "expo": "~52.0.26",
     "expo-constants": "~17.0.4",
     "expo-dev-client": "~5.0.9",

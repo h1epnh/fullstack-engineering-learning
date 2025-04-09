@@ -35,14 +35,24 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Feed',
+          title: 'Home',
           tabBarIcon: ({ color }) => <FeedIcon color={color} />,
-          headerRight: () => <CreateNewPostLink />,
-          tabBarButtonTestID: 'feed-tab',
+          // headerRight: () => <BookNowLink />,
+          tabBarButtonTestID: 'home-tab',
         }}
       />
 
       <Tabs.Screen
+        name="services"
+        options={{
+          title: 'Services',
+          headerShown: false,
+          tabBarIcon: ({ color }) => <StyleIcon color={color} />,
+          tabBarButtonTestID: 'style-tab',
+        }}
+      />
+
+      {/* <Tabs.Screen
         name="style"
         options={{
           title: 'Style',
@@ -50,7 +60,8 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <StyleIcon color={color} />,
           tabBarButtonTestID: 'style-tab',
         }}
-      />
+      /> */}
+
       <Tabs.Screen
         name="settings"
         options={{
@@ -64,11 +75,11 @@ export default function TabLayout() {
   );
 }
 
-const CreateNewPostLink = () => {
+const BookNowLink = () => {
   return (
-    <Link href="/feed/add-post" asChild>
+    <Link href="/scheduler/book-appointment" asChild>
       <Pressable>
-        <Text className="px-3 text-primary-300">Create</Text>
+        <Text className="px-3 text-primary-300">Book Now</Text>
       </Pressable>
     </Link>
   );
