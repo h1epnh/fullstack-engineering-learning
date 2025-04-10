@@ -2,6 +2,8 @@ version: '3'
 
 services:
   n8n:
+    # Specify the image name and tag
+    image: custom-n8n:latest
     # image: n8nio/n8n:latest
     build:
       context: .
@@ -9,6 +11,8 @@ services:
       - "5678:5678"
     volumes:
       - ~/.n8n:/home/node/.n8n
+      # Add additional volumes if necessary
+      - /Users/mac/Engineering/GitHub/fullstack-engineering-learning/devops/monitoring/workflow/n8n/share_data:/home/share_data
     environment:
       - N8N_PORT=5678
       - N8N_PROTOCOL=https
@@ -16,7 +20,7 @@ services:
       - NODE_PATH=/home/node/node_modules
       - GENERIC_TIMEZONE=Europe/Paris
       - NODE_FUNCTION_ALLOW_BUILTIN=*
-      - NODE_FUNCTION_ALLOW_EXTERNAL=lodash
+      - NODE_FUNCTION_ALLOW_EXTERNAL=lodash,mammoth,officeparser,textract
     restart: unless-stopped
     networks:
       - n8n-network
