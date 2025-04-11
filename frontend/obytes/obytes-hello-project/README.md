@@ -1,49 +1,57 @@
-<h1 align="center">
-  <img alt="logo" src="./assets/icon.png" width="124px" style="border-radius:10px"/><br/>
-Mobile App </h1>
+# Nail Salon Management System
 
-> This Project is based on [Obytes starter](https://starter.obytes.com)
+A modern full-stack application for managing nail salon services, appointments, and staff.
 
-## Requirements
+## 🌟 Features
 
-- [React Native dev environment ](https://reactnative.dev/docs/environment-setup)
-- [Node.js LTS release](https://nodejs.org/en/)
-- [Git](https://git-scm.com/)
-- [Watchman](https://facebook.github.io/watchman/docs/install#buildinstall), required only for macOS or Linux users
-- [Pnpm](https://pnpm.io/installation)
-- [Cursor](https://www.cursor.com/) or [VS Code Editor](https://code.visualstudio.com/download) ⚠️ Make sure to install all recommended extension from `.vscode/extensions.json`
+### For Customers
+- User registration and authentication
+- Browse available services
+- Book appointments
+- View appointment history
+- Manage profile
 
-## 👋 Quick start
+### For Staff
+- View daily schedule
+- Manage appointments
+- Update service status
+- View customer history
 
-Clone the repo to your machine and install deps :
+### For Administrators
+- Manage services
+- Manage staff
+- View analytics
+- Handle customer feedback
 
-```sh
-git clone https://github.com/user/repo-name
+## 🛠 Tech Stack
 
-cd ./repo-name
+### Backend
+- Node.js & Express.js
+- TypeScript
+- Prisma (ORM)
+- PostgreSQL
+- JWT Authentication
+- Winston (Logging)
+- Express Rate Limit
+- Compression
+- Morgan (HTTP Request Logging)
 
-pnpm install
-```
+### Frontend
+- React
+- TypeScript
+- Material-UI
+- Redux Toolkit
+- React Query
+- Axios
+- React Router
+- Formik & Yup
 
-To run the app on ios
+## 📋 Prerequisites
 
-```sh
-pnpm ios
-```
+- Node.js (v14 or higher)
+- PostgreSQL
+- npm or yarn
 
-To run the app on Android
+## 🚀 Getting Started
 
-```sh
-pnpm android
-```
-
-## ✍️ Documentation
-
-- [Rules and Conventions](https://starter.obytes.com/getting-started/rules-and-conventions/)
-- [Project structure](https://starter.obytes.com/getting-started/project-structure)
-- [Environment vars and config](https://starter.obytes.com/getting-started/environment-vars-config)
-- [UI and Theming](https://starter.obytes.com/ui-and-theme/ui-theming)
-- [Components](https://starter.obytes.com/ui-and-theme/components)
-- [Forms](https://starter.obytes.com/ui-and-theme/Forms)
-- [Data fetching](https://starter.obytes.com/guides/data-fetching)
-- [Contribute to starter](https://starter.obytes.com/how-to-contribute/)
+### Backend Setup
