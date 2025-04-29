@@ -28,7 +28,11 @@
     },
     "title": "Cài đặt",
     "version": "Phiên bản",
-    "website": "Trang web"
+    "website": "Trang web",
+    "zalo": "Zalo",
+    "facebook": "Facebook",
+    "instagram": "Instagram",
+    "x": "X"
   },
   "welcome": "Chào mừng đến với trang web ứng dụng Nail Salon",
   "auth": {

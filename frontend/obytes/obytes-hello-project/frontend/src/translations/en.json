@@ -28,7 +28,11 @@
     },
     "title": "Settings",
     "version": "Version",
-    "website": "Website"
+    "website": "Website",
+    "zalo": "Zalo",
+    "facebook": "Facebook",
+    "instagram": "Instagram",
+    "x": "X"
   },
   "welcome": "Welcome to Nail Salon app",
   "auth": {

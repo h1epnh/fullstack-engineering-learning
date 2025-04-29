@@ -10,6 +10,7 @@ interface AuthState {
   signIn: (data: TokenType) => void;
   signOut: () => void;
   hydrate: () => void;
+  getToken: () => TokenType | null;
 }
 
 const _useAuth = create<AuthState>((set, get) => ({
@@ -36,6 +37,10 @@ const _useAuth = create<AuthState>((set, get) => ({
       // Maybe sign_out user!
     }
   },
+  getToken: () => {
+    const token = get().token;
+    return token;
+  },
 }));
 
 export const useAuth = createSelectors(_useAuth);
@@ -43,3 +48,4 @@ export const useAuth = createSelectors(_useAuth);
 export const signOut = () => _useAuth.getState().signOut();
 export const signIn = (token: TokenType) => _useAuth.getState().signIn(token);
 export const hydrateAuth = () => _useAuth.getState().hydrate();
+// export const getAccessToken = () => _useAuth.getState().getToken();

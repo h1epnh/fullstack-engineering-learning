@@ -1,6 +1,8 @@
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as React from 'react';
+import { useAuth } from '@/lib/auth';
+import { useEffect, useState } from 'react';
 
 import {
   Button,
@@ -27,54 +29,20 @@ type ServiceDetail = {
   aftercare: string[];
 };
 
-// Mock data
-const SERVICE_DETAILS: Record<string, ServiceDetail> = {
-  '1': {
-    id: '1',
-    name: 'Manicure Services',
-    description:
-      'Experience our premium manicure services designed to keep your nails healthy and beautiful.',
-    image: 'https://images.unsplash.com/photo-1596462502278-27bfdc403348',
-    services: [
-      {
-        name: 'Classic Manicure',
-        price: 25,
-        duration: '45 min',
-        description: 'Basic nail care with polish application',
-      },
-      {
-        name: 'Gel Manicure',
-        price: 35,
-        duration: '60 min',
-        description: 'Long-lasting gel polish application',
-      },
-      {
-        name: 'French Manicure',
-        price: 30,
-        duration: '50 min',
-        description: 'Classic French tip design',
-      },
-      {
-        name: 'Nail Art',
-        price: 15,
-        duration: '30 min',
-        description: 'Custom nail designs',
-      },
-    ],
-    benefits: [
-      'Healthy nail growth',
-      'Improved nail strength',
-      'Professional finish',
-      'Relaxing experience',
-    ],
-    aftercare: [
-      'Avoid water for 2 hours',
-      'Use cuticle oil daily',
-      'Wear gloves for cleaning',
-      'Schedule regular maintenance',
-    ],
-  },
-  // Add more service details for other categories
+
+// Types
+type Service = {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  imageUrl: string;
+  price: number;
+  duration: string;
+  benefits: string[];
+  aftercare: string[];
+  createdAt: string;
+  updatedAt: string;
 };
 
 function ServiceItem({ service }: { service: ServiceDetail['services'][0] }) {
@@ -117,9 +85,36 @@ function AftercareTips({ tips }: { tips: string[] }) {
 export default function ServiceDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const service = SERVICE_DETAILS[id];
+  console.log('ServiceDetail ', id);
 
-  console.log(id);
+  const [service, setService] = React.useState<Service>();
+  const { getToken } = useAuth();
+  const fetchServicesById = async () => {
+    const token = getToken();
+    try {
+      const response = await fetch(`http://localhost:3000/api/services/${id}`, {
+        headers: {
+          'Authorization': `Bearer ${token?.access}`,
+        },
+        });
+        
+      if (!response.ok) {
+        throw new Error('Failed to fetch services');
+      }
+
+      const data = await response.json();
+      console.log(data);
+      setService(data); // Assuming the API returns an array of appointments
+    } catch (error) {
+      console.error('Error fetching services:', error);
+    } finally {
+      // setLoading(false); // Set loading to false after the API call
+    }
+  };
+
+  useEffect(() => {
+    fetchServicesById(); // Fetch appointments on component mount
+  }, []);
 
   if (!service) {
     return (
@@ -133,20 +128,21 @@ export default function ServiceDetail() {
   }
 
   return (
+
     <SafeAreaView className="flex-1 bg-gray-50">
       <FocusAwareStatusBar />
       <ScrollView>
         {/* Hero Image */}
         <View className="relative h-64">
           <Image
-            source={{ uri: service.image }}
+            source={{ uri: service?.imageUrl || '' }}
             className="size-full"
             contentFit="cover"
           />
           <View className="absolute inset-0 bg-black/30" />
           <View className="absolute inset-0 items-center justify-center p-4">
             <Text className="text-center text-3xl font-bold text-white">
-              {service.name}
+              {service?.name || ''}
             </Text>
           </View>
         </View>
@@ -154,26 +150,31 @@ export default function ServiceDetail() {
         {/* Content */}
         <View className="p-4">
           {/* Description */}
-          <Text className="mb-6 text-gray-600">{service.description}</Text>
+          <Text className="mb-6 text-gray-600">{service?.description || ''}</Text>
 
           {/* Services */}
           <Text className="mb-4 text-xl font-bold">Available Services</Text>
-          {service.services.map((item, index) => (
+          <ServiceItem key={1} service={service} />
+          {/* {service.services.map((item, index) => (
             <ServiceItem key={index} service={item} />
-          ))}
+          ))} */}
 
           {/* Benefits */}
           <Text className="mb-4 mt-6 text-xl font-bold">Benefits</Text>
           <View className="rounded-lg bg-white p-4 shadow-sm">
-            {service.benefits.map((benefit, index) => (
+          <View key={1} className="mb-2 flex-row items-center">
+                <View className="bg-primary mr-2 size-1.5 rounded-full" />
+                  <Text className="text-gray-700">{'Sale off to 30% for new customers'}</Text>
+                </View>
+            </View>
+            {/* {service.benefits.map((benefit, index) => (
               <View key={index} className="mb-2 flex-row items-center">
                 <View className="bg-primary mr-2 size-1.5 rounded-full" />
                 <Text className="text-gray-700">{benefit}</Text>
               </View>
-            ))}
-          </View>
+            ))} */}
 
-          <AftercareTips tips={service.aftercare} />
+          <AftercareTips tips={[service.description]} />
         </View>
       </ScrollView>
     </SafeAreaView>

@@ -1,0 +1,9 @@
+{
+    "builds": [
+      {
+        "src": "app.js",
+        "use": "@vercel/node",
+        "config": { "installCommand": "node app.js" }
+      }
+    ]
+  }

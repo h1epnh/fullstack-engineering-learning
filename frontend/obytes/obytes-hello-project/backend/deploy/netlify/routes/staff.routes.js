@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const staff_controller_1 = require("../controllers/staff.controller");
+const auth_middleware_1 = require("../middlewares/auth.middleware");
+const router = (0, express_1.Router)();
+const staffController = new staff_controller_1.StaffController();
+router.get('/', staffController.getAllStaffs);
+router.get('/:id', staffController.getStaffById);
+router.post('/', auth_middleware_1.authMiddleware, staffController.createStaff);
+router.put('/:id', auth_middleware_1.authMiddleware, staffController.updateStaff);
+router.delete('/:id', auth_middleware_1.authMiddleware, staffController.deleteStaff);
+exports.default = router;

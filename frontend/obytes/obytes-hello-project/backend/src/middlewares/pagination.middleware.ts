@@ -1,18 +1,26 @@
-import { type NextFunction, type Request, type Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
+
+interface PaginationQuery {
+  page?: string;
+  limit?: string;
+}
 
 export const paginationMiddleware = (
-  req: Request,
+  req: Request<{}, {}, {}, PaginationQuery>,
   res: Response,
   next: NextFunction
 ) => {
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = parseInt(req.query.limit as string) || 10;
-  const skip = (page - 1) * limit;
+  const page = parseInt(req.query.page || '1', 10);
+  const limit = parseInt(req.query.limit || '10', 10);
+
+  // Validate pagination parameters
+  const validatedPage = page > 0 ? page : 1;
+  const validatedLimit = limit > 0 && limit <= 100 ? limit : 10;
 
   req.pagination = {
-    page,
-    limit,
-    skip,
+    page: validatedPage,
+    limit: validatedLimit,
+    skip: (validatedPage - 1) * validatedLimit
   };
 
   next();

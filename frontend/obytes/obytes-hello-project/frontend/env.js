@@ -36,7 +36,7 @@ require('dotenv').config({
 
 const BUNDLE_ID = 'com.expo-owner-hello-project'; // ios bundle id
 const PACKAGE = 'com.expo_owner_hello_project'; // android package name
-const NAME = 'expo-owner-hello-project'; // app name
+const NAME = 'Nail-Salon-App'; // app name
 const EXPO_ACCOUNT_OWNER = 'expo-owner'; // expo account owner
 const EAS_PROJECT_ID = 'c3e1075b-6fe7-4686-aa49-35b46a229044'; // eas project id
 const SCHEME = 'expo-owner-hello-project'; // app scheme
