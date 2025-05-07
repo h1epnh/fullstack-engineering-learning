@@ -1,1 +1,0 @@
-[](https://github.com/getredash/redash/wiki/Local-development-setup)
