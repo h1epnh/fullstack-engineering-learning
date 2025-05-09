@@ -18,6 +18,9 @@
 *.zip
 *.tar.gz
 *.rar
+*.tar
+*.gz
+*.bkp
 
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
@@ -27,4 +30,5 @@ replay_pid*
 .node_modules/
 .node_modules/.cache/
 
-frontend/obytes/obytes-hello-project
+frontend/obytes/obytes-hello-project/
+devops/cloud/minio/data/
