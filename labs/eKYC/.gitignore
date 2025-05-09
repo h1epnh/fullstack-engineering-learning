@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+videos/
+weights/
+images/
+landmarks/
+*.ipynb
