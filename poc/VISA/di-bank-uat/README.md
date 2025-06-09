@@ -1,0 +1,1 @@
+openssl pkeyutl -decrypt -in decoded_data.bin -inkey privateKey.pem -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 > decrypted_shared_secret.txt

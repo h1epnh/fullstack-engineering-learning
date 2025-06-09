@@ -1,0 +1,24 @@
+server:
+  port: 8888
+
+spring:
+  application:
+    name: atg-jwt-service
+
+x-pay-integration:
+  atg:
+#    issuer: ${ATG_ISSUER} # Replace with the actual 'iss' provided by ATG
+#    duration: ${ATG_TOKEN_DURATION} # Duration for which the token is valid
+#    token-claim: ${ATG_TOKEN_CLAIM} # The claim that contains the token
+#    private-key: ${ATG_TOKEN_PRIVATE_KEY} # Private key for signing the JWT
+
+    issuer: 559e1f93-65b2-11ef-8e67-fa163e85d367 # Replace with the actual 'iss' provided by ATG
+    duration: 'PT3H' # Duration for which the token is valid
+    token-claim: '' # The claim that contains the token
+    private-key: MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCrLBG2YrxevJcBt235uAC1y3FJSXERSGJvsyPv95yq9lzCcGOt0BOufHziEEg7Ad+Y1DfkyC2E7ZhDTAAea5RC4EY68j/cRdjJnkmn0evgM54yuy43TmVSCeUCZEutFDVN4SI8XUDVp815qSqkj6C2zDY4vkkb4TpMe/CFxO5PSplP1HCdkaqSag8rL+6BMQUHoKLItPGUflmPGTwR7ojmdOeMVejQMOMvqOE1zb6jFTDJf8zqVSPVlBJ5NmZ6DL+7nrpN1ux6IgiYdYBHaTXMSJwmxVExDdOQ3qIlWm3jRRf8vHdeUVPw5WtpRkRa3dPV0Cnit1HdLoAf3950/Cx9AgMBAAECggEASYCdAoKXfN7iwTvxH6Bhva7ksKG2ycMZcfms3uim/8rWvi/gvcxyByUxwylWuu/tAgVvEvDaixAzqAJEsstjWOxRfBJ2VbIwizNLUaMU9Kt1rTcve1RQsc/J5SMIVAQvd4fLWbx5kMWDuFBqHUwHqTc7uVYMssoebKVz/R05cBZW WnLR6ggr+xZgzuidNloREsVXDi5BCxzcZb1heJ2zlAK97SgV3o0plKMQnGOT7vBUvI1i2Vyu+yTRoHJjW9PXLqSKdhW++PTZ8U9UmeX/bKVwVtmaZhMkEa7SYXX64fDxZV9+IBdYUBy2jnj7N7wxFok5oY+sOXEt1W1edkUpCQKBgQDf9gKIRsdGyA+M60KDgZ163y2wQ7QFwCrzcVEuf41s8gYIsyq7qWwLy5LagwIb+6Zi2fuw+ylBMJYNG8cx4DwwWqwfUURz3UWj/rTeMZ9TTVTjPkbaDKkIxLH0IdCxeB8TOwwq9NBV42lTS5pUPWiKowFtjDXslikUN1co3Z18ewKBgQDDqM4jYx/9Z4qq9HdcDYA5NS5AHnQTGLvoERD2Gi7Iy5FUV6+PjdNN0F4Y5Zb/sMzQHFyd2Mw4l4frl29aUFtZRFmf90amQPL/zrO3c4QL2ABI9hXE2Ww2u1ZlkJ/7xNNahIOjXMX1x5OAykuWmMdZXaZ42exNYRkKZ3VxiGsVZwKBgHz5j+Ix9OPHof3WDlDKFHHLdnhk32FSIeWlN1MGNIo16C4UpOUBntxaJkGvV47795Yz4+KX1SaekS0Rci+f3JZzEpeLRvKM6F6iNJXFBQ58GcGRMAJfjDfrYw5DjGxsBpM5oQmbgWJcO5sSljUp61tpqNNTqYezJ4szcnzIZihfAoGAJjwrpGCvlK6SO5wwYw3EW+mXkzIgTscLmWsUXHN7ZwPY75l/FleJznAEo2riWi8rpxOTycjfB8Qc7J4YRZbkcwpXVVpWNREGK5UyK4xoZoQcciWc1W4DpqJvXMOpb+LjxpGUw+zSRphsq8NciB5s/nq9mGpFsk1iPlU/byNQgcsCgYANGbeL//ETfgPmZMxKlnY8rdW9Fftye9jHcHQfF9+FMTEnXAsPX1uPdzRiAGFZYDL4e7aPK9TUYxEuWKbhpycLhX+ONrbZYEJF//hQyreOCj+D5tHbdY3PY/LQQttJGSozTe1p6q02uEgx6owhjoTjs2DSivtFJ2gx4OWt6NCY9Q== # Private key for signing the JWT
+
+    # Secrets for Encrypted Card Data (JWE/JWS) - REPLACE WITH ACTUAL ATG SECRETS
+    # These should be at least 32 bytes (256 bits) for HS256 and A256GCMKW/A256GCM
+    card-data:
+      enc-secret: c432ce02a852bc075b40b8dc180ade38cec62fca7063d9c3e1c6bb17694663fd # Example: 32 chars = 32 bytes if ASCII
+      sig-secret: 76b0ba1b713ceaaceaf2d8f1105baab977274d770ba2086f77d644ac53d67918 # Example: 32 chars = 32 bytes if ASCII
