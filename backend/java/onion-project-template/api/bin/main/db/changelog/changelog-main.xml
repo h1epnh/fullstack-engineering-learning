@@ -1,8 +1,8 @@
 <databaseChangeLog
-        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
-        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.7.xsd"
-        xmlns:liquibasePercona="http://www.liquibase.org/xml/ns/dbchangelog-ext/liquibase-percona">
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.7.xsd"
+>
 
     <changeSet id="country_master" author="XI4074-puneetswarup">
         <sql>
@@ -240,4 +240,495 @@
             VALUES (16, 'PMNT', 'CCRD', 'MARK', 'FOREIGN ONLINE CARD MARKUP AMOUNT', 'ECOM', '245990053.00','card_transactions', FALSE);
         </sql>
     </changeSet>
+
+    <changeSet id="VWCP-146-add-more-btc-code" author="Quan-Nguyen-FinX">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (15, 'PMNT', 'RCDT', 'RRTN', 'REFUND (DOMESTIC/FOREIGN)', 'ECOM', '245990053.01','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (16, 'PMNT', 'CCRD', 'MARK', 'FOREIGN ONLINE CARD MARKUP AMOUNT', 'ECOM', '245990053.00','card_transactions', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="VWCP-659-add-more-btc-code" author="Ky-Mai-FinX">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (17, 'PMNT', 'RRCT', 'HDBP', 'PAYROLL_HDBANK_TO_PAYROLL', 'PAYROLL', '251990006.00','interbank_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (18, 'PMNT', 'IRCT', 'HDBP', 'PAYROLL_VIKKI_TO_HDBANK', 'PAYROLL', '251990006.00','interbank_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="VWCP-610-add-more-btc-code" author="hoang.tran">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (19, 'PMNT', 'MCOP', 'BOOK', 'WITHDRAW_BEFORE_DUE_DATE_PRINCIPAL', 'INTRA', '','internal_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="VWCP-544-add-more-btc-code" author="ky.mai">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (20, 'PMNT', 'IRCT', 'HDTU', 'VNPAY_TOPUP', 'MOBILE_TOPUP', '251990004.00','interbank_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (21, 'PMNT', 'IRCT', 'HDBL', 'VNPAY_BILL PAY', 'BILL_PAY', '251990004.00','interbank_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (22, 'PMNT', 'IRCT', 'HQON', 'VNPAY_[ON-US] QRPAY', 'QR_PAY', '251990004.00','interbank_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (23, 'PMNT', 'IRCT', 'HQOF', 'VNPAY_[OFF-US] QRPAY', 'QR_PAY', '251990004.00','interbank_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (24, 'PMNT', 'IRCT', 'HDCR', 'CREDIT CARD_VIKKI-TO-W4', 'CREDIT_CARD', '251990004.00','interbank_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="20240327__add-payroll-payment-internal-account" author="huy.tran">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (25, 'PMNT', 'IRCT', 'BOOK', 'Intrabank account - VIKKI-HDBANK-PAYROLL', 'PAYROLL', '251990006.00','internal_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="20240327__migrate-channel" author="huy.tran">
+        <sql>
+            UPDATE internal_account_mapping
+            SET channel = 'MOBILE_TOP_UP'
+            WHERE channel = 'MOBILE_TOPUP';
+
+            UPDATE internal_account_mapping
+            SET channel = 'CASA'
+            WHERE channel IN ('INTRA', 'IBFT');
+
+            UPDATE internal_account_mapping
+            SET channel = 'CREDIT_CARD_REPAYMENT'
+            WHERE channel = 'CREDIT_CARD';
+
+            UPDATE internal_account_mapping
+            SET channel = 'BILL_PAYMENT'
+            WHERE channel = 'BILL_PAY';
+        </sql>
+    </changeSet>
+
+    <changeSet id="20240403__update_payroll_client_id" author="huy.tran">
+        <sql>
+            UPDATE internal_account_mapping
+            SET
+                client_id = 'internal_transfer',
+                account_number = ''
+            WHERE
+                domain = 'PMNT'
+                AND family IN (
+                    'RRCT', 'IRCT'
+                )
+                AND sub_family = 'HDBP';
+        </sql>
+    </changeSet>
+
+    <changeSet id="20240403__add-payroll-mapping" author="huy.tran">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (26, 'PMNT', 'MCOP', 'SALA', '[CASH-IN] PAYROLL VIKKI', 'PAYROLL', '','internal_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (27, 'PMNT', 'MDOP', 'SALA', '[CASHOUT] PAYROLL VIKKI', 'PAYROLL', '','internal_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="20240404-add-blockade-internal-account-mapping" author="an.binh">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (28, 'PMNT', 'LBOX', 'LBDP', 'BLOCKADE CREDIT_BLOCK', 'CASA', '','internal_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (29, 'PMNT', 'LBOX', 'ULDP', 'BLOCKADE CREDIT_BLOCK', 'CASA', '','internal_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (30, 'PMNT', 'LBOX', 'LBDB', 'BLOCKADE DEBIT_BLOCK', 'CASA', '','internal_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (31, 'PMNT', 'LBOX', 'ULDB', 'BLOCKADE DEBIT_UNBLOCK', 'CASA', '','internal_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="20240502-add-payroll-debt-collection-internal-account-mapping" author="huy.tran">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (32, 'PMNT', 'IRCT', 'HDBD', 'PAYROLL DEBT COLLECTION', 'PAYROLL', '251990007','internal_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="20240507-update-payroll-debt-collection-internal-account-mapping" author="huy.tran">
+        <sql>
+            UPDATE internal_account_mapping
+            SET account_number = '251990007.00'
+            WHERE id = 32;
+        </sql>
+    </changeSet>
+
+    <changeSet id="20240619-add-close-contract-committed-internal-account-mapping" author="tu.mai">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (33, 'LDAS', 'CSLN', 'RIMB', 'CLOSE CONTRACT_COMMITTED', 'CASA', '','internal_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (34, 'ACMT', 'ODFI', 'FI06', 'OVERDRAFT FEE EARLY CLOSING', 'CASA', '','internal_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (35, 'ACMT', 'ODFI', 'TAXE', 'OVERDRAFT VAT EARLY CLOSING', 'CASA', '','internal_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="20240620-add-internal-account-for-od-tax-and-fee" author="quan.nguyen">
+        <sql>
+            UPDATE internal_account_mapping
+            SET account_number = '371909001.00'
+            WHERE id = 34;
+
+            UPDATE internal_account_mapping
+            SET account_number = '245310000.00'
+            WHERE id = 35;
+        </sql>
+    </changeSet>
+
+    <changeSet id="20240705-add-internal-account-for-victoria-prepaid-and-fx-payment" author="an.binh">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (36, 'PMNT', 'IRCT', 'HDFX', '[OUT] FX TRANS-VIKKI TO HDBANK', 'CASA', '251990004.00','interbank_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (37, 'PMNT', 'IRCT', 'HDRP', 'VICT PREPAID CARD_VIKKI-TO-W4', 'CASA', '251990004.00','interbank_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="VWCC-781-add-more-btc-code" author="duc.pham">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (38, 'ACMT', 'MCFI', 'FI03', 'DEBIT CARD REPLACEMENT FEE', 'INTRA', '251990004.00','interbank_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (39, 'ACMT', 'MCFI', 'TAXE', 'DEBIT CARD REPLACEMENT FEE VAT', 'INTRA', '251990004.00','interbank_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="add-btc-code-payroll-sovico" author="long.do">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (40, 'PMNT', 'RRCT', 'HDBB', '[CASH IN] BU FUNDING_HDB TO VIKKI', 'BU_PAYROLL', '251990006.00','internal_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (41, 'PMNT', 'MCOP', 'SALB', '[CASH IN] BU PAYROLL VIKKI', 'BU_PAYROLL', '','internal_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="add-btc-code-physical-debit" author="an.binh">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (42, 'PMNT', 'CCRD', 'CWDL', 'DOMESTIC_ATM_WITHDRAWAL', 'ATM_WITHDRAW', '245990054.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (43, 'PMNT', 'CCRD', 'DF01', 'DOMESTIC_ATM_WITHDRAWAL_FEE', 'ATM_WITHDRAW', '371109017.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (44, 'PMNT', 'CCRD', 'TAXE', 'DOMESTIC_ATM_WITHDRAWAL_VAT', 'ATM_WITHDRAW', '245310000.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (45, 'PMNT', 'CCRD', 'XBCW', 'FOREIGN_ATM_WITHDRAWAL', 'ATM_WITHDRAW', '245990054.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (46, 'PMNT', 'CCRD', 'FF01', 'FOREIGN_ATM_WITHDRAWAL_FEE', 'ATM_WITHDRAW', '371109017.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (47, 'PMNT', 'CCRD', 'FF03', 'FOREIGN_ATM_WITHDRAWAL_FOREX_FEE', 'ATM_WITHDRAW', '371109017.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (48, 'FORX', 'SPOT', 'CAJC', 'FOREIGN_CASH_SETTLE_CURRENCY_TRADING', 'ATM_WITHDRAW', '247123700.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (49, 'FORX', 'SPOT', 'DAJC', 'FOREIGN_CASH_TRADING_FOREIGN_CURRENCY', 'ATM_WITHDRAW', '245990054.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (50, 'PMNT', 'CCRD', 'POSD', 'DOMESTIC_POS_PAYMENT', 'POS_PAYMENT', '245990053.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (51, 'PMNT', 'CCRD', 'DF02', 'DOMESTIC_POS_PAYMENT_FEE', 'POS_PAYMENT', '371109017.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (52, 'PMNT', 'CCRD', 'TAXE', 'DOMESTIC_POS_PAYMENT_VAT', 'POS_PAYMENT', '245310000.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (53, 'PMNT', 'CCRD', 'POSF', 'FOREIGN_POS_PAYMENT', 'POS_PAYMENT', '245990053.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (54, 'PMNT', 'CCRD', 'FF02', 'FOREIGN_POS_PAYMENT_FEE', 'POS_PAYMENT', '371109017.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (55, 'PMNT', 'CCRD', 'FF03', 'FOREIGN_POS_PAYMENT_FOREX_FEE', 'POS_PAYMENT', '371109017.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (56, 'PMNT', 'CCRD', 'TAXE', 'FOREIGN_POS_PAYMENT_VAT', 'POS_PAYMENT', '245310000.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (57, 'FORX', 'SPOT', 'CAJT', 'FOREIGN_POS_SETTLE_FOREIGN_CURRENCY_TRADING', 'POS_PAYMENT', '247123700.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (58, 'FORX', 'SPOT', 'DAJT', 'FOREIGN_POS_TRADING_FOREIGN_CURRENCY', 'POS_PAYMENT', '245990053.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (59, 'PMNT', 'RCDT', 'CWDL', 'DEBIT_CARD_REFUND', 'ATM_WITHDRAW', '245990054.00','card_transactions', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="add-btc-code-qr-cash-withdrawal-on-us" author="ky.mai">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (60, 'PMNT', 'IRCT', 'CWHC', 'QR CASH_HDB ATM WITHDRAWAL', 'CASH_WITHDRAWAL', '251990004.00','interbank_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (61, 'PMNT', 'RRCT', 'CWHC', 'QR CASH_HDB ATM WITHDRAWAL REFUND', 'CASH_WITHDRAWAL', '251990004.00','interbank_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (62, 'PMNT', 'CAFT', 'FT01', 'FEE OF QR CASH_HDB ATM WITHDRAWAL', 'CASH_WITHDRAWAL', '371100011.00','interbank_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (63, 'PMNT', 'CAFT', 'TAXE', 'VAT FEE OF QR CASH_HDB ATM WITHDRAWAL', 'CASH_WITHDRAWAL', '245310000.00','interbank_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="update-btc-code-physical-debit-replacement" author="duc.pham">
+        <sql>
+            UPDATE internal_account_mapping set account_number = '371109017.00' where id = 38;
+            UPDATE internal_account_mapping set account_number = '245310000.00' where id = 39;
+        </sql>
+    </changeSet>
+
+    <changeSet id="add_btc_code_withdraw_principle_at_maturity" author="loi.vuu">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (64, 'PMNT', 'FTDP', 'BOOK', 'AT_MATURITY_DATE_TERM_SAVINGS_PRINCIPAL_WITHDRAWAL', 'INTRA', '','internal_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="add-btc-code-vja-booking-payment" author="quoc.pham">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family, description, channel, account_number, client_id, aml_check)
+            VALUES (65, 'PMNT', 'IRCT', 'HDBC', 'VJA_VIKKI_TO_HDB', 'BILL_PAY', '251990004.00','interbank_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="update-qr-withdrawal-transaction-channel" author="huy.tran">
+        <sql>
+            UPDATE internal_account_mapping set channel = 'ATM_WITHDRAW' where id IN (60, 61)
+        </sql>
+    </changeSet>
+
+    <changeSet id="update-card-pos-internal-account" author="an.binh">
+        <sql>
+            UPDATE internal_account_mapping
+            SET sub_family = 'ECOM'
+            WHERE id = 50;
+
+            UPDATE internal_account_mapping
+            SET sub_family = 'XBCP'
+            WHERE id = 53;
+
+            UPDATE internal_account_mapping
+            SET sub_family = 'FEES'
+            WHERE id = 54;
+
+        </sql>
+    </changeSet>
+    <changeSet id="add-more-internal-account" author="an.binh">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (66, 'PMNT', 'CCRD', 'MARK', 'FOREIGN ONLINE CARD MARKUP AMOUNT', 'POS_PAYMENT', '245990053.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (67, 'PMNT', 'CCRD', 'MARK', 'FOREIGN ONLINE CARD MARKUP AMOUNT', 'ATM_WITHDRAW', '245990053.00','card_transactions', FALSE);
+        </sql>
+    </changeSet>
+    <changeSet id="add-btc-code-citad-payment" author="truong.duong">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family, description, channel, account_number, client_id, aml_check)
+            VALUES (68, 'PMNT', 'RRCT', 'CITA', 'CITAD_TO_VIKKI_CURRENT', 'CASA', '251990005.00','interbank_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+     <changeSet id="add-pos-refund-internal-account" author="an.binh">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (69, 'PMNT', 'RCDT', 'RRTN', 'REFUND (DOMESTIC/FOREIGN)', 'POS_PAYMENT', '245990053.01','card_transactions', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="add-new-btc-internal-account" author="an.binh">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (70, 'PMNT', 'CCRD', 'EPON', 'ECOM_POS_PAYMENT_ON_US', 'POS_PAYMENT', '242119000.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (71, 'PMNT', 'RCDT', 'EPON', 'DEBIT_CARD_ON_US_REFUND', 'POS_PAYMENT', '242119000.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (72, 'PMNT', 'CCRD', 'CWDO', 'ATM_WHITDRAWAL_ON_US', 'ATM_WITHDRAW', '242119000.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (73, 'PMNT', 'RCDT', 'RRTN', 'ATM_WHITDRAWAL_ON_US_REFUND', 'ATM_WITHDRAW', '242119000.00','card_transactions', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="add-teller-deposit-internal-account" author="tu.dao">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (74, 'PMNT', 'CNTR', 'CDPT', '[AT COUNTER] CASH DEPOSIT', 'CASA', '251990008.00','interbank_transfer', FALSE);
+        </sql>
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (75, 'PMNT', 'CNTR', 'CWDL', '[AT COUNTER] CASH WITHDRAWAL', 'CASA', '251990008.00','interbank_transfer', FALSE);
+        </sql>
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (76, 'PMNT', 'CNTR', 'PMHD', '[AT COUNTER] PAYMENT TO HDBANK', 'CASA', '251990008.00','interbank_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="update-atm-refund-internal-account" author="an.binh">
+        <sql>
+            UPDATE internal_account_mapping
+            SET sub_family = 'CWDO'
+            WHERE id = 73;
+        </sql>
+    </changeSet>
+    
+    <changeSet id="update-internal-account-atm-pos-onus" author="an.binh">
+        <sql>
+            UPDATE internal_account_mapping
+            SET account_number = '251990004.00'
+            WHERE id in (70, 72);
+        </sql>
+    </changeSet>
+
+    <changeSet id="update-internal-account-refund" author="an.binh">
+        <sql>
+            UPDATE internal_account_mapping
+            SET account_number = '251990004.00'
+            WHERE id in (71, 73);
+        </sql>
+    </changeSet>
+
+    <changeSet id="add-asean-qr-gl-codes" author="huy.tran">
+        <sql>
+            INSERT INTO internal_account_mapping
+                (id, domain, family, sub_family, description, channel, account_number, client_id, aml_check)
+            VALUES
+                (77, 'PMNT', 'IRCT', 'FQRP', 'FOREIGN VIKKI-TO-NAPAS QRPUSH', 'QR_PAY', '245990013.00','interbank_transfer', FALSE),
+                (78, 'PMNT', 'IRCT', 'FEQR', '[CASHOUT] VIKKI-TO-NAPAS QRPUSH FEE', 'QR_PAY', '371109002.00','interbank_transfer', FALSE),
+                (79, 'PMNT', 'IRCT', 'TAQR', '[CASHOUT] VIKKI-TO-NAPAS QRPUSH VAT', 'QR_PAY', '245310000.00','interbank_transfer', FALSE);
+        </sql>
+    </changeSet>
+    <changeSet id="add-new-btc-bill-payment" author="nhat.le">
+        <sql>
+            INSERT INTO internal_account_mapping
+            (id, domain, family, sub_family, description, channel, account_number, client_id, aml_check)
+            VALUES
+            (80, 'PMNT', 'IRCT', 'BIPA', 'BILL PAYMENT', 'BILL_PAYMENT', '251990011.00','interbank_transfer', FALSE),
+            (81, 'PMNT', 'RRCT', 'BIPA', 'BILL PAYMENT REFUND', 'BILL_PAYMENT', '251990011.00','interbank_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+
+    <changeSet id="add-new-btc-skyjoy-fee" author="an.binh">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (82, 'PMNT', 'CCRD', 'FF02', 'FOREIGN_POS_PAYMENT_FEE', 'ECOM', '371109017.00','card_transactions', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="change-card-refund-internal-account" author="an.binh">
+        <sql>
+            UPDATE internal_account_mapping
+            SET account_number = '245990053.00'
+            WHERE id in (15, 69)
+        </sql>
+    </changeSet>
+
+    <changeSet id="add-ecom-onus-internal-account" author="an.binh">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (83, 'PMNT', 'CCRD', 'EPON', 'ECOM_POS_PAYMENT_ON_US', 'ECOM', '251990004.00','card_transactions', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (84, 'PMNT', 'RCDT', 'EPON', 'DEBIT_CARD_ON_US_REFUND', 'ECOM', '251990004.00','card_transactions', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="add-new-btc-vikki-go" author="tu.dao">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family, description, channel, account_number, client_id, aml_check)
+            VALUES
+                (85, 'PMNT', 'IRCT', 'TURP', 'VIKKI GO TOPUP', 'CASA', '251990004.00','interbank_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="add-new-btc-beautiful-account" author="hoang.thai">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family, description, channel, account_number, client_id, aml_check)
+            VALUES
+                (86, 'ACMT', 'CAFO', 'FO07', 'BEAUTIFUL ACCOUNT PAYMENT', 'CASA', '371909001.00','internal_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family, description, channel, account_number, client_id, aml_check)
+            VALUES
+                (87, 'ACMT', 'CAFO', 'TAXE', 'BEAUTIFUL ACCOUNT PAYMENT VAT', 'CASA', '245310000.00','internal_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="add-new-btc-vikki-go-reward" author="tu.dao">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family, description, channel, account_number, client_id, aml_check)
+            VALUES
+                (88, 'PMNT', 'RRCT', 'RWAM', 'VIKKI GO REWARD_TOPUP', 'CASA', '486600001.00','internal_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+    <changeSet id="update-btc-vikki-go-reward" author="tu.dao">
+        <sql>
+            UPDATE  internal_account_mapping set account_number = '486600002.00' where id = 88;
+        </sql>
+    </changeSet>
+
+    <changeSet id="20241217-add-overdraft-internal-account-mapping" author="long.truong">
+        <sql>
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (89, 'PMNT', 'CSLN', 'DPPA', 'ONDUE_COLLECTED_DEBT', 'CASA', '127519001.00','internal_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (90, 'PMNT', 'CSLN', 'ODG2', 'OVERDUE_COLLECTED_DEBT_GROUP_2', 'CASA', '127529001.00','internal_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (91, 'PMNT', 'CSLN', 'ODG3', 'OVERDUE_COLLECTED_DEBT_GROUP_3', 'CASA', '127539001.00','internal_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (92, 'PMNT', 'CSLN', 'ODG4', 'OVERDUE_COLLECTED_DEBT_GROUP_4', 'CASA', '127549001.00','internal_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (93, 'PMNT', 'CSLN', 'ODG5', 'OVERDUE_COLLECTED_DEBT_GROUP_5', 'CASA', '127559001.00','internal_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (94, 'PMNT', 'CSLN', 'INTR', 'ONDUE_COLLECTED_INTEREST', 'CASA', '139419005.00','internal_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (95, 'PMNT', 'CSLN', 'INOD', 'OVERDUE_COLLECTED_INTEREST', 'CASA', '370209002.00','internal_transfer', FALSE);
+
+            INSERT INTO internal_account_mapping(id, domain, family, sub_family,  description, channel, account_number, client_id, aml_check)
+            VALUES (96, 'PMNT', 'CSLN', 'INPE', 'ONDUE_COLLECTED_PENALTY_INTEREST', 'CASA', '370209900.00','internal_transfer', FALSE);
+        </sql>
+    </changeSet>
+
+
+
+
 </databaseChangeLog>

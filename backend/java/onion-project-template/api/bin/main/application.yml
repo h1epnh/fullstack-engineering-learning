@@ -7,6 +7,9 @@ spring:
       - prod
   webflux:
     base-path: /api/payment-execution
+  config:
+    import:
+      - 'classpath:kafka.yml'
 
   r2dbc:
     url: r2dbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${DATABASE_NAME:paymentexecution}
@@ -50,50 +53,72 @@ idempotentFilter:
 #    ttlInSecond: 3600
 
 management:
+  server:
+    port: ${MANAGEMENT_SERVER_PORT:8081}
   endpoints:
     web:
+      base-path: /
       exposure:
-        include: '*'
+        include:
+          - prometheus
+          - health
+          - metrics
       path-mapping:
-        prometheus: /prometheus/metrics
+        health: /actuator/health
+        prometheus: /actuator/prometheus
   endpoint:
+    prometheus:
+      enabled: true
     health:
-      show-details: always
       probes:
         enabled: true
+      show-components: always
+  metrics:
+    distribution:
+      percentiles-histogram:
+        "http.server.requests": true
+      percentiles:
+        "http.server.requests": 0.5, 0.90, 0.95, 0.99
 
 kafka:
-  securityProtocol: ${THOUGHT_MACHINE_KAFKA_SECURITY_PROTOCOL:SSL}
+  securityProtocol: ${THOUGHT_MACHINE_KAFKA_SECURITY_PROTOCOL}
   sslProtocol: ${THOUGHT_MACHINE_KAFKA_SSL_PROTOCOL:TLSv1.2}
   sslEndpointIdentificationAlgorithmConfig: ${THOUGHT_MACHINE_SSL_ENDPOINT_ALGORITHM:https}
+  saslUsername: ${THOUGHT_MACHINE_KAFKA_SASL_USERNAME}
+  saslPassword: ${THOUGHT_MACHINE_KAFKA_SASL_PASSWORD}
+  saslMechanisms: ${THOUGHT_MACHINE_KAFKA_SASL_MECHANISMS:SCRAM-SHA-512}
   groupId: payment-execution-service
   thoughtMachine:
     server: ${THOUGHT_MACHINE_KAFKA_SERVERS:localhost:9092}
     groupId: ${KAFKA_TM_CONSUMER_GROUP_ID:card-payment-execution-consumer-local-test}
     producers:
+
+
       lowPriorityTopic: ${LOW_PRIORITY_TM_PRODUCER_TOPIC:vault.core.postings.requests.low_priority.v1}
       highPriorityTopic: ${HIGH_PRIORITY_TM_PRODUCER_TOPIC:vault.core.postings.requests.v1}
     consumers:
-      highPriorityTopic: ${HIGH_PRIORITY_TM_CONSUMER_TOPIC:integration.postings_api.card_transactions_high.response}
-#      deductFeeHighPriorityTopic: ${DEDUCT_FEE_HIGH_PRIORITY_TM_CONSUMER_TOPIC:integration.postings_api.sample_high.response}
-      interbankTransferHighPriorityTopic: ${HIGH_PRIORITY_INTERBANK_TRANSFER_POSTING_TOPIC:integration.postings_api.interbank_transfer_high.response}
-      intrabankTransferTopic: ${INTRABANK_TRANSFER_POSTING_TOPIC:integration.postings_api.internal_transfer.response}
+
   settlementService:
     server: ${KAFKA_PLAINTEXT_SERVERS:localhost:9092}
     groupId: ${KAFKA_TM_CONSUMER_GROUP_ID:card-payment-execution-consumer-local}
     consumers:
-      cardSettlementTopic: ${SETTLEMENT_TRANSACTION_EXECUTION_TOPIC:sit.settlement_service.execution_event}
+
     producers:
       cardSettlementDlqTopic: ${SETTLEMENT_TRANSACTION_EXECUTION_DLQ_TOPIC:sit.settlement_service.execution_event.dlq}
 
-cbsSyncAsyncConfigHighPriority:
-  preserveInterval: 10000 #ms
-  pollingInterval: 150 #ms
-  timeout: 4000 #ms
-cbsSyncAsyncConfigLowPriority:
-  preserveInterval: 10000 #ms
-  pollingInterval: 150 #ms
-  timeout: 4000 #ms
+cbsPollingConfig:
+  postingTimeout: ${CBS_REDIS_POSTING_TIMEOUT:5000} #ms
+  pollingInterval: ${CBS_REDIS_POLLING_INTERVAL:150} #ms
+  pollingTimeout: ${CBS_REDIS_POLLING_TIMEOUT:12000} #ms
+
+internalAccount:
+  expiredInDays: ${INTERNAL_ACCOUNT_EXPIRED_DAY:7} #days
+
+effectiveTimestamp:
+  enabled: ${EFFECTIVE_TIMESTAMP_ENABLED:false}
 
 local:
-  enabled: ${LOCAL_ENABLED:false}
+
+
+blacklist:
+  additional-data: ${BLACKLIST_ADDITIONAL_DATA:originating_account_id}
