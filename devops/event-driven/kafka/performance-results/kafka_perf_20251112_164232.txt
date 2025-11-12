@@ -1,0 +1,23 @@
+Kafka Performance Test Results
+Date: Wed Nov 12 16:42:32 +07 2025
+System: Darwin MacBook-Pro-cua-mac.local 24.6.0 Darwin Kernel Version 24.6.0: Mon Jul 14 11:30:29 PDT 2025; root:xnu-11417.140.69~1/RELEASE_ARM64_T6000 arm64
+========================================
+
+831899 records sent, 166379.8 records/sec (162.48 MB/sec), 85.7 ms avg latency, 482.0 ms max latency.
+1000000 records sent, 170590.242238 records/sec (166.59 MB/sec), 71.75 ms avg latency, 482.00 ms max latency, 9 ms 50th, 332 ms 95th, 437 ms 99th, 477 ms 99.9th.
+WARNING: option [threads] and [num-fetch-threads] have been deprecated and will be ignored by the test
+start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec, rebalance.time.ms, fetch.time.ms, fetch.MB.sec, fetch.nMsg.sec
+2025-11-12 09:42:45:154, 2025-11-12 09:42:50:047, 976.5625, 199.5836, 1000000, 204373.5949, 3579, 1314, 743.1982, 761035.0076
+WARNING: The 'kafka.tools' package is deprecated and will change to 'org.apache.kafka.tools' in the next major release.
+0	35.299584
+1000	0.978625
+2000	0.549875
+3000	0.47083400000000003
+4000	0.392791
+5000	0.409416
+6000	0.4785
+7000	0.394583
+8000	0.46041699999999997
+9000	0.393666
+Avg latency: 0.5280 ms
+Percentiles: 50th = 0, 99th = 1, 99.9th = 3

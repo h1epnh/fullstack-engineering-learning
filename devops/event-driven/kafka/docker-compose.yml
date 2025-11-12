@@ -10,16 +10,25 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kafka-network
 
   kafka:
     image: confluentinc/cp-kafka:latest
     hostname: kafka
     container_name: kafka
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_healthy
     ports:
       - "9092:9092"
-      - "9094:9094"  # for external access (outside the Docker network)
+      - "9094:9094"
+      - "9999:9999"  # JMX port for monitoring
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -29,12 +38,26 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_LOG_RETENTION_HOURS: 168 # Default 7 days retention.  Adjust as needed.
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true" # IMPORTANT: Consider disabling in production environments!  See notes below.
-      # For testing, you can add the following line to enable automatic topic creation.  **Do NOT use this in production!**
-      # KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      # Performance tuning
+      KAFKA_NUM_NETWORK_THREADS: 8
+      KAFKA_NUM_IO_THREADS: 8
+      KAFKA_SOCKET_SEND_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_RECEIVE_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_REQUEST_MAX_BYTES: 104857600
+      # JMX for monitoring
+      KAFKA_JMX_PORT: 9999
+      KAFKA_JMX_HOSTNAME: localhost
     volumes:
-      - kafka_data:/var/lib/kafka/data # Persist Kafka data
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - kafka-network
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -42,29 +65,47 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
-      # If you have authentication enabled on Kafka, configure it here.
-      #  Example for SASL/PLAIN:
-      #  KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: SASL_PLAIN
-      #  KAFKA_CLUSTERS_0_PROPERTIES_SASL_MECHANISM: PLAIN
-      #  KAFKA_CLUSTERS_0_PROPERTIES_SASL_JAAS_CONFIG: org.apache.kafka.common.security.plain.PlainLoginModule required username="<your_username>" password="<your_password>";
+      KAFKA_CLUSTERS_0_METRICS_PORT: 9999
+      DYNAMIC_CONFIG_ENABLED: "true"
+    restart: unless-stopped
+    networks:
+      - kafka-network
 
-  # Optional:  A simple Kafka client for testing.
-  kafka-client:
-    image: wurstmeister/kafka
-    container_name: kafka-client
+  # Performance testing container
+  kafka-perf:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka-perf
     depends_on:
-      - kafka
-    entrypoint:
-      [
-        "sh",
-        "-c",
-        "kafka-console-consumer --bootstrap-server kafka:9092 --topic test-topic --from-beginning",
-      ]
-    tty: true # Keep the container running in the background
+      kafka:
+        condition: service_healthy
+    command: >
+      sh -c "
+        echo '================================================'
+        echo 'Kafka Performance Testing Container Ready'
+        echo '================================================'
+        echo ''
+        echo 'Available commands:'
+        echo '  Producer test: kafka-producer-perf-test --topic test --num-records 1000000 --record-size 1024 --throughput -1 --producer-props bootstrap.servers=kafka:9092'
+        echo '  Consumer test: kafka-consumer-perf-test --topic test --messages 1000000 --bootstrap-server kafka:9092'
+        echo '  Latency test: kafka-run-class kafka.tools.EndToEndLatency kafka:9092 test 10000 1 1024'
+        echo ''
+        echo 'Access this container: docker exec -it kafka-perf bash'
+        echo '================================================'
+        tail -f /dev/null
+      "
+    tty: true
+    networks:
+      - kafka-network
 
 volumes:
   kafka_data:
+    driver: local
+
+networks:
+  kafka-network:
+    driver: bridge
