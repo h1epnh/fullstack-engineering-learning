@@ -9,11 +9,10 @@ on:
 jobs:
   build-maven-app:
     runs-on: ubuntu-latest
-    # Set a default working directory for all run steps in this job
-    defaults:
-      run:
-        working-directory: devops/ci-cd/github-actions/sample-java-demo-maven
     steps:
+      - name: List directory structure
+        run: ls -la devops/ci-cd/github-actions/
+
       - name: Checkout repository
         uses: actions/checkout@v3
       
@@ -31,7 +30,9 @@ jobs:
           restore-keys: ${{ runner.os }}-m2
       
       - name: Build with Maven
+        working-directory: ./devops/ci-cd/github-actions/sample-java-demo-maven
         run: mvn clean install
       
       - name: Run tests
+        working-directory: ./devops/ci-cd/github-actions/sample-java-demo-maven
         run: mvn test
