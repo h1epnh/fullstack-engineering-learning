@@ -12,7 +12,7 @@ jobs:
     # Set a default working directory for all run steps in this job
     defaults:
       run:
-        working-directory: ./devops/ci-cd/github-actions/sample-java-demo-maven
+        working-directory: devops/ci-cd/github-actions/sample-java-demo-maven
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
