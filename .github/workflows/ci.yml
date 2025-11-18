@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: List directory structure
-        run: ls -la devops/ci-cd/github-actions/
+        run: ls -la
 
       - name: Checkout repository
         uses: actions/checkout@v3
