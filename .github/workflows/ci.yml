@@ -1,5 +1,4 @@
-name: Run Node App
-
+name: Build Java Maven App
 on:
   push:
     branches:
@@ -7,27 +6,32 @@ on:
   pull_request:
     branches:
       - master
-
 jobs:
-  run-node-app:
+  build-maven-app:
     runs-on: ubuntu-latest
-
     # Set a default working directory for all run steps in this job
     defaults:
       run:
-        working-directory: ./devops/projects/simple-lab/app  # Change this to your desired directory
-
+        working-directory: ./devops/ci-cd/github-actions/sample-java-demo-maven
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/checkout@v3
+      
+      - name: Set up JDK
+        uses: actions/setup-java@v3
         with:
-          node-version: '16'  # Adjust the version as needed
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Run Node application
-        run: node server.js
+          java-version: '17'  # Adjust to your Java version (8, 11, 17, 21, etc.)
+          distribution: 'temurin'  # or 'adopt', 'zulu', 'corretto'
+      
+      - name: Cache Maven packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+      
+      - name: Build with Maven
+        run: mvn clean install
+      
+      - name: Run tests
+        run: mvn test
