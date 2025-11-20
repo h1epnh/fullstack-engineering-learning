@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  oracle-db:
+    image: container-registry.oracle.com/database/express:21.3.0-xe
+    container_name: oracle-xe-21c
+    ports:
+      - "1521:1521"   # Oracle listener port
+      - "5500:5500"   # Oracle Enterprise Manager (EM) Express
+    environment:
+      # Oracle password for SYS, SYSTEM, and PDBADMIN users
+      ORACLE_PWD: OraclePassword123
+      # Optionally set character set (default is AL32UTF8)
+      ORACLE_CHARACTERSET: AL32UTF8
+    volumes:
+      # Persist Oracle data
+      - oracle-data:/opt/oracle/oradata
+      # Optional: Mount initialization scripts
+      - ./init-scripts:/opt/oracle/scripts/startup
+    networks:
+      - oracle-network
+    healthcheck:
+      test: ["CMD", "sqlplus", "-L", "sys/OraclePassword123@//localhost:1521/XE as sysdba", "@healthcheck.sql"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+    # Resource limits (adjust based on your system)
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+volumes:
+  oracle-data:
+    driver: local
+
+networks:
+  oracle-network:
+    driver: bridge

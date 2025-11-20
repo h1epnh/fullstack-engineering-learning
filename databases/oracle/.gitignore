@@ -1,0 +1,10 @@
+# Ignore Oracle data directory if created locally
+oradata/
+
+# Ignore backup files
+*.dmp
+*.log
+
+# Ignore environment files with sensitive data
+.env
+.env.local
