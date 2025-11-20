@@ -1,0 +1,25 @@
+{
+  "name": "kafka-nodejs-example",
+  "version": "1.0.0",
+  "description": "Simple Kafka Producer and Consumer examples in Node.js",
+  "main": "index.js",
+  "scripts": {
+    "producer": "node producer.js",
+    "consumer": "node consumer.js",
+    "producer:json": "node producer-json.js",
+    "consumer:json": "node consumer-json.js",
+    "safe:producer": "python ../python/safe_producer.py",
+    "safe:consumer": "python ../python/safe_consumer.py",
+    "offset:demo": "python ../python/offset_demo.py"
+  },
+  "keywords": [
+    "kafka",
+    "producer",
+    "consumer"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "kafkajs": "^2.2.4"
+  }
+}
