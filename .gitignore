@@ -29,6 +29,19 @@ replay_pid*
 .idea/
 .node_modules/
 .node_modules/.cache/
+node_modules/
+
+# Python virtualenvs
+.venv/
+venv/
+
+# Build outputs
+.gradle/
+build/
+target/
+
+# OS
+.DS_Store
 
 frontend/obytes/obytes-hello-project/
 devops/cloud/minio/data/
