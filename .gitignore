@@ -54,3 +54,6 @@ devops/cloud/minio/data/
 
 # Vendored external tool pending submodule conversion (huge, root-owned build output)
 devops/monitoring/unleash/
+
+# n8n runtime data/credentials (contains encryption key + credentials DB, must never be committed)
+devops/monitoring/workflow/n8n/
