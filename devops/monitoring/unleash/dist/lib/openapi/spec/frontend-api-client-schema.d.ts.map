@@ -1,0 +1,1 @@
+{"version":3,"file":"frontend-api-client-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/frontend-api-client-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAEpD,eAAO,MAAM,uBAAuB;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;CAgD1B,CAAC;AAEX,MAAM,MAAM,uBAAuB,GAAG,UAAU,CAC5C,OAAO,uBAAuB,CACjC,CAAC"}

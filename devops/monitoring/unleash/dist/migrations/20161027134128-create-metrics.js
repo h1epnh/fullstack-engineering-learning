@@ -1,0 +1,13 @@
+'use strict';
+exports.up = function (db, callback) {
+    db.runSql(`
+CREATE TABLE client_metrics (
+  id serial primary key,
+  created_at timestamp default now(),
+  metrics json
+);`, callback);
+};
+exports.down = function (db, callback) {
+    db.runSql('DROP TABLE client_metrics;', callback);
+};
+//# sourceMappingURL=20161027134128-create-metrics.js.map

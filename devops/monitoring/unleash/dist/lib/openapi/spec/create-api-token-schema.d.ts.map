@@ -1,0 +1,1 @@
+{"version":3,"file":"create-api-token-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/create-api-token-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAiGpD,eAAO,MAAM,oBAAoB;;;;;;CAYvB,CAAC;AAEX,MAAM,MAAM,oBAAoB,GAAG,UAAU,CAAC,OAAO,oBAAoB,CAAC,CAAC"}

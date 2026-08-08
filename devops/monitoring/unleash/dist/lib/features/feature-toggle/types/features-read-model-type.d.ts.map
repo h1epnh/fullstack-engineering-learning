@@ -1,0 +1,1 @@
+{"version":3,"file":"features-read-model-type.d.ts","sourceRoot":"","sources":["../../../../../src/lib/features/feature-toggle/types/features-read-model-type.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,kBAAkB;IAC/B,aAAa,CAAC,MAAM,EAAE,MAAM,GAAG,OAAO,CAAC,OAAO,CAAC,CAAC;IAChD,wBAAwB,CACpB,QAAQ,EAAE,MAAM,EAChB,QAAQ,EAAE,MAAM,GACjB,OAAO,CAAC,OAAO,CAAC,CAAC;CACvB"}

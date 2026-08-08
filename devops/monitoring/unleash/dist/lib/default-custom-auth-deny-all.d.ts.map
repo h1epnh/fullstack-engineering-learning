@@ -1,0 +1,1 @@
+{"version":3,"file":"default-custom-auth-deny-all.d.ts","sourceRoot":"","sources":["../../src/lib/default-custom-auth-deny-all.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,OAAO,EAAE,MAAM,SAAS,CAAC;AACvC,OAAO,KAAK,EAAE,cAAc,EAAE,MAAM,gBAAgB,CAAC;AAKrD,wBAAgB,wBAAwB,CACpC,GAAG,EAAE,OAAO,EACZ,MAAM,EAAE,cAAc,GACvB,IAAI,CAQN"}

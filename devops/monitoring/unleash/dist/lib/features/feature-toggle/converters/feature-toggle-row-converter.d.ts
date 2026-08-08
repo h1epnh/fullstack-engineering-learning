@@ -1,0 +1,175 @@
+import type { PartialDeep, IFeatureToggleClient, IStrategyConfig, IFeatureToggleQuery, ITag, IFlagResolver, IFeatureToggleListItem } from '../../../types';
+import type { FeatureConfigurationClient } from '../types/feature-toggle-strategies-store-type';
+export declare class FeatureToggleRowConverter {
+    private flagResolver;
+    constructor(flagResolver: IFlagResolver);
+    isUnseenStrategyRow: (feature: PartialDeep<IFeatureToggleClient>, row: Record<string, any>) => boolean;
+    isNewTag: (feature: PartialDeep<IFeatureToggleClient>, row: Record<string, any>) => boolean;
+    addSegmentToStrategy: (feature: PartialDeep<IFeatureToggleClient>, row: Record<string, any>) => void;
+    addSegmentIdsToStrategy: (feature: PartialDeep<IFeatureToggleClient>, row: Record<string, any>) => void;
+    addLastSeenByEnvironment: (feature: PartialDeep<IFeatureToggleListItem>, row: Record<string, any>) => void;
+    rowToStrategy: (row: Record<string, any>) => IStrategyConfig;
+    addTag: (feature: Record<string, any>, row: Record<string, any>) => void;
+    rowToTag: (row: Record<string, any>) => ITag;
+    formatToggles: (result: IFeatureToggleQuery) => any[];
+    createBaseFeature: (row: any, feature: PartialDeep<IFeatureToggleClient>, featureQuery?: IFeatureToggleQuery) => {
+        name?: string | undefined;
+        description?: string | undefined | null;
+        type?: string | undefined;
+        project?: string | undefined;
+        stale?: boolean | undefined;
+        variants?: ({
+            name?: string | undefined;
+            weight?: number | undefined;
+            weightType?: "variable" | "fix" | undefined;
+            payload?: {
+                type?: "string" | "number" | "json" | "csv" | undefined;
+                value?: string | undefined;
+            } | undefined;
+            stickiness?: string | undefined;
+            overrides?: ({
+                contextName?: string | undefined;
+                values?: (string | undefined)[] | undefined;
+            } | undefined)[] | undefined;
+        } | undefined)[] | undefined;
+        enabled?: boolean | undefined;
+        strategies?: ({
+            title?: string | null | undefined;
+            id?: string | undefined;
+            name?: string | undefined;
+            parameters?: {
+                [x: string]: string | undefined;
+            } | undefined;
+            featureName?: string | undefined;
+            constraints?: ({
+                contextName?: string | undefined;
+                operator?: "NOT_IN" | "IN" | "STR_ENDS_WITH" | "STR_STARTS_WITH" | "STR_CONTAINS" | "NUM_EQ" | "NUM_GT" | "NUM_GTE" | "NUM_LT" | "NUM_LTE" | "DATE_AFTER" | "DATE_BEFORE" | "SEMVER_EQ" | "SEMVER_GT" | "SEMVER_LT" | undefined;
+                values?: (string | undefined)[] | undefined;
+                value?: string | undefined;
+                inverted?: boolean | undefined;
+                caseInsensitive?: boolean | undefined;
+            } | undefined)[] | undefined;
+            variants?: ({
+                name?: string | undefined;
+                payload?: {
+                    type?: "string" | "number" | "json" | "csv" | undefined;
+                    value?: string | undefined;
+                } | undefined;
+                weight?: number | undefined;
+                weightType?: "variable" | "fix" | undefined;
+                stickiness?: string | undefined;
+            } | undefined)[] | undefined;
+            sortOrder?: number | undefined;
+            segments?: (number | undefined)[] | undefined;
+            milestoneId?: string | undefined;
+        } | undefined)[] | undefined;
+        dependencies?: ({
+            feature?: string | undefined;
+            variants?: (string | undefined)[] | undefined;
+            enabled?: boolean | undefined;
+        } | undefined)[] | undefined;
+        impressionData?: boolean | undefined;
+        lastSeenAt?: {
+            toString?: {} | undefined;
+            toDateString?: {} | undefined;
+            toTimeString?: {} | undefined;
+            toLocaleString?: {} | undefined;
+            toLocaleDateString?: {} | undefined;
+            toLocaleTimeString?: {} | undefined;
+            valueOf?: {} | undefined;
+            getTime?: {} | undefined;
+            getFullYear?: {} | undefined;
+            getUTCFullYear?: {} | undefined;
+            getMonth?: {} | undefined;
+            getUTCMonth?: {} | undefined;
+            getDate?: {} | undefined;
+            getUTCDate?: {} | undefined;
+            getDay?: {} | undefined;
+            getUTCDay?: {} | undefined;
+            getHours?: {} | undefined;
+            getUTCHours?: {} | undefined;
+            getMinutes?: {} | undefined;
+            getUTCMinutes?: {} | undefined;
+            getSeconds?: {} | undefined;
+            getUTCSeconds?: {} | undefined;
+            getMilliseconds?: {} | undefined;
+            getUTCMilliseconds?: {} | undefined;
+            getTimezoneOffset?: {} | undefined;
+            setTime?: {} | undefined;
+            setMilliseconds?: {} | undefined;
+            setUTCMilliseconds?: {} | undefined;
+            setSeconds?: {} | undefined;
+            setUTCSeconds?: {} | undefined;
+            setMinutes?: {} | undefined;
+            setUTCMinutes?: {} | undefined;
+            setHours?: {} | undefined;
+            setUTCHours?: {} | undefined;
+            setDate?: {} | undefined;
+            setUTCDate?: {} | undefined;
+            setMonth?: {} | undefined;
+            setUTCMonth?: {} | undefined;
+            setFullYear?: {} | undefined;
+            setUTCFullYear?: {} | undefined;
+            toUTCString?: {} | undefined;
+            toISOString?: {} | undefined;
+            toJSON?: {} | undefined;
+            [Symbol.toPrimitive]?: {} | undefined;
+        } | undefined;
+        createdAt?: {
+            toString?: {} | undefined;
+            toDateString?: {} | undefined;
+            toTimeString?: {} | undefined;
+            toLocaleString?: {} | undefined;
+            toLocaleDateString?: {} | undefined;
+            toLocaleTimeString?: {} | undefined;
+            valueOf?: {} | undefined;
+            getTime?: {} | undefined;
+            getFullYear?: {} | undefined;
+            getUTCFullYear?: {} | undefined;
+            getMonth?: {} | undefined;
+            getUTCMonth?: {} | undefined;
+            getDate?: {} | undefined;
+            getUTCDate?: {} | undefined;
+            getDay?: {} | undefined;
+            getUTCDay?: {} | undefined;
+            getHours?: {} | undefined;
+            getUTCHours?: {} | undefined;
+            getMinutes?: {} | undefined;
+            getUTCMinutes?: {} | undefined;
+            getSeconds?: {} | undefined;
+            getUTCSeconds?: {} | undefined;
+            getMilliseconds?: {} | undefined;
+            getUTCMilliseconds?: {} | undefined;
+            getTimezoneOffset?: {} | undefined;
+            setTime?: {} | undefined;
+            setMilliseconds?: {} | undefined;
+            setUTCMilliseconds?: {} | undefined;
+            setSeconds?: {} | undefined;
+            setUTCSeconds?: {} | undefined;
+            setMinutes?: {} | undefined;
+            setUTCMinutes?: {} | undefined;
+            setHours?: {} | undefined;
+            setUTCHours?: {} | undefined;
+            setDate?: {} | undefined;
+            setUTCDate?: {} | undefined;
+            setMonth?: {} | undefined;
+            setUTCMonth?: {} | undefined;
+            setFullYear?: {} | undefined;
+            setUTCFullYear?: {} | undefined;
+            toUTCString?: {} | undefined;
+            toISOString?: {} | undefined;
+            toJSON?: {} | undefined;
+            [Symbol.toPrimitive]?: {} | undefined;
+        } | undefined;
+        tags?: ({
+            value?: string | undefined;
+            type?: string | undefined;
+            color?: string | null | undefined;
+        } | undefined)[] | undefined;
+        favorite?: boolean | undefined;
+    };
+    buildFeatureToggleListFromRows: (rows: any[], featureQuery?: IFeatureToggleQuery, includeDisabledStrategies?: boolean) => IFeatureToggleListItem[];
+    buildPlaygroundFeaturesFromRows: (rows: any[], featureQuery?: IFeatureToggleQuery) => FeatureConfigurationClient[];
+    buildArchivedFeatureToggleListFromRows: (rows: any[]) => IFeatureToggleListItem[];
+}
+//# sourceMappingURL=feature-toggle-row-converter.d.ts.map

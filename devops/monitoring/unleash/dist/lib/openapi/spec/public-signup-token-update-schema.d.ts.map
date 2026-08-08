@@ -1,0 +1,1 @@
+{"version":3,"file":"public-signup-token-update-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/public-signup-token-update-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAEpD,eAAO,MAAM,6BAA6B;;;;;;;;;;;;;;;;;;;CAoBhC,CAAC;AAEX,MAAM,MAAM,6BAA6B,GAAG,UAAU,CAClD,OAAO,6BAA6B,CACvC,CAAC"}

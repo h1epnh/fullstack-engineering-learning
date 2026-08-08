@@ -1,0 +1,1 @@
+{"version":3,"file":"upsert-segment-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/upsert-segment-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAGpD,eAAO,MAAM,mBAAmB;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;CAoCtB,CAAC;AAEX,MAAM,MAAM,mBAAmB,GAAG,UAAU,CAAC,OAAO,mBAAmB,CAAC,CAAC"}

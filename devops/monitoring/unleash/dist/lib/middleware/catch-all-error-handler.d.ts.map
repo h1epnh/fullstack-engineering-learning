@@ -1,0 +1,1 @@
+{"version":3,"file":"catch-all-error-handler.d.ts","sourceRoot":"","sources":["../../../src/lib/middleware/catch-all-error-handler.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,mBAAmB,EAAE,MAAM,SAAS,CAAC;AACnD,OAAO,KAAK,EAAE,WAAW,EAAE,MAAM,WAAW,CAAC;AAG7C,eAAO,MAAM,oBAAoB,GAC7B,aAAa,WAAW,KACzB,mBAOF,CAAC"}

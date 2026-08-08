@@ -1,0 +1,1 @@
+{"version":3,"file":"patches-schema.js","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/patches-schema.ts"],"names":[],"mappings":";;;AACA,iDAA6C;AAEhC,QAAA,aAAa,GAAG;IACzB,GAAG,EAAE,oCAAoC;IACzC,IAAI,EAAE,OAAO;IACb,WAAW,EAAE,mBAAmB;IAChC,KAAK,EAAE;QACH,IAAI,EAAE,kCAAkC;KAC3C;IACD,UAAU,EAAE;QACR,OAAO,EAAE;YACL,WAAW,EAAX,0BAAW;SACd;KACJ;CACK,CAAC"}

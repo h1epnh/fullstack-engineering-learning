@@ -1,0 +1,1 @@
+{"version":3,"file":"postgres-version-checker.d.ts","sourceRoot":"","sources":["../../../src/lib/util/postgres-version-checker.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,aAAa,EAAE,cAAc,EAAE,MAAM,UAAU,CAAC;AAK9D,wBAAsB,4BAA4B,CAC9C,MAAM,EAAE,cAAc,EACtB,YAAY,EAAE,aAAa,GAC5B,OAAO,CAAC,IAAI,CAAC,CAWf"}

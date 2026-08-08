@@ -1,0 +1,1 @@
+{"version":3,"file":"createGroupService.d.ts","sourceRoot":"","sources":["../../../../src/lib/features/group/createGroupService.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,cAAc,EAAE,MAAM,aAAa,CAAC;AAClD,OAAO,EAAE,YAAY,EAAE,MAAM,gBAAgB,CAAC;AAC9C,OAAO,KAAK,EAAE,EAAE,EAAE,MAAM,aAAa,CAAC;AAKtC,eAAO,MAAM,kBAAkB,GAC3B,IAAI,EAAE,EACN,QAAQ,cAAc,KACvB,YAWF,CAAC"}

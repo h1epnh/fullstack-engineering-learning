@@ -1,0 +1,1 @@
+{"version":3,"file":"application-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/application-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAGpD,eAAO,MAAM,iBAAiB;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;CA6DpB,CAAC;AAEX,MAAM,MAAM,iBAAiB,GAAG,UAAU,CAAC,OAAO,iBAAiB,CAAC,CAAC"}

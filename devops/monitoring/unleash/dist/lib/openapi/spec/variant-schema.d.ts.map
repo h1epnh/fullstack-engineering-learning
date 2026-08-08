@@ -1,0 +1,1 @@
+{"version":3,"file":"variant-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/variant-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAGpD,eAAO,MAAM,aAAa;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;CAiEhB,CAAC;AAEX,MAAM,MAAM,aAAa,GAAG,UAAU,CAAC,OAAO,aAAa,CAAC,CAAC"}

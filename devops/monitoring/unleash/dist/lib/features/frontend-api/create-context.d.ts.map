@@ -1,0 +1,1 @@
+{"version":3,"file":"create-context.d.ts","sourceRoot":"","sources":["../../../../src/lib/features/frontend-api/create-context.ts"],"names":[],"mappings":"AAEA,OAAO,KAAK,EAAE,OAAO,EAAE,MAAM,gBAAgB,CAAC;AAE9C,wBAAgB,aAAa,CAAC,WAAW,EAAE,GAAG,GAAG,OAAO,CA2BvD;AAED,eAAO,MAAM,mBAAmB,GAAI,aAAa,GAAG,EAAE,IAAI,MAAM,KAAG,OAKlE,CAAC"}

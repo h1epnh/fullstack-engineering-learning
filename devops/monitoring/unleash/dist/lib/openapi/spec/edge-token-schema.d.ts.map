@@ -1,0 +1,1 @@
+{"version":3,"file":"edge-token-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/edge-token-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AACpD,OAAO,EAAE,YAAY,EAAE,MAAM,8BAA8B,CAAC;AAE5D,eAAO,MAAM,eAAe;;;;;;;;;;;;;;;;;;;;;;;;;;;;CAgClB,CAAC;AAEX,MAAM,MAAM,eAAe,GAAG,UAAU,CAAC,OAAO,eAAe,CAAC,CAAC"}

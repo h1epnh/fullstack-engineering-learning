@@ -1,0 +1,1 @@
+{"version":3,"file":"sdk-flat-context-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/sdk-flat-context-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAIpD,eAAO,MAAM,oBAAoB;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;CAQvB,CAAC;AAEX,MAAM,MAAM,oBAAoB,GAAG,UAAU,CAAC,OAAO,oBAAoB,CAAC,CAAC"}

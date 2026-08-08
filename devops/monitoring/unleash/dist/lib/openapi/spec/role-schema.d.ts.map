@@ -1,0 +1,1 @@
+{"version":3,"file":"role-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/role-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAEpD,eAAO,MAAM,UAAU;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;CAsCb,CAAC;AAEX,MAAM,MAAM,UAAU,GAAG,UAAU,CAAC,OAAO,UAAU,CAAC,CAAC"}

@@ -1,0 +1,4 @@
+declare const UNIQUE_CONSTRAINT_VIOLATION = "23505";
+declare const FOREIGN_KEY_VIOLATION = "23503";
+export { UNIQUE_CONSTRAINT_VIOLATION, FOREIGN_KEY_VIOLATION };
+//# sourceMappingURL=db-error.d.ts.map

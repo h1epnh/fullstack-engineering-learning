@@ -1,0 +1,203 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const date_fns_1 = require("date-fns");
+const metrics_helper_1 = __importDefault(require("../util/metrics-helper"));
+const metric_events_1 = require("../metric-events");
+const COLUMNS = [
+    'app_name',
+    'instance_id',
+    'sdk_version',
+    'client_ip',
+    'last_seen',
+    'created_at',
+    'environment',
+];
+const TABLE = 'client_instances';
+const mapRow = (row) => ({
+    appName: row.app_name,
+    instanceId: row.instance_id,
+    sdkVersion: row.sdk_version,
+    clientIp: row.client_ip,
+    lastSeen: row.last_seen,
+    createdAt: row.created_at,
+    environment: row.environment,
+});
+const mapToDb = (client) => ({
+    app_name: client.appName,
+    instance_id: client.instanceId,
+    sdk_version: client.sdkVersion || '',
+    client_ip: client.clientIp,
+    last_seen: client.lastSeen || 'now()',
+    environment: client.environment || 'default',
+});
+class ClientInstanceStore {
+    constructor(db, eventBus, getLogger) {
+        this.db = db;
+        this.eventBus = eventBus;
+        this.logger = getLogger('client-instance-store.ts');
+        this.metricTimer = (action) => metrics_helper_1.default.wrapTimer(eventBus, metric_events_1.DB_TIME, {
+            store: 'instance',
+            action,
+        });
+    }
+    async removeInstancesOlderThanTwoDays() {
+        const rows = await this.db(TABLE)
+            .whereRaw("created_at < now() - interval '2 days'")
+            .del();
+        if (rows > 0) {
+            this.logger.debug(`Deleted ${rows} instances`);
+        }
+    }
+    async setLastSeen({ appName, instanceId, environment, clientIp, }) {
+        await this.db(TABLE)
+            .insert({
+            app_name: appName,
+            instance_id: instanceId,
+            environment,
+            last_seen: new Date(),
+            client_ip: clientIp,
+        })
+            .onConflict(['app_name', 'instance_id', 'environment'])
+            .merge({
+            last_seen: new Date(),
+            client_ip: clientIp,
+        });
+    }
+    async bulkUpsert(instances) {
+        const rows = instances.map(mapToDb);
+        await this.db(TABLE)
+            .insert(rows)
+            .onConflict(['app_name', 'instance_id', 'environment'])
+            .merge();
+    }
+    async delete({ appName, instanceId, }) {
+        await this.db(TABLE)
+            .where({
+            app_name: appName,
+            instance_id: instanceId,
+        })
+            .del();
+    }
+    async deleteAll() {
+        await this.db(TABLE).del();
+    }
+    async get({ appName, instanceId, }) {
+        const row = await this.db(TABLE)
+            .where({
+            app_name: appName,
+            instance_id: instanceId,
+        })
+            .first();
+        return mapRow(row);
+    }
+    async exists({ appName, instanceId, }) {
+        const result = await this.db.raw(`SELECT EXISTS (SELECT 1 FROM ${TABLE} WHERE app_name = ? AND instance_id = ?) AS present`, [appName, instanceId]);
+        const { present } = result.rows[0];
+        return present;
+    }
+    async insert(details) {
+        const stopTimer = this.metricTimer('insert');
+        await this.db(TABLE)
+            .insert(mapToDb(details))
+            .onConflict(['app_name', 'instance_id', 'environment'])
+            .merge();
+        stopTimer();
+    }
+    async getAll() {
+        const stopTimer = this.metricTimer('getAll');
+        const rows = await this.db
+            .select(COLUMNS)
+            .from(TABLE)
+            .orderBy('last_seen', 'desc');
+        const toggles = rows.map(mapRow);
+        stopTimer();
+        return toggles;
+    }
+    async getByAppName(appName) {
+        const rows = await this.db
+            .select()
+            .from(TABLE)
+            .where('app_name', appName)
+            .orderBy('last_seen', 'desc');
+        return rows.map(mapRow);
+    }
+    async getRecentByAppNameAndEnvironment(appName, environment) {
+        const rows = await this.db
+            .select()
+            .from(TABLE)
+            .where('app_name', appName)
+            .where('environment', environment)
+            .whereRaw("last_seen >= NOW() - INTERVAL '24 hours'")
+            .orderBy('last_seen', 'desc')
+            .limit(1000);
+        return rows.map(mapRow);
+    }
+    async getBySdkName(sdkName) {
+        const sdkPrefix = `${sdkName}%`;
+        const rows = await this.db
+            .select()
+            .from(TABLE)
+            .whereLike('sdk_version', sdkPrefix)
+            .orderBy('last_seen', 'desc');
+        return rows.map(mapRow);
+    }
+    async groupApplicationsBySdk() {
+        const rows = await this.db
+            .select([
+            'sdk_version as sdkVersion',
+            this.db.raw('ARRAY_AGG(DISTINCT app_name) as applications'),
+        ])
+            .from(TABLE)
+            .groupBy('sdk_version');
+        return rows;
+    }
+    async groupApplicationsBySdkAndProject(projectId) {
+        const rows = await this.db
+            .with('instances', this.db
+            .select('app_name', 'sdk_version')
+            .distinct()
+            .from('client_instances'))
+            .select([
+            'i.sdk_version as sdkVersion',
+            this.db.raw('ARRAY_AGG(DISTINCT cme.app_name) as applications'),
+        ])
+            .from('client_metrics_env as cme')
+            .leftJoin('features as f', 'f.name', 'cme.feature_name')
+            .leftJoin('instances as i', 'i.app_name', 'cme.app_name')
+            .where('f.project', projectId)
+            .groupBy('i.sdk_version');
+        return rows;
+    }
+    async getDistinctApplications() {
+        const rows = await this.db
+            .distinct('app_name')
+            .select(['app_name'])
+            .from(TABLE)
+            .orderBy('app_name', 'desc');
+        return rows.map((r) => r.app_name);
+    }
+    async getDistinctApplicationsCount(daysBefore) {
+        const query = this.db
+            .from((qb) => qb
+            .select('app_name')
+            .from(TABLE)
+            .modify((qb) => {
+            if (daysBefore) {
+                qb.where('last_seen', '>', (0, date_fns_1.subDays)(new Date(), daysBefore));
+            }
+        })
+            .groupBy('app_name')
+            .as('subquery'))
+            .count('* as count');
+        return query.then((res) => Number(res[0].count));
+    }
+    async deleteForApplication(appName) {
+        return this.db(TABLE).where('app_name', appName).del();
+    }
+    destroy() { }
+}
+exports.default = ClientInstanceStore;
+//# sourceMappingURL=client-instance-store.js.map

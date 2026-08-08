@@ -1,0 +1,1 @@
+{"version":3,"file":"feature-dependencies-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/feature-dependencies-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAGpD,eAAO,MAAM,yBAAyB;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;CA0B5B,CAAC;AAEX,MAAM,MAAM,yBAAyB,GAAG,UAAU,CAC9C,OAAO,yBAAyB,CACnC,CAAC"}

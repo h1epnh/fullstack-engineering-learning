@@ -1,0 +1,1 @@
+{"version":3,"file":"create-tag-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/create-tag-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAIpD,eAAO,MAAM,eAAe;;;;;;;;;;;;;;;;;;;;;;;;;;;;;CAiBlB,CAAC;AAEX,MAAM,MAAM,eAAe,GAAG,UAAU,CAAC,OAAO,eAAe,CAAC,CAAC"}

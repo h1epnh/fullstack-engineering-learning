@@ -1,0 +1,1 @@
+{"version":3,"file":"fake-features-read-model.js","sourceRoot":"","sources":["../../../../../src/lib/features/feature-toggle/fakes/fake-features-read-model.ts"],"names":[],"mappings":";;;AAEA,MAAa,qBAAqB;IAC9B,aAAa;QACT,OAAO,OAAO,CAAC,OAAO,CAAC,KAAK,CAAC,CAAC;IAClC,CAAC;IAED,wBAAwB,CACpB,QAAgB,EAChB,QAAgB;QAEhB,OAAO,OAAO,CAAC,OAAO,CAAC,IAAI,CAAC,CAAC;IACjC,CAAC;CACJ;AAXD,sDAWC"}

@@ -1,0 +1,1 @@
+{"version":3,"file":"fake-feature-collaborators-read-model.d.ts","sourceRoot":"","sources":["../../../../src/lib/features/feature-toggle/fake-feature-collaborators-read-model.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EACR,YAAY,EACZ,8BAA8B,EACjC,MAAM,+CAA+C,CAAC;AAEvD,qBAAa,iCACT,YAAW,8BAA8B;IAEnC,uBAAuB,CACzB,OAAO,EAAE,MAAM,GAChB,OAAO,CAAC,KAAK,CAAC,YAAY,CAAC,CAAC;CAGlC"}

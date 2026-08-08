@@ -1,0 +1,1 @@
+{"version":3,"file":"fake-user-unsubscribe-store.d.ts","sourceRoot":"","sources":["../../../../src/lib/features/user-subscriptions/fake-user-unsubscribe-store.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,qBAAqB,EAAE,MAAM,+BAA+B,CAAC;AAE3E,qBAAa,wBAAyB,YAAW,qBAAqB;IAC5D,MAAM;IAEN,MAAM,IAAI,OAAO,CAAC,IAAI,CAAC;IAE7B,OAAO,IAAI,IAAI;CAClB"}

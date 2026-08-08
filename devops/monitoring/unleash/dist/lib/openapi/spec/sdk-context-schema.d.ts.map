@@ -1,0 +1,1 @@
+{"version":3,"file":"sdk-context-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/sdk-context-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAEpD,eAAO,MAAM,gBAAgB;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;CAmDnB,CAAC;AAEX,MAAM,MAAM,gBAAgB,GAAG,UAAU,CAAC,OAAO,gBAAgB,CAAC,CAAC"}

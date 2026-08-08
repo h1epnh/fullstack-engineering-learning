@@ -1,0 +1,1 @@
+{"version":3,"file":"client-feature-toggle-read-model-type.d.ts","sourceRoot":"","sources":["../../../../src/lib/features/frontend-api/client-feature-toggle-read-model-type.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,oBAAoB,EAAE,MAAM,aAAa,CAAC;AAExD,MAAM,WAAW,6BAA6B;IAC1C,MAAM,IAAI,OAAO,CAAC,MAAM,CAAC,MAAM,EAAE,MAAM,CAAC,MAAM,EAAE,oBAAoB,CAAC,CAAC,CAAC,CAAC;CAC3E"}

@@ -1,0 +1,1 @@
+{"version":3,"file":"invalid-operation-error.js","sourceRoot":"","sources":["../../../src/lib/error/invalid-operation-error.ts"],"names":[],"mappings":";;AAAA,mDAA+C;AAE/C,MAAM,qBAAsB,SAAQ,4BAAY;IAAhD;;QACI,eAAU,GAAG,GAAG,CAAC;IACrB,CAAC;CAAA;AACD,kBAAe,qBAAqB,CAAC;AACrC,MAAM,CAAC,OAAO,GAAG,qBAAqB,CAAC"}

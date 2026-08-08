@@ -1,0 +1,1 @@
+{"version":3,"file":"invalid-token-error.js","sourceRoot":"","sources":["../../../src/lib/error/invalid-token-error.ts"],"names":[],"mappings":";;AAAA,mDAA+C;AAE/C,MAAM,iBAAkB,SAAQ,4BAAY;IAGxC;QACI,KAAK,CAAC,qBAAqB,CAAC,CAAC;QAHjC,eAAU,GAAG,GAAG,CAAC;IAIjB,CAAC;CACJ;AAED,kBAAe,iBAAiB,CAAC;AACjC,MAAM,CAAC,OAAO,GAAG,iBAAiB,CAAC"}

@@ -1,0 +1,1 @@
+{"version":3,"file":"oss-authentication.d.ts","sourceRoot":"","sources":["../../../src/lib/middleware/oss-authentication.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,WAAW,EAAE,MAAM,SAAS,CAAC;AAE3C,OAAO,KAAK,EAAE,WAAW,EAAE,MAAM,WAAW,CAAC;AAE7C,iBAAS,WAAW,CAChB,GAAG,EAAE,WAAW,EAChB,SAAS,EAAE,WAAW,EACtB,WAAW,EAAE,MAAM,GACpB,IAAI,CASN;AACD,eAAe,WAAW,CAAC"}

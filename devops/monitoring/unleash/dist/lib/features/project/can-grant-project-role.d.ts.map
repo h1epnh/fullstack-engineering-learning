@@ -1,0 +1,1 @@
+{"version":3,"file":"can-grant-project-role.d.ts","sourceRoot":"","sources":["../../../../src/lib/features/project/can-grant-project-role.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,WAAW,EAAE,MAAM,aAAa,CAAC;AAC/C,OAAO,KAAK,EAAE,eAAe,EAAE,MAAM,iCAAiC,CAAC;AAEvE,eAAO,MAAM,mBAAmB,GAC5B,oBAAoB,eAAe,EAAE,EACrC,qBAAqB,WAAW,EAAE,YAerC,CAAC"}

@@ -1,0 +1,1 @@
+{"version":3,"file":"patches-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/patches-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAGpD,eAAO,MAAM,aAAa;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;CAYhB,CAAC;AAEX,MAAM,MAAM,aAAa,GAAG,UAAU,CAAC,OAAO,aAAa,CAAC,CAAC"}

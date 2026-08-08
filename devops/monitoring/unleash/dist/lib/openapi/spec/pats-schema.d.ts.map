@@ -1,0 +1,1 @@
+{"version":3,"file":"pats-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/pats-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAGpD,eAAO,MAAM,UAAU;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;CAmBb,CAAC;AAEX,MAAM,MAAM,UAAU,GAAG,UAAU,CAAC,OAAO,UAAU,CAAC,CAAC"}
