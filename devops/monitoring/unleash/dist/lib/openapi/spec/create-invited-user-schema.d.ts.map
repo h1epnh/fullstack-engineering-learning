@@ -1,1 +1,0 @@
-{"version":3,"file":"create-invited-user-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/create-invited-user-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAEpD,eAAO,MAAM,uBAAuB;;;;;;;;;;;;;;;;;;;;;;;;;;;;;CA6B1B,CAAC;AAEX,MAAM,MAAM,uBAAuB,GAAG,UAAU,CAC5C,OAAO,uBAAuB,CACjC,CAAC"}

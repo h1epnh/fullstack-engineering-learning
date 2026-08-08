@@ -1,1 +1,0 @@
-{"version":3,"file":"integration-headers.d.ts","sourceRoot":"","sources":["../../../src/lib/middleware/integration-headers.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,OAAO,EAAE,MAAM,SAAS,CAAC;AAiBvC,eAAO,MAAM,iBAAiB,GAAI,SAAS,OAAO,KAAG,MAAM,GAAG,SAO7D,CAAC;AAEF,eAAO,MAAM,0BAA0B,GACnC,WAAW,MAAM,KAClB,MAAM,GAAG,SAKX,CAAC"}

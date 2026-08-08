@@ -1,1 +1,0 @@
-{"version":3,"file":"feature-type-count-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/feature-type-count-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAEpD,eAAO,MAAM,sBAAsB;;;;;;;;;;;;;;;;;;;;;CAsBzB,CAAC;AAEX,MAAM,MAAM,sBAAsB,GAAG,UAAU,CAAC,OAAO,sBAAsB,CAAC,CAAC"}

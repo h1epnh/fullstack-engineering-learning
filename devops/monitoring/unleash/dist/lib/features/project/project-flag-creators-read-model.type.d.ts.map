@@ -1,1 +1,0 @@
-{"version":3,"file":"project-flag-creators-read-model.type.d.ts","sourceRoot":"","sources":["../../../../src/lib/features/project/project-flag-creators-read-model.type.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,6BAA6B;IAC1C,eAAe,CACX,OAAO,EAAE,MAAM,GAChB,OAAO,CAAC,KAAK,CAAC;QAAE,EAAE,EAAE,MAAM,CAAC;QAAC,IAAI,EAAE,MAAM,CAAA;KAAE,CAAC,CAAC,CAAC;CACnD"}

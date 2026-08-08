@@ -1,1 +1,0 @@
-{"version":3,"file":"rate-limit-error.d.ts","sourceRoot":"","sources":["../../../src/lib/error/rate-limit-error.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,YAAY,EAAE,MAAM,iBAAiB,CAAC;AAE/C,qBAAa,cAAe,SAAQ,YAAY;IAC5C,UAAU,SAAO;gBAGb,OAAO,GAAE,MAA8E;CAI9F"}

@@ -1,1 +1,0 @@
-{"version":3,"file":"base-pagination-parameters.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/base-pagination-parameters.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,eAAe,EAAE,MAAM,2BAA2B,CAAC;AAEjE,eAAO,MAAM,wBAAwB;;;;;;;;;;;;;;;;EAqB3B,CAAC;AAEX,MAAM,MAAM,wBAAwB,GAAG,OAAO,CAC1C,eAAe,CAAC,OAAO,wBAAwB,CAAC,CACnD,CAAC"}

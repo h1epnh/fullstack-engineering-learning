@@ -1,1 +1,0 @@
-{"version":3,"file":"project.d.ts","sourceRoot":"","sources":["../../../src/lib/types/project.ts"],"names":[],"mappings":"AAAA,eAAO,MAAM,eAAe,YAAY,CAAC;AAEzC,MAAM,WAAW,iBAAiB;IAC9B,OAAO,EAAE,MAAM,CAAC;IAChB,IAAI,EAAE,MAAM,CAAC;IACb,SAAS,EAAE,MAAM,CAAC;IAClB,UAAU,EAAE,MAAM,CAAC;IACnB,mBAAmB,EAAE,MAAM,CAAC;CAC/B"}

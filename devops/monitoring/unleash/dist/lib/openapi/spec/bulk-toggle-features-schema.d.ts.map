@@ -1,1 +1,0 @@
-{"version":3,"file":"bulk-toggle-features-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/bulk-toggle-features-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAEpD,eAAO,MAAM,wBAAwB;;;;;;;;;;;;;;;;;CAiB3B,CAAC;AAEX,MAAM,MAAM,wBAAwB,GAAG,UAAU,CAC7C,OAAO,wBAAwB,CAClC,CAAC"}

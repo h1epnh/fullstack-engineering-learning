@@ -1,1 +1,0 @@
-{"version":3,"file":"client-features-query-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/client-features-query-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAEpD,eAAO,MAAM,yBAAyB;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;CA+C5B,CAAC;AAEX,MAAM,MAAM,yBAAyB,GAAG,UAAU,CAC9C,OAAO,yBAAyB,CACnC,CAAC"}

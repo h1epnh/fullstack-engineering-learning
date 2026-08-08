@@ -1,1 +1,0 @@
-{"version":3,"file":"secure-headers.d.ts","sourceRoot":"","sources":["../../../src/lib/middleware/secure-headers.ts"],"names":[],"mappings":"AACA,OAAO,KAAK,EAAE,cAAc,EAAE,MAAM,SAAS,CAAC;AAC9C,OAAO,KAAK,EAAE,cAAc,EAAE,MAAM,UAAU,CAAC;AAG/C,QAAA,MAAM,aAAa,EAAE,CAAC,MAAM,EAAE,cAAc,KAAK,cAsIhD,CAAC;AAEF,eAAe,aAAa,CAAC"}

@@ -1,1 +1,0 @@
-{"version":3,"file":"archivedfeature-error.d.ts","sourceRoot":"","sources":["../../../src/lib/error/archivedfeature-error.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,YAAY,EAAE,MAAM,iBAAiB,CAAC;AAE/C,cAAM,oBAAqB,SAAQ,YAAY;IAC3C,UAAU,SAAO;gBAGb,OAAO,GAAE,MAA6D;CAI7E;AACD,eAAe,oBAAoB,CAAC"}

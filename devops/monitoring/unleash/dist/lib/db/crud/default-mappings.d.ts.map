@@ -1,1 +1,0 @@
-{"version":3,"file":"default-mappings.d.ts","sourceRoot":"","sources":["../../../../src/lib/db/crud/default-mappings.ts"],"names":[],"mappings":"AAMA;;;;;GAKG;AACH,eAAO,MAAM,YAAY,GAAI,UAAU,EAAE,QAAQ,EAC7C,MAAM,OAAO,CAAC,UAAU,CAAC,KAC1B,OAAO,CAAC,QAAQ,CAMlB,CAAC;AAEF;;;;GAIG;AACH,eAAO,MAAM,cAAc,GAAI,SAAS,EAAE,OAAO,EAC7C,KAAK,OAAO,CAAC,OAAO,CAAC,KACtB,OAAO,CAAC,SAAS,CAMnB,CAAC"}

@@ -1,1 +1,0 @@
-{"version":3,"file":"parent-feature-options-schema.js","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/parent-feature-options-schema.ts"],"names":[],"mappings":";;;AAEa,QAAA,0BAA0B,GAAG;IACtC,GAAG,EAAE,iDAAiD;IACtD,IAAI,EAAE,OAAO;IACb,WAAW,EACP,wHAAwH;IAC5H,KAAK,EAAE;QACH,IAAI,EAAE,QAAQ;KACjB;IACD,UAAU,EAAE,EAAE;CACR,CAAC"}

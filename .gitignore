@@ -51,3 +51,6 @@ target/
 
 frontend/obytes/obytes-hello-project/
 devops/cloud/minio/data/
+
+# Vendored external tool pending submodule conversion (huge, root-owned build output)
+devops/monitoring/unleash/

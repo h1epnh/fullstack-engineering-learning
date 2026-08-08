@@ -1,1 +1,0 @@
-{"version":3,"file":"fake-user-subscriptions-read-model.d.ts","sourceRoot":"","sources":["../../../../src/lib/features/user-subscriptions/fake-user-subscriptions-read-model.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,2BAA2B,EAAE,MAAM,sCAAsC,CAAC;AAExF,qBAAa,8BACT,YAAW,2BAA2B;IAEhC,kBAAkB,CAAC,YAAY,EAAE,MAAM;IAIvC,oBAAoB,CAAC,YAAY,EAAE,MAAM;IAIzC,oBAAoB;CAG7B"}

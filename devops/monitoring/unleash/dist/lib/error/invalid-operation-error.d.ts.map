@@ -1,1 +1,0 @@
-{"version":3,"file":"invalid-operation-error.d.ts","sourceRoot":"","sources":["../../../src/lib/error/invalid-operation-error.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,YAAY,EAAE,MAAM,iBAAiB,CAAC;AAE/C,cAAM,qBAAsB,SAAQ,YAAY;IAC5C,UAAU,SAAO;CACpB;AACD,eAAe,qBAAqB,CAAC"}

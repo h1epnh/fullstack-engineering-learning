@@ -1,1 +1,0 @@
-{"version":3,"file":"unique-connection-read-model.d.ts","sourceRoot":"","sources":["../../../../src/lib/features/unique-connection/unique-connection-read-model.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EACR,0BAA0B,EAC1B,sBAAsB,EACzB,MAAM,aAAa,CAAC;AAKrB,qBAAa,yBAA0B,YAAW,0BAA0B;IACxE,OAAO,CAAC,qBAAqB,CAAyB;gBAE1C,qBAAqB,EAAE,sBAAsB;IAInD,QAAQ;;;;;;;;CA6DjB"}

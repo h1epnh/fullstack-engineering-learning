@@ -1,1 +1,0 @@
-{"version":3,"file":"dependent-feature-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/dependent-feature-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAGpD,eAAO,MAAM,sBAAsB;;;;;;;;;;;;;;;;;;;;;;;;;;;CAQzB,CAAC;AAEX,MAAM,MAAM,sBAAsB,GAAG,UAAU,CAAC,OAAO,sBAAsB,CAAC,CAAC"}

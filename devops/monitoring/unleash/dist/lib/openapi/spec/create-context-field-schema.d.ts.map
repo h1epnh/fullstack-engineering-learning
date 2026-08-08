@@ -1,1 +1,0 @@
-{"version":3,"file":"create-context-field-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/create-context-field-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAGpD,eAAO,MAAM,wBAAwB;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;CAa3B,CAAC;AAEX,MAAM,MAAM,wBAAwB,GAAG,UAAU,CAC7C,OAAO,wBAAwB,CAClC,CAAC"}

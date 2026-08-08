@@ -1,1 +1,0 @@
-{"version":3,"file":"token-user-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/token-user-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAGpD,eAAO,MAAM,eAAe;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;CA2ClB,CAAC;AAEX,MAAM,MAAM,eAAe,GAAG,UAAU,CAAC,OAAO,eAAe,CAAC,CAAC"}

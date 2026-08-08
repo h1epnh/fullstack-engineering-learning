@@ -1,1 +1,0 @@
-{"version":3,"file":"update-feature-schema.d.ts","sourceRoot":"","sources":["../../../../src/lib/openapi/spec/update-feature-schema.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,mBAAmB,CAAC;AAGpD,eAAO,MAAM,mBAAmB;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;CA8CtB,CAAC;AAEX,MAAM,MAAM,mBAAmB,GAAG,UAAU,CAAC,OAAO,mBAAmB,CAAC,CAAC"}

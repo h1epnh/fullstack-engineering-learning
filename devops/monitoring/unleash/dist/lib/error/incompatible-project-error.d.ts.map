@@ -1,1 +1,0 @@
-{"version":3,"file":"incompatible-project-error.d.ts","sourceRoot":"","sources":["../../../src/lib/error/incompatible-project-error.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,KAAK,cAAc,EAAE,YAAY,EAAE,MAAM,iBAAiB,CAAC;AAEpE,MAAM,CAAC,OAAO,OAAO,wBAAyB,SAAQ,YAAY;IAC9D,UAAU,SAAO;gBAEL,aAAa,EAAE,MAAM;IAIjC,MAAM,IAAI,cAAc;CAW3B"}
