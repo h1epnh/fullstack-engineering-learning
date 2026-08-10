@@ -56,4 +56,4 @@ devops/cloud/minio/data/
 devops/monitoring/unleash/
 
 # n8n runtime data/credentials (contains encryption key + credentials DB, must never be committed)
-devops/monitoring/workflow/n8n/
+devops/orchestration/workflow/n8n/
