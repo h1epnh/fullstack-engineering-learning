@@ -1,0 +1,27 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "ABCDE12345.com.example.app",
+        "paths": [
+          "/",
+          "/about-us/",
+          "/products/*",
+          "/services/detail/?id=*",
+          "/news/article/*",
+          "/promo/*",
+          "NOT /private/",
+          "NOT /settings/*",
+          "*.html"
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["ABCDE12345.com.example.app"]
+  },
+  "appclips": {
+    "apps": ["ABCDE12345.com.example.app"]
+  }
+}

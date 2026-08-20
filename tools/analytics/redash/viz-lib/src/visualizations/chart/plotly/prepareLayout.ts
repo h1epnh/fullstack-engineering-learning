@@ -1,0 +1,137 @@
+import { isObject, isUndefined, filter, map } from "lodash";
+import { getPieDimensions } from "./preparePieData";
+
+function getAxisTitleText(axis: any): string | null {
+  if (!axis || !axis.title) return null;
+  return isObject(axis.title) ? axis.title.text : axis.title;
+}
+
+function getAxisScaleType(axis: any) {
+  switch (axis.type) {
+    case "datetime":
+      return "date";
+    case "logarithmic":
+      return "log";
+    default:
+      return axis.type;
+  }
+}
+
+function prepareXAxis(axisOptions: any, additionalOptions: any) {
+  const titleText = getAxisTitleText(axisOptions);
+  const axis: any = {
+    title: titleText ? { text: titleText } : null,
+    type: getAxisScaleType(axisOptions),
+    automargin: true,
+    tickformat: axisOptions.tickFormat ?? null,
+  };
+
+  if (additionalOptions.sortX && axis.type === "category") {
+    if (additionalOptions.reverseX) {
+      axis.categoryorder = "category descending";
+    } else {
+      axis.categoryorder = "category ascending";
+    }
+  }
+
+  if (!isUndefined(axisOptions.labels)) {
+    axis.showticklabels = axisOptions.labels.enabled;
+  }
+
+  return axis;
+}
+
+function prepareYAxis(axisOptions: any) {
+  const titleText = getAxisTitleText(axisOptions);
+  return {
+    title: titleText ? { text: titleText } : null,
+    type: getAxisScaleType(axisOptions),
+    automargin: true,
+    autorange: true,
+    range: null,
+    tickformat: axisOptions.tickFormat ?? null,
+  };
+}
+
+function preparePieLayout(layout: any, options: any, data: any) {
+  const hasName = /{{\s*@@name\s*}}/.test(options.textFormat);
+
+  const { cellsInRow, cellWidth, cellHeight, xPadding } = getPieDimensions(data);
+
+  if (hasName) {
+    layout.annotations = [];
+  } else {
+    layout.annotations = filter(
+      map(data, (series, index) => {
+        const xPosition = ((index as number) % cellsInRow) * cellWidth;
+        const yPosition = Math.floor((index as number) / cellsInRow) * cellHeight;
+        return {
+          x: xPosition + (cellWidth - xPadding) / 2,
+          y: yPosition + cellHeight - 0.015,
+          xanchor: "center",
+          yanchor: "top",
+          text: series.name,
+          showarrow: false,
+        };
+      })
+    );
+  }
+
+  return layout;
+}
+
+function prepareDefaultLayout(layout: any, options: any, data: any) {
+  const y2Series = data.filter((s: any) => s.yaxis === "y2");
+
+  layout.xaxis = prepareXAxis(options.xAxis, options);
+
+  layout.yaxis = prepareYAxis(options.yAxis[0]);
+  if (y2Series.length > 0) {
+    layout.yaxis2 = prepareYAxis(options.yAxis[1]);
+    layout.yaxis2.overlaying = "y";
+    layout.yaxis2.side = "right";
+  }
+
+  if (options.series.stacking) {
+    layout.barmode = "relative";
+  }
+
+  return layout;
+}
+
+function prepareBoxLayout(layout: any, options: any, data: any) {
+  layout = prepareDefaultLayout(layout, options, data);
+  layout.boxmode = "group";
+  layout.boxgroupgap = 0.5;
+  return layout;
+}
+
+export default function prepareLayout(element: any, options: any, data: any) {
+  const layout: any = {
+    margin: { l: 10, r: 10, b: 5, t: 20, pad: 4 },
+    // plot size should be at least 5x5px
+    width: Math.max(5, Math.floor(element.offsetWidth)),
+    height: Math.max(5, Math.floor(element.offsetHeight)),
+    autosize: false,
+    showlegend: options.legend.enabled,
+    legend: {
+      traceorder: options.legend.traceorder,
+    },
+    hoverlabel: {
+      namelength: -1,
+    },
+  };
+
+  if (["line", "area", "column"].includes(options.globalSeriesType)) {
+    layout.hovermode = options.swappedAxes ? 'y' : 'x';
+  }
+
+  switch (options.globalSeriesType) {
+    case "pie":
+      return preparePieLayout(layout, options, data);
+    case "box":
+      return prepareBoxLayout(layout, options, data);
+    default:
+      return prepareDefaultLayout(layout, options, data);
+  }
+}

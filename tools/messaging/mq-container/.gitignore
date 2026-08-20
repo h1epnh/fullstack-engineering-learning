@@ -1,0 +1,25 @@
+.dockerignore
+.DS_Store
+.vscode
+test/docker/coverage
+test/docker/vendor
+test/kubernetes/vendor
+test/messaging/target
+build
+coverage
+downloads
+incubating/mqipt/*-IBM-MQIPT-*.tar*
+vendor/github.com/prometheus/client_model/bin/
+vendor/github.com/prometheus/client_model/.classpath
+vendor/github.com/prometheus/client_model/.project
+vendor/github.com/prometheus/client_model/.settings*
+gosec_results.json
+internal/qmgrauth/qmgroam/patch
+.tagcache
+
+# Nix
+*.nix
+.envrc
+.direnv
+result
+downloads/

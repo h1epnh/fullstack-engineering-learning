@@ -35,7 +35,7 @@ The repository is organized by domain:
 *   Cross-cutting testing resources (e.g. performance testing).
 
 ### 🛠 Vendored Tools (`/tools`)
-*   Third-party tools cloned as git submodules for local use (security, messaging, orchestration, workflow, analytics). **Not authored here** — see `tools/README.md` before editing anything inside.
+*   Third-party tools vendored as plain copies for local use (security, messaging, workflow, analytics). **Not authored here** — see `tools/README.md` before editing anything inside.
 
 ### 🛡️ Security (`/devops/security`, `/tools/security`)
 *   Authored security learning material lives under `devops/security`; vendored security tools (MobSF, PhoneSploit...) live under `tools/security`.
