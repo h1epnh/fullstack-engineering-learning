@@ -28,3 +28,6 @@
 [submodule "devops/cloud/github/changtraisitinh.github.io"]
 	path = devops/cloud/github/changtraisitinh.github.io
 	url = https://github.com/changtraisitinh/changtraisitinh.github.io
+[submodule "ai/openhands"]
+	path = ai/openhands
+	url = https://github.com/OpenHands/OpenHands.git

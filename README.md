@@ -20,13 +20,25 @@ The repository is organized by domain:
         *   **Backend**: Node.js, Express, Prisma, PostgreSQL.
 
 ### ☁️ DevOps (`/devops`)
-*   Resources for Docker, Kubernetes, CI/CD pipelines, and infrastructure as code.
+*   Docker, Kubernetes, CI/CD pipelines, cloud, monitoring, event-driven, and databases (Redis, Postgres, Oracle) setup/ops.
+
+### 🏛️ Architecture (`/architecture`)
+*   Enterprise architecture frameworks: TOGAF (fully documented — see `architecture/TOGAF/MASTER_PLAN.md`), COBIT, ITIL.
 
 ### 🧠 AI & Data (`/ai`, `/data`)
-*   Exploration of AI models, data engineering pipelines, and machine learning concepts.
+*   Exploration of AI models/agents (e.g. `ai/openhands` — self-hosted agent UI), data engineering pipelines, and ML concepts.
 
-### 🛡️ Security (`/pentest`)
-*   Penetration testing resources and security best practices.
+### 🧪 Proof of Concepts (`/poc`)
+*   Standalone experiments and demos (Stripe payments, JWT generators, Strapi CMS, Google Maps scraping, etc.) — not meant to be production patterns like `/backend/projects`.
+
+### 🧯 Testing (`/testing`)
+*   Cross-cutting testing resources (e.g. performance testing).
+
+### 🛠 Vendored Tools (`/tools`)
+*   Third-party tools cloned as git submodules for local use (security, messaging, orchestration, workflow, analytics). **Not authored here** — see `tools/README.md` before editing anything inside.
+
+### 🛡️ Security (`/devops/security`, `/tools/security`)
+*   Authored security learning material lives under `devops/security`; vendored security tools (MobSF, PhoneSploit...) live under `tools/security`.
 
 ---
 
