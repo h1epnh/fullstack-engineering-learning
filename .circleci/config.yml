@@ -18,10 +18,10 @@ jobs:
       - run:
           name: Install dependencies
           command: npm install
-          working_directory: ~/repo/devops/projects/simple-lab/app
+          working_directory: ~/repo/engineering/devops/projects/simple-lab/app
       - run:
           name: Run App
-          command: node ./devops/projects/simple-lab/app/server.js
+          command: node ./engineering/devops/projects/simple-lab/app/server.js
       - run:
           name: Stop App
           command: fuser -k 3000/tcp

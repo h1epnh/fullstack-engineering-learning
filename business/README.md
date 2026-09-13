@@ -1,6 +1,10 @@
 # business/
 
-Kiến thức quản trị/kinh doanh — tách biệt khỏi các domain kỹ thuật (`backend/`, `frontend/`,
-`devops/`...) và khỏi `architecture/` (khung kiến trúc doanh nghiệp/IT governance như TOGAF/COBIT/ITIL).
+Career/professional development — tách biệt khỏi `engineering/` (code, infra, thực hành kỹ thuật).
+Không có code, không dùng chung tooling/CI với `engineering/`.
 
-- **[mba/](mba/)** — chương trình học MBA, tổ chức theo 7 nhóm môn học.
+- **[MBA/](MBA/)** — chương trình học MBA (Banking and Finance Management), tổ chức theo 7 nhóm môn học.
+- **[Courses/](Courses/)** — khoá học bổ trợ dạng video (VD: QTKD 1/2).
+- **[architecture/](architecture/)** — khung kiến trúc doanh nghiệp/IT governance: TOGAF, COBIT, ITIL, SAFe.
+  Đây là kiến trúc doanh nghiệp (enterprise architecture), khác với các pattern kiến trúc phần mềm
+  (Clean/DDD/Onion) nằm ở `engineering/backend/java/`.

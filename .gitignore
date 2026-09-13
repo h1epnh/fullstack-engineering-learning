@@ -49,11 +49,10 @@ target/
 # OS
 .DS_Store
 
-frontend/obytes/obytes-hello-project/
-devops/cloud/minio/data/
+engineering/devops/cloud/minio/data/
 
 # Vendored external tool pending submodule conversion (huge, root-owned build output)
-devops/monitoring/unleash/
+engineering/devops/monitoring/unleash/
 
 # n8n runtime data/credentials (contains encryption key + credentials DB, must never be committed)
-devops/orchestration/workflow/n8n/
+engineering/devops/orchestration/workflow/n8n/

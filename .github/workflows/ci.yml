@@ -30,9 +30,9 @@ jobs:
           restore-keys: ${{ runner.os }}-m2
       
       - name: Build with Maven
-        working-directory: ./devops/ci-cd/github-actions/sample-java-demo-maven
+        working-directory: ./engineering/devops/ci-cd/pipelines/github-actions/sample-java-demo-maven
         run: mvn clean install
-      
+
       - name: Run tests
-        working-directory: ./devops/ci-cd/github-actions/sample-java-demo-maven
+        working-directory: ./engineering/devops/ci-cd/pipelines/github-actions/sample-java-demo-maven
         run: mvn test
