@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: ewallet-lab-bill-payment-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5434}/${DB_NAME:ewallet_bill_payment}
+    username: ${DB_USER:ewallet_bill_payment}
+    password: ${DB_PASSWORD:ewallet_bill_payment}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+server:
+  port: 8095
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+ewallet-lab:
+  wallet-service:
+    base-url: ${WALLET_SERVICE_URL:http://localhost:8091}

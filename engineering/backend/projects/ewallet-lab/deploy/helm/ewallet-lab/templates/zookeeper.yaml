@@ -1,0 +1,42 @@
+# emptyDir, not a PVC — disposable lab data, matches docker-compose (no volume declared there
+# either). Real EKS: Amazon MSK instead of self-hosting Kafka+Zookeeper at all (see values-eks.yaml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zookeeper
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: zookeeper }
+  template:
+    metadata:
+      labels: { app: zookeeper }
+    spec:
+      # Kubernetes injects <SVC>_PORT-style legacy Docker-links env vars for every
+      # Service in the namespace by default; Confluent's cp-kafka entrypoint
+      # misreads an injected KAFKA_PORT as a Kafka 'port' config property and
+      # crashes. Disabling this (largely obsolete now that Service DNS exists)
+      # avoids that class of bug everywhere, not just on kafka itself.
+      enableServiceLinks: false
+      containers:
+        - name: zookeeper
+          image: {{ .Values.zookeeper.image }}
+          ports:
+            - containerPort: 2181
+          env:
+            - name: ZOOKEEPER_CLIENT_PORT
+              value: "2181"
+            - name: ZOOKEEPER_TICK_TIME
+              value: "2000"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper
+  namespace: {{ .Values.namespace }}
+spec:
+  selector: { app: zookeeper }
+  ports:
+    - port: 2181
+      targetPort: 2181

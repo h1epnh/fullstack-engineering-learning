@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mfe-topup
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.frontend.replicas }}
+  selector:
+    matchLabels: { app: mfe-topup }
+  template:
+    metadata:
+      labels: { app: mfe-topup }
+    spec:
+      # Kubernetes injects <SVC>_PORT-style legacy Docker-links env vars for every
+      # Service in the namespace by default; Confluent's cp-kafka entrypoint
+      # misreads an injected KAFKA_PORT as a Kafka 'port' config property and
+      # crashes. Disabling this (largely obsolete now that Service DNS exists)
+      # avoids that class of bug everywhere, not just on kafka itself.
+      enableServiceLinks: false
+      containers:
+        - name: mfe-topup
+          image: {{ include "ewallet-lab.image" (dict "root" $ "name" "mfe-topup") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.frontend.port }}
+          readinessProbe:
+            httpGet: { path: /remoteEntry.js, port: {{ .Values.frontend.port }} }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /remoteEntry.js, port: {{ .Values.frontend.port }} }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mfe-topup
+  namespace: {{ .Values.namespace }}
+spec:
+  selector: { app: mfe-topup }
+  ports:
+    - port: {{ .Values.frontend.port }}
+      targetPort: {{ .Values.frontend.port }}

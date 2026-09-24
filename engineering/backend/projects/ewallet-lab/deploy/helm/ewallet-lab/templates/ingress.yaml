@@ -1,0 +1,110 @@
+# Host-based routing, not path-based, for the 4 frontend apps — deliberate: path-prefix routing
+# would require setting Vite's `base` per remote to match the prefix, an extra moving part for
+# every static bundle. See DESIGN.md-equivalent reasoning in the deploy README. The backend API
+# is path-routed under one host instead, since plain JSON REST endpoints don't have this problem.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ewallet-lab-frontend
+  namespace: {{ .Values.namespace }}
+  annotations:
+    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.ingress.hosts.shell }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: shell, port: { number: 80 } }
+    - host: {{ .Values.ingress.hosts.mfeAuth }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: mfe-auth, port: { number: 80 } }
+    - host: {{ .Values.ingress.hosts.mfeWallet }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: mfe-wallet, port: { number: 80 } }
+    - host: {{ .Values.ingress.hosts.mfeTopup }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: mfe-topup, port: { number: 80 } }
+    - host: {{ .Values.ingress.hosts.mfeTransfer }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: mfe-transfer, port: { number: 80 } }
+    - host: {{ .Values.ingress.hosts.mfeBillPayment }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: mfe-bill-payment, port: { number: 80 } }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ewallet-lab-api
+  namespace: {{ .Values.namespace }}
+  annotations:
+    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.ingress.hosts.api }}
+      http:
+        paths:
+          - path: /users
+            pathType: Prefix
+            backend:
+              service: { name: user-service, port: { number: 8090 } }
+          - path: /wallets
+            pathType: Prefix
+            backend:
+              service: { name: wallet-service, port: { number: 8091 } }
+          - path: /topups
+            pathType: Prefix
+            backend:
+              service: { name: topup-service, port: { number: 8092 } }
+          - path: /withdrawals
+            pathType: Prefix
+            backend:
+              service: { name: topup-service, port: { number: 8092 } }
+          - path: /linked-bank-accounts
+            pathType: Prefix
+            backend:
+              service: { name: topup-service, port: { number: 8092 } }
+          - path: /bank-transfers
+            pathType: Prefix
+            backend:
+              service: { name: topup-service, port: { number: 8092 } }
+          - path: /transfers
+            pathType: Prefix
+            backend:
+              service: { name: transfer-service, port: { number: 8094 } }
+          - path: /bills
+            pathType: Prefix
+            backend:
+              service: { name: bill-payment-service, port: { number: 8095 } }
+          - path: /payment-requests
+            pathType: Prefix
+            backend:
+              service: { name: payment-request-service, port: { number: 8096 } }
+          - path: /lucky-money
+            pathType: Prefix
+            backend:
+              service: { name: lucky-money-service, port: { number: 8097 } }

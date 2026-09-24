@@ -1,0 +1,56 @@
+{
+  "$schema_note": "Xem DESIGN.md#DonViHanhChinhCapTinh. Nguồn ghép từ 2 trang khác nhau — xem SOURCES.md mục 'Còn thiếu' trước khi coi là đã đối chiếu chéo 100%.",
+  "nghi_quyet": "Nghị quyết 202/2025/QH15",
+  "hieu_luc_tu": "2025-07-01",
+  "items": [
+    { "id": "lao-cai", "ten": "Lào Cai", "loai": "tinh", "sap_nhap": true, "don_vi_cu": ["Yên Bái", "Lào Cai"] },
+    { "id": "thai-nguyen", "ten": "Thái Nguyên", "loai": "tinh", "sap_nhap": true, "don_vi_cu": ["Bắc Kạn", "Thái Nguyên"] },
+    { "id": "phu-tho", "ten": "Phú Thọ", "loai": "tinh", "sap_nhap": true, "don_vi_cu": ["Vĩnh Phúc", "Hòa Bình", "Phú Thọ"] },
+    { "id": "bac-ninh", "ten": "Bắc Ninh", "loai": "tinh", "sap_nhap": true, "don_vi_cu": ["Bắc Giang", "Bắc Ninh"] },
+    { "id": "hung-yen", "ten": "Hưng Yên", "loai": "tinh", "sap_nhap": true, "don_vi_cu": ["Thái Bình", "Hưng Yên"] },
+    { "id": "ninh-binh", "ten": "Ninh Bình", "loai": "tinh", "sap_nhap": true, "don_vi_cu": ["Hà Nam", "Nam Định", "Ninh Bình"] },
+    { "id": "quang-tri", "ten": "Quảng Trị", "loai": "tinh", "sap_nhap": true, "don_vi_cu": ["Quảng Bình", "Quảng Trị"] },
+    { "id": "quang-ngai", "ten": "Quảng Ngãi", "loai": "tinh", "sap_nhap": true, "don_vi_cu": ["Kon Tum", "Quảng Ngãi"] },
+    { "id": "gia-lai", "ten": "Gia Lai", "loai": "tinh", "sap_nhap": true, "don_vi_cu": ["Bình Định", "Gia Lai"] },
+    { "id": "khanh-hoa", "ten": "Khánh Hòa", "loai": "tinh", "sap_nhap": true, "don_vi_cu": ["Ninh Thuận", "Khánh Hòa"] },
+    { "id": "lam-dong", "ten": "Lâm Đồng", "loai": "tinh", "sap_nhap": true, "don_vi_cu": ["Đắk Nông", "Bình Thuận", "Lâm Đồng"] },
+    { "id": "dak-lak", "ten": "Đắk Lắk", "loai": "tinh", "sap_nhap": true, "don_vi_cu": ["Phú Yên", "Đắk Lắk"] },
+    { "id": "dong-nai", "ten": "Đồng Nai", "loai": "tinh", "sap_nhap": true, "don_vi_cu": ["Bình Phước", "Đồng Nai"] },
+    { "id": "tay-ninh", "ten": "Tây Ninh", "loai": "tinh", "sap_nhap": true, "don_vi_cu": ["Long An", "Tây Ninh"] },
+    { "id": "vinh-long", "ten": "Vĩnh Long", "loai": "tinh", "sap_nhap": true, "don_vi_cu": ["Bến Tre", "Trà Vinh", "Vĩnh Long"] },
+    { "id": "dong-thap", "ten": "Đồng Tháp", "loai": "tinh", "sap_nhap": true, "don_vi_cu": ["Tiền Giang", "Đồng Tháp"] },
+    { "id": "ca-mau", "ten": "Cà Mau", "loai": "tinh", "sap_nhap": true, "don_vi_cu": ["Bạc Liêu", "Cà Mau"] },
+    { "id": "an-giang", "ten": "An Giang", "loai": "tinh", "sap_nhap": true, "don_vi_cu": ["Kiên Giang", "An Giang"] },
+    { "id": "tuyen-quang", "ten": "Tuyên Quang", "loai": "tinh", "sap_nhap": true, "don_vi_cu": ["Hà Giang", "Tuyên Quang"] },
+
+    { "id": "hai-phong", "ten": "Hải Phòng", "loai": "thanh_pho_tw", "sap_nhap": true, "don_vi_cu": ["Hải Phòng", "Hải Dương"] },
+    { "id": "da-nang", "ten": "Đà Nẵng", "loai": "thanh_pho_tw", "sap_nhap": true, "don_vi_cu": ["Đà Nẵng", "Quảng Nam"] },
+    { "id": "ho-chi-minh", "ten": "Thành phố Hồ Chí Minh", "loai": "thanh_pho_tw", "sap_nhap": true, "don_vi_cu": ["Thành phố Hồ Chí Minh", "Bà Rịa - Vũng Tàu", "Bình Dương"] },
+    { "id": "can-tho", "ten": "Cần Thơ", "loai": "thanh_pho_tw", "sap_nhap": true, "don_vi_cu": ["Cần Thơ", "Sóc Trăng", "Hậu Giang"] },
+
+    { "id": "cao-bang", "ten": "Cao Bằng", "loai": "tinh", "sap_nhap": false, "don_vi_cu": null },
+    { "id": "dien-bien", "ten": "Điện Biên", "loai": "tinh", "sap_nhap": false, "don_vi_cu": null },
+    { "id": "ha-tinh", "ten": "Hà Tĩnh", "loai": "tinh", "sap_nhap": false, "don_vi_cu": null },
+    { "id": "lai-chau", "ten": "Lai Châu", "loai": "tinh", "sap_nhap": false, "don_vi_cu": null },
+    { "id": "lang-son", "ten": "Lạng Sơn", "loai": "tinh", "sap_nhap": false, "don_vi_cu": null },
+    { "id": "nghe-an", "ten": "Nghệ An", "loai": "tinh", "sap_nhap": false, "don_vi_cu": null },
+    { "id": "quang-ninh", "ten": "Quảng Ninh", "loai": "tinh", "sap_nhap": false, "don_vi_cu": null },
+    { "id": "thanh-hoa", "ten": "Thanh Hóa", "loai": "tinh", "sap_nhap": false, "don_vi_cu": null },
+    { "id": "son-la", "ten": "Sơn La", "loai": "tinh", "sap_nhap": false, "don_vi_cu": null },
+
+    { "id": "ha-noi", "ten": "Hà Nội", "loai": "thanh_pho_tw", "sap_nhap": false, "don_vi_cu": null },
+    { "id": "hue", "ten": "Huế", "loai": "thanh_pho_tw", "sap_nhap": false, "don_vi_cu": null }
+  ],
+  "nguon": [
+    {
+      "tieu_de": "Chi tiết 34 đơn vị hành chính cấp tỉnh từ 12/6/2025",
+      "url": "https://xaydungchinhsach.chinhphu.vn/chi-tiet-34-don-vi-hanh-chinh-cap-tinh-tu-12-6-2025-119250612141845533.htm",
+      "ngay_truy_cap": "2026-09-22"
+    },
+    {
+      "tieu_de": "34 tỉnh thành hiện nay được sáp nhập và giữ nguyên thế nào (dùng riêng cho chi tiết Tuyên Quang + Hà Giang)",
+      "url": "https://thuvienphapluat.vn/phap-luat/ho-tro-phap-luat/34-tinh-thanh-hien-nay-duoc-sap-nhap-va-giu-nguyen-the-nao-danh-sach-sap-nhap-tinh-thanh-moi-nhat-2-29215-232808.html",
+      "ngay_truy_cap": "2026-09-22"
+    }
+  ]
+}

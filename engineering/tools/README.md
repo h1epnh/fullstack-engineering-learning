@@ -12,8 +12,7 @@ upstream and replacing the directory contents.
 | `security/uber-apk-signer` | [patrickfav/uber-apk-signer](https://github.com/patrickfav/uber-apk-signer) | APK signing utility |
 | `messaging/mq-container` | [ibm-messaging/mq-container](https://github.com/ibm-messaging/mq-container) | IBM MQ container images (`downloads/` gitignored — large installer binaries, not source) |
 | `workflow/conductor-community` | [Netflix Conductor OSS](https://github.com/Netflix/conductor) (discontinued, plain copy) | Workflow orchestration engine |
-| `feature-flags/unleash` | [unleash/unleash](https://github.com/unleash/unleash) | Feature flag service (pending: see repo root for setup note) |
-| `analytics/redash` | [getredash/redash](https://github.com/getredash/redash) | BI/dashboarding tool |
+| `analytics/redash` | [getredash/redash](https://github.com/getredash/redash) | BI/dashboarding tool — community-maintenance mode since the 2020 Databricks acquisition (last major release v10, late 2021; only security/dependency patches since) |
 | `analytics/redash-setup` | [getredash/setup](https://github.com/getredash/setup) | Redash deployment scripts |
 
 `security/mobsf` (1.7GB) and `orchestration/container` (1.2GB) were removed entirely — too large to

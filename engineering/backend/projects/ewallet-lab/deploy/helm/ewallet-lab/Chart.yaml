@@ -1,0 +1,11 @@
+apiVersion: v2
+name: ewallet-lab
+description: >
+  Ewallet Lab microservices (user/wallet/topup-service, mock-bank-gateway) and its
+  microfrontend web client (shell, mfe-auth, mfe-wallet, mfe-topup), packaged for
+  Kubernetes. Structured to be portable to real AWS EKS — see values-eks.yaml for
+  what actually differs there (ECR, ALB ingress, RDS, MSK) vs. this lab's
+  local/minikube defaults in values-local.yaml.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

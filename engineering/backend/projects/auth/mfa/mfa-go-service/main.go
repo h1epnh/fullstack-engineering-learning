@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v4"
 	_ "github.com/lib/pq"
 	"github.com/pquerna/otp/totp"
 	"github.com/sirupsen/logrus"

@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: ewallet-lab-lucky-money-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5434}/${DB_NAME:ewallet_lucky_money}
+    username: ${DB_USER:ewallet_lucky_money}
+    password: ${DB_PASSWORD:ewallet_lucky_money}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+server:
+  port: 8097
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+ewallet-lab:
+  user-service:
+    base-url: ${USER_SERVICE_URL:http://localhost:8090}
+  wallet-service:
+    base-url: ${WALLET_SERVICE_URL:http://localhost:8091}
+  # Issue #10: "48 giờ để đăng ký nhận... quá hạn tự động hoàn tiền" — configurable so Acceptance
+  # criteria's expiry behavior can be verified in seconds during testing instead of waiting 48h.
+  lucky-money:
+    ttl-hours: ${LUCKY_MONEY_TTL_HOURS:48}

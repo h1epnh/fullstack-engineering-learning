@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/stripe/stripe-go/v72"
-	"github.com/stripe/stripe-go/v72/paymentintent"
+	"github.com/stripe/stripe-go/v83"
+	"github.com/stripe/stripe-go/v83/paymentintent"
 )
 
 func main() {

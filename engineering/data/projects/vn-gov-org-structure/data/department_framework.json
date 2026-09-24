@@ -1,0 +1,36 @@
+{
+  "$schema_note": "Xem DESIGN.md#KhungCoQuanChuyenMon. Đây là KHUNG quy định áp dụng chung cho 34 tỉnh, không phải danh sách sở thực tế của từng tỉnh — xem 'Chưa làm' trong DESIGN.md.",
+  "can_cu_phap_ly": "Nghị định 150/2025/NĐ-CP (hiệu lực 2025-06-16)",
+  "ghi_chu_sua_doi": "Nghị định 370/2025/NĐ-CP (2025-12-31) sửa đổi, bổ sung một số điều của Nghị định 150 — CHƯA xác minh nội dung sửa đổi có ảnh hưởng đến danh sách/số lượng sở dưới đây hay không. Coi bảng này là 'theo bản gốc Nghị định 150', chưa cập nhật theo bản sửa đổi.",
+  "so_luong_toi_da": {
+    "tinh_thanh_thuong": 14,
+    "ha_noi_va_ho_chi_minh": 15
+  },
+  "items": [
+    { "id": "so-noi-vu", "ten": "Sở Nội vụ", "nhom": "bat_buoc", "dieu_khoan": "Điều 8" },
+    { "id": "so-tu-phap", "ten": "Sở Tư pháp", "nhom": "bat_buoc", "dieu_khoan": "Điều 8" },
+    { "id": "so-tai-chinh", "ten": "Sở Tài chính", "nhom": "bat_buoc", "dieu_khoan": "Điều 8" },
+    { "id": "so-cong-thuong", "ten": "Sở Công Thương", "nhom": "bat_buoc", "dieu_khoan": "Điều 8" },
+    { "id": "so-nong-nghiep-va-moi-truong", "ten": "Sở Nông nghiệp và Môi trường", "nhom": "bat_buoc", "dieu_khoan": "Điều 8" },
+    { "id": "so-xay-dung", "ten": "Sở Xây dựng", "nhom": "bat_buoc", "dieu_khoan": "Điều 8" },
+    { "id": "so-khoa-hoc-va-cong-nghe", "ten": "Sở Khoa học và Công nghệ", "nhom": "bat_buoc", "dieu_khoan": "Điều 8" },
+    { "id": "so-van-hoa-the-thao-va-du-lich", "ten": "Sở Văn hóa, Thể thao và Du lịch", "nhom": "bat_buoc", "dieu_khoan": "Điều 8" },
+    { "id": "so-giao-duc-va-dao-tao", "ten": "Sở Giáo dục và Đào tạo", "nhom": "bat_buoc", "dieu_khoan": "Điều 8" },
+    { "id": "so-y-te", "ten": "Sở Y tế", "nhom": "bat_buoc", "dieu_khoan": "Điều 8" },
+    { "id": "thanh-tra-tinh", "ten": "Thanh tra tỉnh", "nhom": "bat_buoc", "dieu_khoan": "Điều 8" },
+    { "id": "van-phong-uy-ban-nhan-dan", "ten": "Văn phòng Ủy ban nhân dân", "nhom": "bat_buoc", "dieu_khoan": "Điều 8" },
+
+    { "id": "so-ngoai-vu", "ten": "Sở Ngoại vụ", "nhom": "dac_thu", "dieu_khoan": "Điều 9", "dieu_kien": "địa phương có công tác đối ngoại/biên giới" },
+    { "id": "so-dan-toc-va-ton-giao", "ten": "Sở Dân tộc và Tôn giáo", "nhom": "dac_thu", "dieu_khoan": "Điều 9", "dieu_kien": "địa phương có đông đồng bào dân tộc thiểu số/tôn giáo" },
+    { "id": "so-du-lich", "ten": "Sở Du lịch", "nhom": "dac_thu", "dieu_khoan": "Điều 9", "dieu_kien": "địa phương trọng điểm du lịch" },
+    { "id": "so-quy-hoach-kien-truc", "ten": "Sở Quy hoạch - Kiến trúc", "nhom": "dac_thu", "dieu_khoan": "Điều 9", "dieu_kien": "chỉ Hà Nội và Thành phố Hồ Chí Minh" }
+  ],
+  "nguon": [
+    {
+      "tieu_de": "Nghị định 150/2025/NĐ-CP: Tổ chức cơ quan chuyên môn thuộc UBND tỉnh, thành phố",
+      "url": "https://luatvietnam.vn/co-cau-to-chuc/nghi-dinh-150-2025-nd-cp-to-chuc-co-quan-chuyen-mon-thuoc-ubnd-tinh-thanh-pho-402760-d1.html",
+      "ngay_truy_cap": "2026-09-22",
+      "ghi_chu": "Trang gốc trên chinhphu.vn hiển thị Nghị định dưới dạng ảnh chụp, không trích xuất được text — dùng nguồn thứ cấp này (luatvietnam.vn) cho nội dung điều khoản, đã ghi rõ giới hạn."
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+# minikube profile — overrides values.yaml for local dev. Images are expected to already
+# be built into minikube's own Docker daemon (`eval $(minikube docker-env)` before `docker
+# build`), hence pullPolicy Never: nothing is ever pulled from a registry locally.
+image:
+  registry: ""
+  pullPolicy: Never
+  tag: local
+
+ingress:
+  className: nginx

@@ -1,0 +1,23 @@
+{
+  "$schema_note": "Xem DESIGN.md#NganSachNhaNuoc. Đây là DỰ TOÁN (kế hoạch được duyệt), không phải quyết toán (số thực chi).",
+  "items": [
+    {
+      "nam": 2026,
+      "nghi_quyet": "245/2025/QH15",
+      "ngay_thong_qua": "2025-11-13",
+      "don_vi": "ty_dong",
+      "tong_thu": { "tong": 2529467, "trung_uong": 1225356, "dia_phuong": 1304111 },
+      "tong_chi": { "tong": 3159106, "trung_uong": 1809056, "dia_phuong": 1350050 },
+      "boi_chi": { "tong": 605800, "phan_tram_gdp": 4.2, "trung_uong": 583700, "dia_phuong": 22100 },
+      "luong_co_so_dong_thang": 2340000,
+      "nguon": [
+        {
+          "tieu_de": "Quốc hội thông qua Nghị quyết về dự toán ngân sách nhà nước năm 2026",
+          "url": "https://www.vietnamplus.vn/quoc-hoi-thong-qua-nghi-quyet-ve-du-toan-ngan-sach-nha-nuoc-nam-2026-post1076767.vnp",
+          "ngay_truy_cap": "2026-09-22"
+        }
+      ],
+      "ghi_chu": "Số hiệu Nghị quyết 245/2025/QH15 đối chiếu chéo từ 2 nguồn thứ cấp (studocu.vn, find-law.asia) trong kết quả tìm kiếm, không có trong bài vietnamplus.vn đã fetch trực tiếp — nguồn chính (vietnamplus.vn) xác nhận toàn bộ số liệu tài khóa + ngày thông qua."
+    }
+  ]
+}

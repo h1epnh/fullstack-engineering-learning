@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mfe-bill-payment
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.frontend.replicas }}
+  selector:
+    matchLabels: { app: mfe-bill-payment }
+  template:
+    metadata:
+      labels: { app: mfe-bill-payment }
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: mfe-bill-payment
+          image: {{ include "ewallet-lab.image" (dict "root" $ "name" "mfe-bill-payment") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.frontend.port }}
+          readinessProbe:
+            httpGet: { path: /remoteEntry.js, port: {{ .Values.frontend.port }} }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /remoteEntry.js, port: {{ .Values.frontend.port }} }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mfe-bill-payment
+  namespace: {{ .Values.namespace }}
+spec:
+  selector: { app: mfe-bill-payment }
+  ports:
+    - port: {{ .Values.frontend.port }}
+      targetPort: {{ .Values.frontend.port }}

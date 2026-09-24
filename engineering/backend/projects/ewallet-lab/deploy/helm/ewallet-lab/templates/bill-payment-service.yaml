@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bill-payment-service
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.billPaymentService.replicas }}
+  selector:
+    matchLabels: { app: bill-payment-service }
+  template:
+    metadata:
+      labels: { app: bill-payment-service }
+    spec:
+      # Kubernetes injects <SVC>_PORT-style legacy Docker-links env vars for every
+      # Service in the namespace by default; Confluent's cp-kafka entrypoint
+      # misreads an injected KAFKA_PORT as a Kafka 'port' config property and
+      # crashes. Disabling this (largely obsolete now that Service DNS exists)
+      # avoids that class of bug everywhere, not just on kafka itself.
+      enableServiceLinks: false
+      containers:
+        - name: bill-payment-service
+          image: {{ include "ewallet-lab.image" (dict "root" $ "name" "bill-payment-service") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.billPaymentService.port }}
+          env:
+            - name: DB_HOST
+              value: postgres
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: ewallet_bill_payment
+            - name: DB_USER
+              valueFrom: { secretKeyRef: { name: postgres-credentials, key: POSTGRES_USER } }
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: postgres-credentials, key: POSTGRES_PASSWORD } }
+            - name: WALLET_SERVICE_URL
+              value: "http://wallet-service:{{ .Values.walletService.port }}"
+            - name: ALLOWED_ORIGIN_PATTERN
+              value: {{ .Values.corsAllowedOriginPattern | quote }}
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: {{ .Values.billPaymentService.port }} }
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: {{ .Values.billPaymentService.port }} }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bill-payment-service
+  namespace: {{ .Values.namespace }}
+spec:
+  selector: { app: bill-payment-service }
+  ports:
+    - port: {{ .Values.billPaymentService.port }}
+      targetPort: {{ .Values.billPaymentService.port }}

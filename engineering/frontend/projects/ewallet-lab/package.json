@@ -1,0 +1,23 @@
+{
+  "name": "ewallet-lab-web",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "shell",
+    "mfe-auth",
+    "mfe-wallet",
+    "mfe-topup",
+    "mfe-transfer",
+    "mfe-bill-payment"
+  ],
+  "scripts": {
+    "build:remotes": "npm run build -w mfe-auth && npm run build -w mfe-wallet && npm run build -w mfe-topup && npm run build -w mfe-transfer && npm run build -w mfe-bill-payment",
+    "preview:remotes": "concurrently -k -n auth,wallet,topup,transfer,bill-payment -c blue,green,yellow,magenta,cyan \"npm run preview -w mfe-auth\" \"npm run preview -w mfe-wallet\" \"npm run preview -w mfe-topup\" \"npm run preview -w mfe-transfer\" \"npm run preview -w mfe-bill-payment\"",
+    "dev:shell": "npm run dev -w shell",
+    "dev": "npm run build:remotes && concurrently -k -n remotes,shell \"npm run preview:remotes\" \"npm run dev:shell\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

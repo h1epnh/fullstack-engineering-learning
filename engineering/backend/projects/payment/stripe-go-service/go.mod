@@ -1,5 +1,5 @@
 module stripe-go-service
 
-go 1.21.4
+go 1.26.0
 
-require github.com/stripe/stripe-go/v72 v72.122.0 // indirect
+require github.com/stripe/stripe-go/v83 v83.2.1

@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: ewallet-lab-payment-request-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5434}/${DB_NAME:ewallet_payment_request}
+    username: ${DB_USER:ewallet_payment_request}
+    password: ${DB_PASSWORD:ewallet_payment_request}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+server:
+  port: 8096
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+ewallet-lab:
+  user-service:
+    base-url: ${USER_SERVICE_URL:http://localhost:8090}
+  transfer-service:
+    base-url: ${TRANSFER_SERVICE_URL:http://localhost:8094}
+  # Issue #3 Task step 2: "Requests should expire (define a TTL, e.g. 24h)". Only applies to
+  # kind=LINK — PaymentReminder (issue #8) has no TTL in its Acceptance criteria, so its
+  # expiresAt is always left null (see PaymentRequestService.createReminder).
+  payment-link:
+    ttl-hours: ${PAYMENT_LINK_TTL_HOURS:24}

@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(kubectl -n ewallet-lab delete pod -l app=shell)",
+      "Bash(kubectl -n ewallet-lab wait --for=condition=Ready pod -l app=shell --timeout=60s)",
+      "Bash(kubectl -n ewallet-lab wait --for=condition=Ready pod -l 'app in \\(mfe-wallet,shell\\)' --timeout=60s)",
+      "Bash(curl -s -o /dev/null -w \"mfe-wallet remoteEntry:%{http_code}\\\\n\" http://mfe-wallet.ewallet-lab.local/remoteEntry.js)",
+      "Bash(curl -s -o /dev/null -w \"shell:%{http_code}\\\\n\" http://shell.ewallet-lab.local/)",
+      "WebFetch(domain:www.vietqr.io)",
+      "Bash(curl -s https://api.vietqr.io/v2/banks)",
+      "Bash(curl -s -I -X OPTIONS https://api.vietqr.io/v2/banks -H \"Origin: http://shell.ewallet-lab.local\" -H \"Access-Control-Request-Method: GET\")",
+      "Bash(curl -s -I https://api.vietqr.io/v2/banks -H \"Origin: http://shell.ewallet-lab.local\")",
+      "Bash(curl -s -I https://cdn.vietqr.io/img/MB.png)",
+      "Bash(python3 -c ' *)"
+    ]
+  }
+}

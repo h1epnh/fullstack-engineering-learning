@@ -1,0 +1,31 @@
+{
+  "$schema_note": "Xem DESIGN.md#CoQuanTrungUong. Mỗi record phải có nguồn đã fetch thật — xem SOURCES.md.",
+  "nhiem_ky": "Quốc hội khóa XVI (2026-2031)",
+  "hieu_luc_tu": "2026-04-07",
+  "items": [
+    { "id": "bo-quoc-phong", "ten": "Bộ Quốc phòng", "loai": "bo" },
+    { "id": "bo-cong-an", "ten": "Bộ Công an", "loai": "bo" },
+    { "id": "bo-ngoai-giao", "ten": "Bộ Ngoại giao", "loai": "bo" },
+    { "id": "bo-noi-vu", "ten": "Bộ Nội vụ", "loai": "bo" },
+    { "id": "bo-tu-phap", "ten": "Bộ Tư pháp", "loai": "bo" },
+    { "id": "bo-tai-chinh", "ten": "Bộ Tài chính", "loai": "bo" },
+    { "id": "bo-cong-thuong", "ten": "Bộ Công Thương", "loai": "bo" },
+    { "id": "bo-nong-nghiep-va-moi-truong", "ten": "Bộ Nông nghiệp và Môi trường", "loai": "bo" },
+    { "id": "bo-xay-dung", "ten": "Bộ Xây dựng", "loai": "bo" },
+    { "id": "bo-van-hoa-the-thao-va-du-lich", "ten": "Bộ Văn hóa, Thể thao và Du lịch", "loai": "bo" },
+    { "id": "bo-khoa-hoc-va-cong-nghe", "ten": "Bộ Khoa học và Công nghệ", "loai": "bo" },
+    { "id": "bo-giao-duc-va-dao-tao", "ten": "Bộ Giáo dục và Đào tạo", "loai": "bo" },
+    { "id": "bo-y-te", "ten": "Bộ Y tế", "loai": "bo" },
+    { "id": "bo-dan-toc-va-ton-giao", "ten": "Bộ Dân tộc và Tôn giáo", "loai": "bo" },
+    { "id": "ngan-hang-nha-nuoc-viet-nam", "ten": "Ngân hàng Nhà nước Việt Nam", "loai": "co_quan_ngang_bo" },
+    { "id": "thanh-tra-chinh-phu", "ten": "Thanh tra Chính phủ", "loai": "co_quan_ngang_bo" },
+    { "id": "van-phong-chinh-phu", "ten": "Văn phòng Chính phủ", "loai": "co_quan_ngang_bo" }
+  ],
+  "nguon": [
+    {
+      "tieu_de": "Chính phủ nhiệm kỳ mới có 14 bộ và 3 cơ quan ngang bộ",
+      "url": "https://baochinhphu.vn/chinh-phu-nhiem-ky-moi-co-14-bo-va-3-co-quan-ngang-bo-102260407115528555.htm",
+      "ngay_truy_cap": "2026-09-22"
+    }
+  ]
+}

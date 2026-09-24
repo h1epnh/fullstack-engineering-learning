@@ -1,0 +1,109 @@
+/*
+ * Shared design tokens for the Ewallet Lab app shell + all micro-frontends.
+ * Accent colors deliberately match MoMo's own published brand pink (verified
+ * from MoMo Partners Brandbook: primary #A50064, tint/shade scale down to
+ * #FFEFF4) — the app still carries its own name ("Ewallet Lab") and no
+ * MoMo logo/wordmark anywhere, per the disclaimer in DESIGN.md. The
+ * developer docs site (engineering/docs/ewallet-lab) intentionally keeps its
+ * own separate teal identity, unaffected by this.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  vertical-align: middle;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+:root {
+  --el-bg: #f4f6f6;
+  --el-surface: #ffffff;
+  --el-surface-2: #fdeef4;
+  --el-ink: #1a0e14;
+  --el-muted: #6b5c63;
+  --el-faint: #9c8a92;
+  --el-line: #f0dbe5;
+  --el-accent: #a50064;
+  --el-accent-ink: #6e0043;
+  --el-accent-soft: #ffeff4;
+  --el-amber: #b4790f;
+  --el-amber-soft: #fbeed9;
+  --el-danger: #a6383a;
+  --el-danger-soft: #fbe7e7;
+  --el-shadow: 0 1px 2px rgba(16, 26, 23, 0.04), 0 8px 24px -12px rgba(16, 26, 23, 0.18);
+  --el-font-display: 'Manrope', 'Segoe UI', system-ui, sans-serif;
+  --el-font-body: 'Public Sans', 'Segoe UI', system-ui, sans-serif;
+  --el-font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  --el-safe-top: env(safe-area-inset-top, 0px);
+  --el-safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --el-bg: #150d11;
+    --el-surface: #1e1216;
+    --el-surface-2: #26161c;
+    --el-ink: #f6eaf0;
+    --el-muted: #b8a3ac;
+    --el-faint: #82707a;
+    --el-line: #33212a;
+    --el-accent: #f95396;
+    --el-accent-ink: #fec8dc;
+    --el-accent-soft: #3a1626;
+    --el-amber: #e0ab52;
+    --el-amber-soft: #2e2515;
+    --el-danger: #e5898b;
+    --el-danger-soft: #3a2222;
+    --el-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+  }
+}
+
+:root[data-theme='dark'] {
+  --el-bg: #150d11;
+  --el-surface: #1e1216;
+  --el-surface-2: #26161c;
+  --el-ink: #f6eaf0;
+  --el-muted: #b8a3ac;
+  --el-faint: #82707a;
+  --el-line: #33212a;
+  --el-accent: #f95396;
+  --el-accent-ink: #fec8dc;
+  --el-accent-soft: #3a1626;
+  --el-amber: #e0ab52;
+  --el-amber-soft: #2e2515;
+  --el-danger: #e5898b;
+  --el-danger-soft: #3a2222;
+  --el-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--el-bg);
+  color: var(--el-ink);
+  font-family: var(--el-font-body);
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input {
+  font-family: inherit;
+}

@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mfe-transfer
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.frontend.replicas }}
+  selector:
+    matchLabels: { app: mfe-transfer }
+  template:
+    metadata:
+      labels: { app: mfe-transfer }
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: mfe-transfer
+          image: {{ include "ewallet-lab.image" (dict "root" $ "name" "mfe-transfer") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.frontend.port }}
+          readinessProbe:
+            httpGet: { path: /remoteEntry.js, port: {{ .Values.frontend.port }} }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /remoteEntry.js, port: {{ .Values.frontend.port }} }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mfe-transfer
+  namespace: {{ .Values.namespace }}
+spec:
+  selector: { app: mfe-transfer }
+  ports:
+    - port: {{ .Values.frontend.port }}
+      targetPort: {{ .Values.frontend.port }}

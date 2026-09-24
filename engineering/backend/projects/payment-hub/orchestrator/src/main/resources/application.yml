@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: payment-hub-orchestrator
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:payment_hub}
+    username: ${DB_USER:payment_hub}
+    password: ${DB_PASSWORD:payment_hub}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: orchestrator
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+server:
+  port: 8080
+
+payment-hub:
+  outbox:
+    poll-interval-ms: 1000
+    routing-topic: payment.routing.requested
+    settlement-topic: payment.settlement.confirmed
+  idempotency:
+    ttl-seconds: 86400
+  compliance:
+    base-url: ${COMPLIANCE_SERVICE_URL:http://localhost:8083}

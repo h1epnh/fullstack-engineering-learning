@@ -1,0 +1,50 @@
+{
+  "$schema_note": "Xem DESIGN.md#NguoiDungDauHienTai. PHẠM VI TỐI THIỂU đã xác nhận với người dùng: chỉ tên + chức danh + nguồn — KHÔNG tiểu sử, KHÔNG ảnh, KHÔNG quan hệ bổ nhiệm/quyền lực.",
+  "nhiem_ky": "2026-2031",
+  "thu_tuong": "Lê Minh Hưng",
+  "pho_thu_tuong": [
+    { "ten": "Phạm Gia Túc", "ghi_chu": "Phó Thủ tướng Thường trực" },
+    { "ten": "Phan Văn Giang", "ghi_chu": "kiêm Bộ trưởng Bộ Quốc phòng" },
+    { "ten": "Phạm Thị Thanh Trà" },
+    { "ten": "Hồ Quốc Dũng" },
+    { "ten": "Nguyễn Văn Thắng" },
+    { "ten": "Lê Tiến Châu" }
+  ],
+  "items": [
+    { "co_quan_id": "bo-quoc-phong", "chuc_danh": "Bộ trưởng", "ten_nguoi_dung_dau": "Phan Văn Giang", "ghi_chu": "kiêm Phó Thủ tướng" },
+    { "co_quan_id": "bo-cong-an", "chuc_danh": "Bộ trưởng", "ten_nguoi_dung_dau": "Lương Tam Quang" },
+    { "co_quan_id": "bo-ngoai-giao", "chuc_danh": "Bộ trưởng", "ten_nguoi_dung_dau": "Lê Hoài Trung" },
+    { "co_quan_id": "bo-noi-vu", "chuc_danh": "Bộ trưởng", "ten_nguoi_dung_dau": "Đỗ Thanh Bình" },
+    { "co_quan_id": "bo-tu-phap", "chuc_danh": "Bộ trưởng", "ten_nguoi_dung_dau": "Hoàng Thanh Tùng" },
+    { "co_quan_id": "bo-tai-chinh", "chuc_danh": "Bộ trưởng", "ten_nguoi_dung_dau": "Ngô Văn Tuấn" },
+    { "co_quan_id": "bo-cong-thuong", "chuc_danh": "Bộ trưởng", "ten_nguoi_dung_dau": "Lê Mạnh Hùng" },
+    { "co_quan_id": "bo-nong-nghiep-va-moi-truong", "chuc_danh": "Bộ trưởng", "ten_nguoi_dung_dau": "Trịnh Việt Hùng" },
+    { "co_quan_id": "bo-xay-dung", "chuc_danh": "Bộ trưởng", "ten_nguoi_dung_dau": "Trần Hồng Minh" },
+    { "co_quan_id": "bo-van-hoa-the-thao-va-du-lich", "chuc_danh": "Bộ trưởng", "ten_nguoi_dung_dau": "Lâm Thị Phương Thanh" },
+    { "co_quan_id": "bo-khoa-hoc-va-cong-nghe", "chuc_danh": "Bộ trưởng", "ten_nguoi_dung_dau": "Vũ Hải Quân" },
+    { "co_quan_id": "bo-giao-duc-va-dao-tao", "chuc_danh": "Bộ trưởng", "ten_nguoi_dung_dau": "Hoàng Minh Sơn" },
+    { "co_quan_id": "bo-y-te", "chuc_danh": "Bộ trưởng", "ten_nguoi_dung_dau": "Đào Hồng Lan" },
+    { "co_quan_id": "bo-dan-toc-va-ton-giao", "chuc_danh": "Bộ trưởng", "ten_nguoi_dung_dau": "Nguyễn Đình Khang" },
+    { "co_quan_id": "ngan-hang-nha-nuoc-viet-nam", "chuc_danh": "Thống đốc", "ten_nguoi_dung_dau": "Phạm Đức Ấn" },
+    { "co_quan_id": "thanh-tra-chinh-phu", "chuc_danh": "Tổng Thanh tra Chính phủ", "ten_nguoi_dung_dau": "Nguyễn Quốc Đoàn" },
+    { "co_quan_id": "van-phong-chinh-phu", "chuc_danh": "Bộ trưởng, Chủ nhiệm", "ten_nguoi_dung_dau": "Đặng Xuân Phong" }
+  ],
+  "nguon": [
+    {
+      "tieu_de": "Quốc hội phê chuẩn bổ nhiệm 6 Phó Thủ tướng, các Bộ trưởng và thành viên Chính phủ",
+      "url": "https://baochinhphu.vn/quoc-hoi-phe-chuan-bo-nhiem-6-pho-thu-tuong-cac-bo-truong-va-thanh-vien-chinh-phu-102260408130112084.htm",
+      "ngay_truy_cap": "2026-09-22"
+    },
+    {
+      "tieu_de": "Danh sách thành viên Chính phủ, cơ cấu Chính phủ nhiệm kỳ 2026-2031",
+      "url": "https://xaydungchinhsach.chinhphu.vn/danh-sach-thanh-vien-chinh-phu-co-cau-chinh-phu-nhiem-ky-2026-2031-119260409071814059.htm",
+      "ngay_truy_cap": "2026-09-22"
+    },
+    {
+      "tieu_de": "Quốc hội bầu đồng chí Lê Minh Hưng giữ chức Thủ tướng Chính phủ, nhiệm kỳ 2026-2031 (đối chiếu chéo cho vị trí Thủ tướng)",
+      "url": "https://vass.gov.vn/bao-ve-nen-tang-tu-tuong-cua-dang/quoc-hoi-bau-dong-chi-le-minh-hung-giu-chuc-thu-tuong-chinh-phu-nhiem-ky-2026-2031-562918",
+      "ngay_truy_cap": "2026-09-22"
+    }
+  ],
+  "ghi_chu_xac_minh": "2 nguồn chính (2 bài viết khác nhau, cùng trên cổng chinhphu.vn) cho ra danh sách 17 người giống hệt nhau ở lần fetch độc lập — độ tin cậy cao. Vị trí Thủ tướng đối chiếu thêm với nguồn thứ 3 độc lập (vass.gov.vn) khớp kết quả. Chưa đối chiếu bằng văn bản Nghị quyết phê chuẩn gốc (chỉ qua báo)."
+}

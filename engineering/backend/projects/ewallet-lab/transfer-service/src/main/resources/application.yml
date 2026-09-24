@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: ewallet-lab-transfer-service
+
+server:
+  port: 8094
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+ewallet-lab:
+  user-service:
+    base-url: ${USER_SERVICE_URL:http://localhost:8090}
+  wallet-service:
+    base-url: ${WALLET_SERVICE_URL:http://localhost:8091}

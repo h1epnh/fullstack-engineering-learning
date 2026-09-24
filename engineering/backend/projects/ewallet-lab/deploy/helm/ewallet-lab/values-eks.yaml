@@ -1,0 +1,36 @@
+# NOT a working config — there is no AWS account behind this lab. This documents, concretely,
+# what would actually change to run this chart on real EKS instead of minikube, so the local
+# deployment isn't mistaken for "how it'd really be done." Each block below is the honest
+# production-shaped answer; none of it has been applied or tested against real AWS.
+#
+# image:
+#   registry: "123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/"   # ECR, not a local docker daemon
+#   pullPolicy: IfNotPresent
+#   tag: <git-sha-from-CI>
+#
+# ingress:
+#   className: alb
+#   annotations:
+#     alb.ingress.kubernetes.io/scheme: internet-facing
+#     alb.ingress.kubernetes.io/target-type: ip
+#     # requires the AWS Load Balancer Controller installed in the cluster — not nginx-ingress
+#   hosts:
+#     shell: app.example.com
+#     api: api.example.com
+#     # mfe-* remotes would more realistically go on S3+CloudFront as static sites, not pods at all —
+#     # the per-remote Deployment/Service/Ingress in this chart is a local-only simplification.
+#
+# postgres:
+#   # Don't run this Deployment at all — point DB_HOST/DB_PORT at an RDS PostgreSQL instance
+#   # (Multi-AZ, automated backups) instead. The postgres.yaml template and its PVC are a
+#   # local-only stand-in for what would be a managed service on EKS.
+#
+# kafka: / zookeeper:
+#   # Same story — use Amazon MSK instead of self-hosting a single-broker Kafka+Zookeeper pair.
+#
+# secrets:
+#   # values.yaml's plaintext postgres.password becomes an External Secrets Operator
+#   # ExternalSecret pulling from AWS Secrets Manager, not a Helm value at all.
+#
+# corsAllowedOriginPattern: "https://app.example.com"   # narrow this for real traffic — the
+#   # local "http://*.ewallet-lab.local" wildcard is lab-only permissiveness.

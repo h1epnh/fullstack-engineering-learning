@@ -1,0 +1,16 @@
+# Mirrors ../../../init-databases.sql verbatim (kept inline here rather than referenced via
+# Helm's .Files, which can only read files inside the chart directory) — one Postgres instance,
+# 3 databases, same schema-per-service layout as docker-compose.yml.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-db
+  namespace: {{ .Values.namespace }}
+data:
+  init-databases.sql: |
+    CREATE DATABASE ewallet_user;
+    CREATE DATABASE ewallet_wallet;
+    CREATE DATABASE ewallet_topup;
+    CREATE DATABASE ewallet_bill_payment;
+    CREATE DATABASE ewallet_payment_request;
+    CREATE DATABASE ewallet_lucky_money;

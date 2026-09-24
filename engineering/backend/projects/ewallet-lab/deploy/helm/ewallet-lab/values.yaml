@@ -1,0 +1,87 @@
+# Base defaults, common to every environment. values-local.yaml / values-eks.yaml
+# override the environment-specific bits (registry, ingress class, storage class).
+
+namespace: ewallet-lab
+
+image:
+  registry: ""   # "" = use the image name as-is (works with images built straight into
+                 # minikube's own docker daemon). Real EKS would set this to an ECR URI,
+                 # e.g. "123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/"
+  pullPolicy: IfNotPresent
+  tag: local
+
+ingress:
+  className: nginx
+  annotations: {}
+  hosts:
+    shell: shell.ewallet-lab.local
+    mfeAuth: mfe-auth.ewallet-lab.local
+    mfeWallet: mfe-wallet.ewallet-lab.local
+    mfeTopup: mfe-topup.ewallet-lab.local
+    mfeTransfer: mfe-transfer.ewallet-lab.local
+    mfeBillPayment: mfe-bill-payment.ewallet-lab.local
+    api: api.ewallet-lab.local
+
+# Same permissive-lab-CORS pattern as docker-compose (see each service's CorsConfig.java),
+# just widened from localhost to the Ingress hostnames.
+corsAllowedOriginPattern: "http://*.ewallet-lab.local"
+
+postgres:
+  image: postgres:16
+  storageSize: 1Gi
+  storageClassName: ""   # "" = cluster default. Real EKS: a gp3 StorageClass, or better,
+                          # skip this Deployment entirely and point DB_HOST at RDS instead.
+  user: postgres
+  password: postgres     # lab-only plaintext Secret value — see values-eks.yaml note.
+
+zookeeper:
+  # Pinned, not :latest — the latest cp-kafka/cp-zookeeper images default to KRaft-only mode and
+  # no longer honor ZOOKEEPER_*/KAFKA_ZOOKEEPER_CONNECT at all. 7.5.3 is the last widely-used line
+  # that still runs classic Zookeeper mode with the env vars this chart sets. Same pin applied to
+  # ../../docker-compose.yml, which hit the identical breakage.
+  image: confluentinc/cp-zookeeper:7.5.3
+
+kafka:
+  image: confluentinc/cp-kafka:7.5.3
+
+userService:
+  port: 8090
+  replicas: 1
+
+walletService:
+  port: 8091
+  replicas: 1
+
+topupService:
+  port: 8092
+  replicas: 1
+
+mockBankGateway:
+  port: 8093
+  replicas: 1
+
+transferService:
+  port: 8094
+  replicas: 1
+
+billPaymentService:
+  port: 8095
+  replicas: 1
+
+paymentRequestService:
+  port: 8096
+  replicas: 1
+  # Issue #3 Task step 2: "Requests should expire (define a TTL, e.g. 24h)" — LINK-only, see
+  # PaymentRequestService.checkExpiry (REMINDER has no TTL, per issue #8's Acceptance criteria).
+  paymentLinkTtlHours: 24
+
+luckyMoneyService:
+  port: 8097
+  replicas: 1
+  # Issue #10: MoMo's verified real 48h window before an unclaimed lucky money is auto-refunded —
+  # configurable so the expiry behavior itself can be verified in seconds during testing.
+  ttlHours: 48
+
+frontend:
+  port: 80
+  replicas: 1
