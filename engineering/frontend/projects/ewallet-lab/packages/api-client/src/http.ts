@@ -37,4 +37,5 @@ export const API_BASE = {
   billPayment: import.meta.env.VITE_BILL_PAYMENT_SERVICE_URL ?? 'http://localhost:8095',
   paymentRequest: import.meta.env.VITE_PAYMENT_REQUEST_SERVICE_URL ?? 'http://localhost:8096',
   luckyMoney: import.meta.env.VITE_LUCKY_MONEY_SERVICE_URL ?? 'http://localhost:8097',
+  bnpl: import.meta.env.VITE_BNPL_SERVICE_URL ?? 'http://localhost:8098',
 };

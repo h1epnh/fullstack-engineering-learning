@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: ewallet-lab-bnpl-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5434}/${DB_NAME:ewallet_bnpl}
+    username: ${DB_USER:ewallet_bnpl}
+    password: ${DB_PASSWORD:ewallet_bnpl}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+server:
+  port: 8098
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+ewallet-lab:
+  wallet-service:
+    base-url: ${WALLET_SERVICE_URL:http://localhost:8091}
+  # Issue #18 — "Ví Trả Sau" MOCK credit line. Every number below comes from momo.vn/vi-tra-sau
+  # (fetched directly by agent-designer, 2 independent rounds — see backend DESIGN.md "Ví Trả Sau"),
+  # but the product itself is a learning simulation: no real lender, no credit scoring.
+  bnpl:
+    # Fixed approved limit for every user (MoMo's published max: 1.000.000đ–20.000.000đ). No
+    # scoring/rejection logic on purpose — see DESIGN.md.
+    credit-limit: ${BNPL_CREDIT_LIMIT:20000000}
+    # 33.000đ/tháng, only for a calendar month that has at least 1 draw. MoMo's "first 5
+    # transactions free" promo is deliberately NOT modeled (see DESIGN.md).
+    monthly-service-fee: ${BNPL_MONTHLY_SERVICE_FEE:33000}
+    # Late fee tiers on the outstanding balance, by days past the due date (day 1 of next month).
+    # Each entry: from-day (inclusive) -> rate. 1-4: 5.25%, 5-9: 10.5%, 10-14: 15.75%, >=15: 21%.
+    late-fee-tiers:
+      - from-day: 1
+        rate: 0.0525
+      - from-day: 5
+        rate: 0.105
+      - from-day: 10
+        rate: 0.1575
+      - from-day: 15
+        rate: 0.21
+    # Statement periods / due dates are calendar-based in Vietnam time, not server time.
+    zone: Asia/Ho_Chi_Minh
+    # TEST ONLY: shifts this service's notion of "now" forward by N days, so due/late-fee tiers can
+    # be exercised without waiting a month (same "lower the milestone, test, revert" pattern used
+    # for TTLs in #3/#10). Must be 0 in any normal deployment.
+    clock-offset-days: ${BNPL_CLOCK_OFFSET_DAYS:0}

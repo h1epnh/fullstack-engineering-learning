@@ -36,7 +36,8 @@ class WalletMutationExecutor {
      * giao dịch/tháng" section for the full source + scope reasoning (including why this is a flat
      * 100tr for every type here rather than the 300tr essential-services carve-out from Thông tư
      * 41/2025 — bill-payment-service has no real domain mapping to essential-service categories to
-     * apply that carve-out safely).
+     * apply that carve-out safely). {@code BNPL_REPAYMENT} (issue #18) is excluded on purpose: the
+     * same Điều 26 lists "trả nợ vay đến hạn/quá hạn tại TCTD" as not counting towards the cap.
      */
     private static final Set<TransactionType> MONTHLY_LIMIT_TYPES =
         EnumSet.of(TransactionType.TRANSFER_OUT, TransactionType.BILL_PAYMENT, TransactionType.WITHDRAW);

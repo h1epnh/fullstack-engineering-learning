@@ -6,7 +6,8 @@ export type TransactionType =
   | 'WITHDRAW'
   | 'TRANSFER_OUT'
   | 'TRANSFER_IN'
-  | 'BILL_PAYMENT';
+  | 'BILL_PAYMENT'
+  | 'BNPL_REPAYMENT';
 
 const TYPE_META: Record<TransactionType, { icon: string; label: string; sign: 1 | -1 }> = {
   TOPUP: { icon: 'south', label: 'Nạp tiền', sign: 1 },
@@ -14,6 +15,7 @@ const TYPE_META: Record<TransactionType, { icon: string; label: string; sign: 1 
   TRANSFER_OUT: { icon: 'north_east', label: 'Chuyển tiền', sign: -1 },
   TRANSFER_IN: { icon: 'south_west', label: 'Nhận tiền', sign: 1 },
   BILL_PAYMENT: { icon: 'receipt_long', label: 'Thanh toán hoá đơn', sign: -1 },
+  BNPL_REPAYMENT: { icon: 'credit_card', label: 'Trả nợ Ví Trả Sau', sign: -1 },
 };
 
 export function TransactionRow({

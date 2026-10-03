@@ -16,8 +16,14 @@ declare module 'mfe_wallet/Home' {
     onMoreServices: () => void;
     onComingSoon: (feature: string) => void;
     onOpenNotifications: () => void;
+    onBnpl?: () => void;
   }>;
   export default Home;
+}
+
+declare module 'mfe_wallet/BnplWallet' {
+  const BnplWallet: ComponentType<{ session: Session; onBack: () => void }>;
+  export default BnplWallet;
 }
 
 declare module 'mfe_wallet/ReceiveQr' {

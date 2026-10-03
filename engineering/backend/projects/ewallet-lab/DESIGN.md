@@ -22,10 +22,11 @@ logic sản phẩm ví phổ quát, không giả vờ có nguồn.
 | `bill-payment-service` | Java/Spring Boot | Tra cứu + thanh toán hoá đơn (mock biller), sở hữu DB riêng `ewallet_bill_payment` | — (bill aggregation là góc nhìn nội bộ MoMo, không public — toàn bộ service là mock, xem mục "Luồng bill payment") |
 | `payment-request-service` | Java/Spring Boot | Sở hữu `PaymentRequest` (link nhận tiền công khai — issue #3 — và nhắc trả tiền 1-1 nội bộ — issue #8), DB riêng `ewallet_payment_request`; tự nó **không** gọi wallet-service — mọi lần thanh toán đều gọi lại `transfer-service`'s `/transfers` thật | Payment-link: cấu trúc adapted từ MoMo Collection Link (merchant-side, KHÔNG phải spec P2P cá nhân đã xác nhận — xem mục dưới). Payment-reminder: luồng 4 bước đã xác minh trực tiếp từ momo.vn (xem mục dưới) |
 | `lucky-money-service` | Java/Spring Boot | Sở hữu `LuckyMoney` (lì xì 1-1 nội bộ, escrow thật — issue #10), DB riêng `ewallet_lucky_money`; **gọi thẳng `wallet-service`'s `/credit`/`/debit`** (khác `payment-request-service` — không đi qua `transfer-service` vì đây là escrow 2 bước theo thời gian, không phải "transfer ngay") | Hạn mức 1.000đ–20.000.000đ/lần và cơ chế 48h/tự động hoàn tiền đã xác minh trực tiếp từ momo.vn (xem mục dưới) |
+| `bnpl-service` | Java/Spring Boot | **Mô phỏng** "Ví Trả Sau" (issue #18): hạn mức tín dụng giả lập, sao kê theo tháng, phí trễ hạn — DB riêng `ewallet_bnpl`; trả nợ gọi `wallet-service`'s `/debit` (type `BNPL_REPAYMENT`) | Hạn mức/lãi/phí lấy từ momo.vn/vi-tra-sau (xác minh trực tiếp) — **sản phẩm là mô phỏng học tập, không có TCTD thật nào đứng sau** (xem mục dưới) |
 
 **Trạng thái**: `wallet-service`, `user-service`, `topup-service`, `mock-bank-gateway`,
-`transfer-service`, `bill-payment-service`, `payment-request-service`, `lucky-money-service` đã
-scaffold — đủ chạy luồng "đăng ký → liên kết NH → nạp tiền → số dư được cộng", P2P transfer nội bộ,
+`transfer-service`, `bill-payment-service`, `payment-request-service`, `lucky-money-service`,
+`bnpl-service` đã scaffold — đủ chạy luồng "đăng ký → liên kết NH → nạp tiền → số dư được cộng", P2P transfer nội bộ,
 thanh toán hoá đơn mock, link nhận tiền + nhắc trả tiền, và lì xì 1-1.
 
 ## Vì sao mỗi service có DB riêng
@@ -436,3 +437,153 @@ hạn → chỉ hoàn tiền đúng 1 lần (balance sender trở về đúng s�
 đó claim → 409. Đã revert `LUCKY_MONEY_TTL_HOURS=48` bằng `kubectl set env`, xác nhận qua
 `kubectl get deploy -o jsonpath` giá trị hiện tại đúng là `48`. Sequential double-claim vẫn đúng
 409, GET/list vẫn đúng dữ liệu sau khi refactor.
+
+## Ví Trả Sau — mô phỏng BNPL (issue #18) — `bnpl-service`
+
+> **Disclaimer bắt buộc**: đây là **mô phỏng học tập**, **KHÔNG PHẢI** sản phẩm cho vay/tín dụng
+> tiêu dùng thật. **KHÔNG CÓ** ngân hàng/công ty tài chính thật nào đứng sau Ví Trả Sau của lab
+> này. Số liệu hạn mức/lãi/phí lấy từ MoMo thật để học; TPBank/MBV/VCBNeo chỉ là **nguồn tham khảo
+> số liệu** (bên cấp hạn mức thật của sản phẩm MoMo), **không phải đối tác** của lab — lab không kết
+> nối với bất kỳ tổ chức tín dụng nào. Không có thẩm định tín dụng, không dùng CIC/điểm tín dụng
+> thật, không có logic từ chối.
+
+**Quyết định kiến trúc (người vận hành, comment trên issue #18)**: **(b) service độc lập mới
+`bnpl-service`, DB riêng `ewallet_bnpl`** — không phải bảng mới trong `wallet-service`. Lý do: đây là
+nợ với 1 "bên thứ 3 giả lập", gần với quan hệ "khoản chờ" của `payment-request-service` hơn là "tiền
+của chính user"; giữ `wallet-service` không phải "biết" khái niệm nợ/hạn mức tín dụng.
+
+### Nguồn số liệu (agent-designer fetch trực tiếp `momo.vn/vi-tra-sau`, 2 vòng độc lập)
+
+| Quy tắc | Giá trị dùng trong lab | Ghi chú |
+|---|---|---|
+| Hạn mức | **20.000.000đ cố định cho mọi user** | MoMo công bố 1.000.000đ–20.000.000đ, duyệt 3 phút. Lab lấy mức tối đa, duyệt ngay — mock có chủ đích, cấu hình `BNPL_CREDIT_LIMIT` |
+| Lãi | **0%** nếu trả đúng hạn | Không cộng gì ngoài gốc + phí dịch vụ + phí trễ hạn |
+| Hạn thanh toán | **Ngày 1 của tháng dương lịch kế tiếp** | Nguồn chỉ nói "đầu tháng tiếp theo", không có ngày cụ thể — ngày 1 là cách đọc sớm nhất, không bịa ngày khác (vòng nghiên cứu đầu ghi nhầm "ngày 5", đã tự đính chính) |
+| Phí dịch vụ | **33.000đ/tháng, chỉ tháng có phát sinh giao dịch** | Cộng vào kỳ ngay lúc có giao dịch "mua" đầu tiên của tháng. **Lược bỏ có chủ đích** ưu đãi "5 giao dịch đầu miễn phí" của MoMo — lab không đếm giao dịch trọn đời; đây không phải thiếu sót |
+| Phí trễ hạn | **1–4 ngày: 5,25% · 5–9: 10,5% · 10–14: 15,75% · ≥15: 21%** trên dư nợ | Cấu hình `ewallet-lab.bnpl.late-fee-tiers` |
+| Bên cấp hạn mức | TPBank, MBV, VCBNeo (thật, của MoMo) | **Chỉ là nguồn tham khảo** — không có trong hệ thống lab |
+
+Đối chiếu ngắn (comment bổ sung trên issue #18, chỉ phần đã xác minh trực tiếp): VNPay×Cake dùng
+model **miễn lãi theo số ngày** ("lên đến 45 ngày"), không công bố hạn mức BNPL cụ thể — khác MoMo
+(phí dịch vụ cố định + hạn "đầu tháng tiếp theo"). Lab chỉ mô phỏng model MoMo; các con số VNPay chưa
+xác minh (5tr, 3,25%/tháng, 18–50 tuổi, 30% tối thiểu) **không** được dùng.
+
+### Mô hình dữ liệu
+
+- `CreditLine` (1/user, `user_id` unique): `creditLimit`, `outstandingPrincipal` (tổng gốc chưa
+  trả — để kiểm tra hạn mức khả dụng chỉ cần 1 dòng), `disclaimerAcceptedAt`.
+- `Statement` (1/tháng dương lịch có giao dịch, giờ Việt Nam `Asia/Ho_Chi_Minh`): `principal`,
+  `serviceFee`, và **chỉ các khoản đã trả** (`principalPaid`, `serviceFeePaid`, `lateFeePaid`).
+  **Phí trễ hạn KHÔNG được lưu** — luôn tính lại.
+- `Draw` — 1 khoản "mua sắm trả sau" **tự chứa, mock**: không có merchant, không tiền nào di
+  chuyển; chỉ tăng gốc của kỳ + giảm hạn mức khả dụng. **Không** tích hợp vào
+  bill-payment/transfer/QR (ngoài phạm vi issue).
+- `Repayment` (`PENDING` → `COMPLETED`/`FAILED`) + bảng phân bổ (`repayment_allocations`: bao
+  nhiêu vào phí trễ hạn / phí dịch vụ / gốc của kỳ nào) — để hoàn lại chính xác khi debit thất bại.
+
+### Phí trễ hạn — luôn tính lại theo `now` (lựa chọn hiện thực)
+
+Với 1 kỳ đã quá hạn, mỗi lần đọc/trả nợ:
+
+```
+base       = gốc chưa trả + phí dịch vụ chưa trả
+daysLate   = (hôm nay theo giờ VN) − dueDate        (trả đúng ngày 1 = đúng hạn, 0 ngày trễ)
+lateFeeDue = max(0, round(tỷ lệ bậc(daysLate) × base) − lateFeePaid)
+```
+
+Tức là phí trễ hạn = % theo bậc **trên dư nợ còn lại tại thời điểm đó**, trừ đi phần phí trễ hạn
+đã trả trước đó cho kỳ này. Không "đóng băng" số cũ: sang bậc mới thì tăng, trả bớt gốc thì giảm.
+Làm tròn HALF_UP về đồng (VND không có đơn vị lẻ).
+
+**Thứ tự phân bổ 1 lần trả nợ**: kỳ cũ nhất trước; trong mỗi kỳ: phí trễ hạn → phí dịch vụ → gốc.
+Vì phí trễ hạn luôn được trả trước khi `base` giảm, trả hết 1 kỳ không thể "xoá" phí trễ hạn chưa
+trả. Trả trước hạn (kỳ chưa đến hạn) được phép.
+
+Ví dụ đã verify thật (gốc 1.000.000đ + phí 33.000đ, kỳ tháng 10): ngày 1/11 → 1.033.000đ (đúng
+hạn); 3/11 (trễ 2 ngày, 5,25%) → phí trễ 54.233đ; trả đúng 54.233đ → còn 1.033.000đ; 9/11 (trễ 8
+ngày, 10,5% = 108.465đ) → phí trễ còn 54.232đ; 19/11 (trễ 18 ngày, 21% = 216.930đ) → còn 162.697đ.
+
+### Race condition — "claim trạng thái trước, move tiền sau" (bắt buộc theo #3/#8/#10)
+
+- **Mọi thao tác ghi** (mua sắm, claim trả nợ, hoàn trả nợ) đều khoá dòng `CreditLine` của user
+  trước (`SELECT ... FOR UPDATE`, `CreditLineRepository.lockByUserId`) → các thao tác trên cùng 1 Ví
+  Trả Sau chạy tuần tự. `@Version` vẫn giữ trên `CreditLine` như lớp phòng thủ phụ, **không phải** cơ
+  chế chính.
+- **Trả nợ** (`BnplService.repay`): (1) transaction claim — khoá, tính dư nợ theo `now`, phân bổ,
+  **giảm nợ + ghi `Repayment` PENDING, commit**; (2) **chỉ sau đó** mới gọi `wallet-service`'s
+  `/debit` thật; (3) thành công → `COMPLETED`. Request đồng thời đọc lại dư nợ **đã giảm** → không
+  thể trả 2 lần cho cùng 1 đồng. Debit thất bại (409 số dư không đủ, hay lỗi khác) →
+  `revertRepayment` cộng lại đúng phần đã claim, `FAILED`.
+- **Mua sắm**: thuần local (không gọi service khác), kiểm tra hạn mức khả dụng bên trong cùng
+  transaction đã khoá → không thể vượt hạn mức khi bắn đồng thời.
+- **Gap đã biết, không giấu**: nếu `wallet-service` đã debit nhưng response bị mất (timeout),
+  bnpl-service vẫn revert → user mất tiền mà nợ không giảm; nếu process chết giữa claim và debit →
+  nợ đã giảm mà tiền chưa trừ (`PENDING` treo). Cùng lớp gap với các service khác của lab (không có
+  outbox/idempotency key giữa các service).
+
+**Đã verify** (`BnplConcurrencyTest` với H2 + Postgres 16 thật chạy local): 12 request trả toàn bộ
+dư nợ đồng thời → **1×200, 11×409**, ví chính bị trừ đúng 1 lần; 12×100.000đ trên dư nợ 300.000đ →
+đúng 3 thành công; 12×3.000.000đ mua sắm trên hạn mức 20tr → đúng 6 thành công, dư nợ 18tr. Kiểm
+chứng ngược: bỏ khoá dòng → 3/5 test race fail.
+
+### `BNPL_REPAYMENT` — `TransactionType` mới của `wallet-service`
+
+- Không tái dùng `WITHDRAW` (rút ra ngân hàng) hay `TRANSFER_OUT` (P2P) — sẽ làm sai sổ cái hiển
+  thị cho user.
+- **KHÔNG tính vào hạn mức 100tr/tháng (issue #7)**: Điều 26 Thông tư 40/2024/TT-NHNN liệt kê rõ
+  "trả nợ vay đến hạn/quá hạn tại TCTD" là ngoại lệ không tính vào hạn mức — trả nợ Ví Trả Sau cho
+  bên cấp hạn mức (TPBank/MBV/VCBNeo ở sản phẩm thật) khớp đúng mô tả này. Hiện thực: không thêm
+  `BNPL_REPAYMENT` vào `MONTHLY_LIMIT_TYPES`. Đã verify: ví đã chạm trần 100tr `TRANSFER_OUT` trong
+  tháng → `TRANSFER_OUT` thêm 1.000đ bị 409, nhưng trả nợ Ví Trả Sau 5.033.000đ vẫn 200.
+- **Step-up xác thực (issue #15, QĐ 2345/QĐ-NHNN)**: issue yêu cầu VẪN áp dụng cho
+  `BNPL_REPAYMENT`. **Tuy nhiên code của #15 (cũng như #12/#13) không có trên nhánh `master` mà
+  issue #18 được làm trên đó** — không có `StepUpModal`/logic ngưỡng 10tr/20tr nào để móc vào.
+  Không tự dựng lại #15 trong phạm vi ticket này; khi #15 được merge, `BNPL_REPAYMENT` phải được
+  thêm vào tập loại giao dịch chịu step-up (mặc định áp dụng — không tìm được miễn trừ tương tự Điều
+  26 cho QĐ 2345).
+- **Bẫy CHECK constraint (CLAUDE.md)**: DB `ewallet_wallet` đang chạy có sẵn
+  `transactions_type_check` sinh từ enum cũ — `ddl-auto: update` **không** tự nới. Đã tái hiện
+  thật: Postgres có constraint cũ → `/debit` type `BNPL_REPAYMENT` 500 → bnpl-service trả 502 và
+  hoàn lại nợ đúng. Fix trên DB đang chạy (đã chạy thử, verify bằng `\d+ transactions`):
+
+  ```sql
+  ALTER TABLE transactions DROP CONSTRAINT transactions_type_check;
+  ALTER TABLE transactions ADD CONSTRAINT transactions_type_check CHECK (type IN
+    ('TOPUP','WITHDRAW','TRANSFER_OUT','TRANSFER_IN','BILL_PAYMENT','REFUND','BNPL_REPAYMENT'));
+  ```
+
+  (Nếu `master` của bạn có thêm enum value khác từ #12/#13, giữ chúng trong danh sách.)
+
+### API (`/bnpl`, cùng convention `userId` trên path, không có auth middleware)
+
+| Method | Path | Ghi chú |
+|---|---|---|
+| GET | `/bnpl/{userId}` | 200 `{opened:false}` nếu chưa mở; ngược lại hạn mức, dư nợ, sao kê (phí trễ hạn tính theo `now`) |
+| POST | `/bnpl/{userId}/open` | Body `{acceptedDisclaimer:true}` bắt buộc — **backend cũng từ chối (400) nếu thiếu**, không chỉ UI. Mở lần 2 → 409 |
+| POST | `/bnpl/{userId}/draws` | `{amount ≥ 1.000, số nguyên, label}` — vượt hạn mức khả dụng → 409 |
+| POST | `/bnpl/{userId}/repayments` | `{amount ≥ 1, số nguyên}` — vượt tổng dư nợ → 400; không còn nợ / ví chính không đủ → 409; wallet-service lỗi → 502 (đã hoàn nợ) |
+
+### Test nhanh mốc thời gian
+
+`BNPL_CLOCK_OFFSET_DAYS=N` (Helm `bnplService.clockOffsetDays`) dời "hôm nay" của riêng
+bnpl-service tới N ngày sau — để thử đến hạn/các bậc phí trễ hạn không phải chờ 1 tháng. **Chỉ để
+test, phải revert về `0`** (cùng pattern hạ TTL ở #3/#10).
+
+### Triển khai lên cluster đang chạy
+
+DB `ewallet_bnpl` chỉ được tạo tự động trên Postgres **mới** (init script). Cluster đang chạy:
+
+```
+kubectl -n ewallet-lab exec deploy/postgres -- psql -U postgres -c "CREATE DATABASE ewallet_bnpl"
+kubectl -n ewallet-lab exec deploy/postgres -- psql -U postgres -d ewallet_wallet -c "<2 câu ALTER ở trên>"
+eval $(minikube docker-env)
+docker build -t ewallet-lab/wallet-service:local wallet-service
+docker build -t ewallet-lab/bnpl-service:local bnpl-service
+helm upgrade ewallet-lab deploy/helm/ewallet-lab -f deploy/helm/ewallet-lab/values-local.yaml -n ewallet-lab
+```
+
+**Chưa verify trên minikube/Ingress thật** — môi trường phát triển của issue này không có Docker
+daemon/minikube. Đã verify: build + 12 test (`./gradlew test`), và toàn bộ luồng HTTP (mở →
+mua sắm → trễ hạn qua clock offset → trả 1 phần/toàn bộ → race 12 request → hạn mức tháng) với
+`wallet-service` + `bnpl-service` thật trên Postgres 16 thật chạy local. Vẫn cần chạy lại các bước
+Acceptance criteria qua `http://api.ewallet-lab.local` trước khi đóng issue.
