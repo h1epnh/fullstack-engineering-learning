@@ -13,6 +13,7 @@ minh, không phải tài liệu trang trí. File này chỉ ghi **quy ước v�
 | topup-service | 8092 | Postgres + Kafka | nạp tiền (MoMo Collection Link đã xác minh) + rút tiền |
 | mock-bank-gateway | 8093 | — (Go) | giả lập ngân hàng, cùng công thức chữ ký với topup-service |
 | transfer-service | 8094 | — (stateless) | chuyển tiền P2P, saga có compensation, KHÔNG persist state |
+| loyalty-service | 8099 | Postgres | **mô phỏng** Điểm thưởng (issue #19) — claim-trước-move-tiền-sau, xem DESIGN.md |
 | bnpl-service | 8098 | Postgres | **mô phỏng** Ví Trả Sau (issue #18) — claim-trước-move-tiền-sau, xem DESIGN.md |
 
 Spring Boot 3.4.1 / Java 21 / Gradle 8.11.1. Dùng `RestClient` cho gọi service-to-service,

@@ -19,7 +19,8 @@ export function describeApiError(
     | 'lucky-money'
     | 'bnpl-open'
     | 'bnpl-draw'
-    | 'bnpl-repay',
+    | 'bnpl-repay'
+    | 'loyalty-redeem',
 ): string {
   if (status === undefined) {
     return 'Không kết nối được tới máy chủ. Kiểm tra lại các service đã chạy chưa rồi thử lại.';
@@ -44,6 +45,15 @@ export function describeApiError(
     if (context === 'bnpl-repay') {
       return 'Ví chính không đủ số dư để trả nợ (hoặc Ví Trả Sau không còn dư nợ). Nạp thêm tiền vào ví chính rồi thử lại.';
     }
+  }
+  if (status === 409 && context === 'loyalty-redeem') {
+    return 'Không đủ điểm để đổi số điểm này.';
+  }
+  if (status === 400 && context === 'loyalty-redeem') {
+    return 'Số điểm đổi chưa đạt mức tối thiểu.';
+  }
+  if (status === 502 && context === 'loyalty-redeem') {
+    return 'Chưa cộng được tiền vào ví chính — điểm đã được hoàn lại, thử lại sau.';
   }
   if (status === 400 && context === 'bnpl-open') {
     return 'Cần đọc và xác nhận điều khoản mô phỏng trước khi mở Ví Trả Sau.';

@@ -44,7 +44,9 @@ const MAIN_GRID: { key: string; icon: string; label: string; more?: boolean; rea
 
 const FEED_TEASERS: { key: string; icon: string; title: string; subtitle: string }[] = [
   { key: 'movie-tickets', icon: 'local_movies', title: 'Vé xem phim & sự kiện', subtitle: 'Xem danh sách rạp, lịch chiếu' },
-  { key: 'suggested', icon: 'redeem', title: 'Ưu đãi & hoàn tiền', subtitle: 'Voucher đối tác, tích điểm' },
+  // Issue #19: "tích điểm" split out into its own, real entry; the rest stays a coming-soon teaser.
+  { key: 'loyalty', icon: 'loyalty', title: 'Điểm thưởng', subtitle: 'Tích điểm khi thanh toán hoá đơn, đổi hoàn tiền' },
+  { key: 'suggested', icon: 'redeem', title: 'Ưu đãi & hoàn tiền', subtitle: 'Voucher đối tác' },
   // Untouched by issue #18 on purpose: this teaser also advertises "vay nhanh", which is out of scope.
   { key: 'finance-insurance', icon: 'credit_card', title: 'Ví Trả Sau, vay nhanh', subtitle: 'Sản phẩm tài chính đối tác' },
 ];
@@ -165,6 +167,7 @@ export default function Home({
   onComingSoon,
   onOpenNotifications,
   onBnpl,
+  onLoyalty,
 }: {
   session: Session;
   onTopup: () => void;
@@ -177,6 +180,8 @@ export default function Home({
   /** Issue #18 — optional so an older shell (deployed separately) still works: falls back to the
    * generic coming-soon screen. */
   onBnpl?: () => void;
+  /** Issue #19 — optional for the same reason as onBnpl. */
+  onLoyalty?: () => void;
 }) {
   const [balance, setBalance] = useState<number | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -341,7 +346,7 @@ export default function Home({
           icon={t.icon}
           title={t.title}
           subtitle={t.subtitle}
-          onClick={() => onComingSoon(t.key)}
+          onClick={() => (t.key === 'loyalty' && onLoyalty ? onLoyalty() : onComingSoon(t.key))}
         />
       ))}
     </Screen>

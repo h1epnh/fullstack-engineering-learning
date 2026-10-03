@@ -48,6 +48,7 @@ bill payment") — không dùng tên nhà cung cấp thật nào.
 | `bill-payment-service` | 8095 | `ewallet_bill_payment` | Tra cứu + thanh toán hoá đơn (mock biller) |
 | `payment-request-service` | 8096 | `ewallet_payment_request` | Link nhận tiền + nhắc trả tiền |
 | `lucky-money-service` | 8097 | `ewallet_lucky_money` | Lì xì 1-1 (escrow) |
+| `loyalty-service` | 8099 | `ewallet_loyalty` | **Mô phỏng** Điểm thưởng — tích điểm hoá đơn, hạng, đổi hoàn tiền (xem DESIGN.md) |
 | `bnpl-service` | 8098 | `ewallet_bnpl` | **Mô phỏng** Ví Trả Sau — không phải sản phẩm cho vay thật (xem DESIGN.md) |
 
 ## Chạy lab

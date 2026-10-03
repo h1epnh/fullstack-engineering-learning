@@ -6,6 +6,12 @@ spring:
     username: ${DB_USER:ewallet_bnpl}
     password: ${DB_PASSWORD:ewallet_bnpl}
   jpa:
+    # Off on purpose: with open-in-view, one persistence context spans the whole HTTP request, so a
+    # row read earlier in the request (e.g. the account lookup before a redemption) is handed back
+    # STALE by the later SELECT ... FOR UPDATE inside the mutation transaction — found under real
+    # Postgres contention as StaleObjectStateException (raw 500). Each @Transactional step must
+    # start from a fresh persistence context.
+    open-in-view: false
     hibernate:
       ddl-auto: update
     show-sql: false

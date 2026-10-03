@@ -3,6 +3,7 @@
 # docker build -f mfe-wallet/Dockerfile \
 #   --build-arg VITE_WALLET_SERVICE_URL=http://api.ewallet-lab.local \
 #   --build-arg VITE_BNPL_SERVICE_URL=http://api.ewallet-lab.local \
+#   --build-arg VITE_LOYALTY_SERVICE_URL=http://api.ewallet-lab.local \
 #   -t ewallet-lab/mfe-wallet:local .
 FROM node:22-alpine AS build
 WORKDIR /repo
@@ -15,6 +16,9 @@ ENV VITE_WALLET_SERVICE_URL=${VITE_WALLET_SERVICE_URL}
 # Issue #18: BnplWallet screen calls bnpl-service.
 ARG VITE_BNPL_SERVICE_URL
 ENV VITE_BNPL_SERVICE_URL=${VITE_BNPL_SERVICE_URL}
+# Issue #19: LoyaltyRewards screen calls loyalty-service.
+ARG VITE_LOYALTY_SERVICE_URL
+ENV VITE_LOYALTY_SERVICE_URL=${VITE_LOYALTY_SERVICE_URL}
 RUN npm run build -w mfe-wallet
 
 FROM nginx:1.27-alpine

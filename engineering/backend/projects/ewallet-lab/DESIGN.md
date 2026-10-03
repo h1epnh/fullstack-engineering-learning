@@ -22,11 +22,12 @@ logic sản phẩm ví phổ quát, không giả vờ có nguồn.
 | `bill-payment-service` | Java/Spring Boot | Tra cứu + thanh toán hoá đơn (mock biller), sở hữu DB riêng `ewallet_bill_payment` | — (bill aggregation là góc nhìn nội bộ MoMo, không public — toàn bộ service là mock, xem mục "Luồng bill payment") |
 | `payment-request-service` | Java/Spring Boot | Sở hữu `PaymentRequest` (link nhận tiền công khai — issue #3 — và nhắc trả tiền 1-1 nội bộ — issue #8), DB riêng `ewallet_payment_request`; tự nó **không** gọi wallet-service — mọi lần thanh toán đều gọi lại `transfer-service`'s `/transfers` thật | Payment-link: cấu trúc adapted từ MoMo Collection Link (merchant-side, KHÔNG phải spec P2P cá nhân đã xác nhận — xem mục dưới). Payment-reminder: luồng 4 bước đã xác minh trực tiếp từ momo.vn (xem mục dưới) |
 | `lucky-money-service` | Java/Spring Boot | Sở hữu `LuckyMoney` (lì xì 1-1 nội bộ, escrow thật — issue #10), DB riêng `ewallet_lucky_money`; **gọi thẳng `wallet-service`'s `/credit`/`/debit`** (khác `payment-request-service` — không đi qua `transfer-service` vì đây là escrow 2 bước theo thời gian, không phải "transfer ngay") | Hạn mức 1.000đ–20.000.000đ/lần và cơ chế 48h/tự động hoàn tiền đã xác minh trực tiếp từ momo.vn (xem mục dưới) |
+| `loyalty-service` | Java/Spring Boot | **Mô phỏng** "Điểm thưởng" (issue #19): tích điểm từ thanh toán hoá đơn, hạng thành viên 12 tháng trượt, đổi điểm lấy hoàn tiền — DB riêng `ewallet_loyalty`; đọc `wallet-service`'s `/transactions`, trả thưởng qua `/credit` (type `LOYALTY_REDEMPTION`) | Tỷ lệ lấy cảm hứng từ chương trình thật (xem mục dưới); chương trình/tên hạng tự thiết kế — **không có đối tác/thương hiệu thật** |
 | `bnpl-service` | Java/Spring Boot | **Mô phỏng** "Ví Trả Sau" (issue #18): hạn mức tín dụng giả lập, sao kê theo tháng, phí trễ hạn — DB riêng `ewallet_bnpl`; trả nợ gọi `wallet-service`'s `/debit` (type `BNPL_REPAYMENT`) | Hạn mức/lãi/phí lấy từ momo.vn/vi-tra-sau (xác minh trực tiếp) — **sản phẩm là mô phỏng học tập, không có TCTD thật nào đứng sau** (xem mục dưới) |
 
 **Trạng thái**: `wallet-service`, `user-service`, `topup-service`, `mock-bank-gateway`,
 `transfer-service`, `bill-payment-service`, `payment-request-service`, `lucky-money-service`,
-`bnpl-service` đã scaffold — đủ chạy luồng "đăng ký → liên kết NH → nạp tiền → số dư được cộng", P2P transfer nội bộ,
+`bnpl-service`, `loyalty-service` đã scaffold — đủ chạy luồng "đăng ký → liên kết NH → nạp tiền → số dư được cộng", P2P transfer nội bộ,
 thanh toán hoá đơn mock, link nhận tiền + nhắc trả tiền, và lì xì 1-1.
 
 ## Vì sao mỗi service có DB riêng
@@ -587,3 +588,88 @@ daemon/minikube. Đã verify: build + 12 test (`./gradlew test`), và toàn bộ
 mua sắm → trễ hạn qua clock offset → trả 1 phần/toàn bộ → race 12 request → hạn mức tháng) với
 `wallet-service` + `bnpl-service` thật trên Postgres 16 thật chạy local. Vẫn cần chạy lại các bước
 Acceptance criteria qua `http://api.ewallet-lab.local` trước khi đóng issue.
+
+## Điểm thưởng — mô phỏng loyalty (issue #19) — `loyalty-service`
+
+> Đây là **chương trình điểm thưởng mô phỏng nội bộ** của lab — **không có đối tác, thương hiệu
+> hay kho voucher thật nào đứng sau**. Phần thưởng duy nhất là hoàn tiền (VND) vào ví chính của chính
+> user. Tên hiển thị và tên field/entity đều generic ("Điểm thưởng", `LoyaltyAccount`...), không
+> dùng tên sản phẩm của bên thứ 3.
+
+**Quyết định kiến trúc (người vận hành, comment trên issue #19)**: **(b) service độc lập
+`loyalty-service`, DB riêng `ewallet_loyalty`** — tính điểm từ `wallet-service`'s
+`GET /wallets/{userId}/transactions`, trả cashback qua `/credit`; không có code path credit riêng.
+
+### Nguồn số liệu tham khảo (theo Context của issue #19)
+
+Nghiên cứu do agent-designer thực hiện; tin nhắn mailbox mà issue trích dẫn (ts
+`2026-10-03T16:45:00Z`, có URL đầy đủ và mức xác minh từng mục) **không có trong repo** (cùng tình
+trạng code #12/#13/#15 — chỉ có ở bản local chưa push). Dưới đây chỉ ghi lại đúng những gì issue
+khẳng định:
+
+- **Đính chính quan trọng**: **"OneU" là chương trình của Techcombank, KHÔNG PHẢI MB Bank**
+  (fetch trực tiếp `techcombank.com/thong-tin/blog/oneu`). Chương trình của MB Bank tên **"MB Star"**
+  (điểm StarPoint). Giả định ban đầu của người vận hành sai ở điểm này.
+- **OneU (Techcombank)**: 1 U-Point = 1 VND; tích qua nhiều kênh (thẻ 0,5–2%, thẻ tín dụng
+  0,1–8%, hoá đơn 10.000–80.000 điểm/lần...); đổi voucher 500+ thương hiệu, dặm bay. Không có
+  hạng riêng (ăn theo hạng VIP ngân hàng).
+- **MB Star**: tích "tương ứng mỗi giao dịch hợp lệ" — **không tìm được tỷ lệ cụ thể công khai**;
+  có chuyển tặng điểm; không công bố hạng.
+- **SkyJoy (Vietjet)**: **1 điểm / 10.000đ** cơ bản, tối đa 12 điểm/10.000đ ở hạng cao nhất; 4
+  hạng xét theo 12 tháng trượt; điểm không hết hạn.
+
+### Thiết kế của lab (tự thiết kế, chỉ lấy cảm hứng cấu trúc)
+
+| Quy tắc | Giá trị | Ghi chú |
+|---|---|---|
+| Giao dịch được tích điểm | **chỉ `BILL_PAYMENT`** | Xem lý do bên dưới |
+| Tỷ lệ cơ bản | **1 điểm / 10.000đ** | Lấy từ tỷ lệ cơ bản SkyJoy; cấu hình `LOYALTY_SPEND_PER_POINT` |
+| Hạng (theo tổng `BILL_PAYMENT` 12 tháng trượt) | Thành viên (0) ×1 · Thân thiết (≥5tr) ×1,2 · Ưu tiên (≥20tr) ×1,5 · Đặc biệt (≥50tr) ×2 | Tên + ngưỡng + hệ số **tự thiết kế**, chỉ mượn cấu trúc "4 hạng / 12 tháng trượt / hạng cao tích nhiều hơn" của SkyJoy; hệ số cao nhất cố ý thấp hơn nhiều so với 12× |
+| Đổi điểm | **1 điểm = 100đ**, tối thiểu 100 điểm | ⇒ hoàn tiền cơ bản 1%. Tự thiết kế |
+| Hết hạn điểm | không | Giống SkyJoy; đơn giản hoá MVP |
+| Giao dịch trước khi tham gia | không tích điểm | Tài khoản điểm tạo lần đầu mở màn hình (`enrolledAt`); chỉ giao dịch từ lúc đó mới tích điểm, không "truy tặng". Hạng thì vẫn xét đủ 12 tháng |
+
+**Vì sao chỉ `BILL_PAYMENT`** (issue cho phép agent-dev chọn, phải ghi lý do): nếu `TRANSFER_OUT`
+được tích điểm, 2 tài khoản chuyển qua lại cho nhau sẽ "đẻ" điểm vô hạn, đổi ra cashback thật — lại
+là lớp bug **tạo tiền từ hư không** của #3/#8/#10. `TOPUP`/`WITHDRAW` có vòng lặp tương tự. Thanh
+toán hoá đơn là tiền rời khỏi các ví của lab sang biller (mock), không thể quay vòng.
+`LOYALTY_REDEMPTION` là tiền vào và không tích điểm, nên không tự nuôi chính nó.
+
+**Hệ số hạng áp dụng lúc đồng bộ**: mỗi lần đọc/đổi điểm, service lấy ledger ví (ngoài mọi
+transaction/khoá DB), tính hạng hiện tại theo 12 tháng, rồi cộng điểm cho các hoá đơn **chưa được
+cộng** theo hạng đó. Mỗi hoá đơn chỉ được cộng 1 lần (`point_entries.source_transaction_id` unique +
+khoá dòng tài khoản). Hoá đơn làm user lên hạng cũng được cộng theo hạng mới — đơn giản hoá có chủ đích.
+
+### Race condition — "claim trước, move tiền sau"
+
+- Mọi thao tác ghi khoá dòng `loyalty_accounts` (`SELECT ... FOR UPDATE`).
+- **Đổi điểm**: (1) đồng bộ; (2) transaction claim: khoá, kiểm tra đủ điểm, **trừ điểm + ghi entry
+  `REDEEM` PENDING, commit**; (3) gọi `/credit` thật; (4) `COMPLETED`. Credit lỗi →
+  `revertRedemption` hoàn điểm, entry `FAILED`.
+- **Bug thật tìm ra khi test trên Postgres, đã sửa**: với `spring.jpa.open-in-view` mặc định (bật),
+  1 persistence context sống suốt HTTP request. Tài khoản được đọc trước (ensureAccount/đồng bộ) rồi
+  bị chính `SELECT ... FOR UPDATE` trả lại **bản cũ** → `StaleObjectStateException` → 9/12 request
+  trả 500 thô (tiền vẫn đúng nhờ `@Version`). Fix: `open-in-view: false` (áp dụng cả
+  `bnpl-service`). Test service-level không bắt được vì không đi qua HTTP → đã thêm
+  `httpConcurrentRedemptionsNeverReturnServerErrors` (bật lại open-in-view thì test này fail).
+
+**Đã verify**: 10 test (4 unit tính điểm/hạng + 6 concurrency/HTTP, H2). Bỏ khoá dòng thì 3/5 test
+race fail. Trên Postgres 16 thật:
+- Chỉ hoá đơn 1,25tr tích 125 điểm; chuyển tiền 5tr/rút 3tr không tích.
+- Đổi điểm khi constraint chưa có `LOYALTY_REDEMPTION` → 502, điểm được hoàn. ALTER xong → đổi 100
+  điểm = +10.000đ.
+- Thêm hoá đơn 4tr → hạng Thân thiết, +480 điểm (×1,2).
+- 12 request đổi toàn bộ 505 điểm đồng thời → **1×200, 11×409**, ví chỉ +50.500đ đúng 1 lần.
+
+**`LOYALTY_REDEMPTION`**: `TransactionType` mới của `wallet-service`. DB đang chạy cần nới CHECK
+constraint giống `BNPL_REPAYMENT` (thêm `'LOYALTY_REDEMPTION'` vào danh sách trong câu ALTER ở mục
+"Ví Trả Sau"), và `CREATE DATABASE ewallet_loyalty`.
+
+**Ngoài phạm vi** (theo issue, không tự mở rộng):
+- dặm bay/hãng bay thật
+- catalog voucher đối tác thật (nếu sau này có, chỉ được dùng voucher hư cấu kèm disclaimer)
+- "mua hạng bằng tiền mặt" (rủi ro thông điệp như BNPL)
+- liên minh quy đổi điểm (point-pooling)
+- chuyển tặng điểm cho người khác
+
+**Chưa verify qua minikube/Ingress.**

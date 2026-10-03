@@ -313,3 +313,26 @@ Backend decisions (why a standalone `bnpl-service`, the late-fee model, claim-be
   Postgres: open via modal (confirm disabled until checkbox), draw, failed repay (empty wallet →
   409 copy + FAILED row in history). **Not yet verified** through minikube/Ingress
   (`shell.ewallet-lab.local`) — no Docker daemon in the environment this was built in.
+
+## 11. Điểm thưởng (issue #19) — `LoyaltyRewards.tsx`, calls loyalty-service directly
+
+A mock, in-house loyalty program — **no real partner, brand or voucher catalog**; the only reward is
+cashback into the user's own main wallet. Rules, sources and the race strategy are in backend
+`DESIGN.md`'s "Điểm thưởng (issue #19)" section.
+
+- **Entry point / no misleading UI**: `Home.tsx`'s old `suggested` teaser ("Ưu đãi & hoàn tiền —
+  Voucher đối tác, tích điểm") claimed "tích điểm" while only opening coming-soon. It is now split:
+  a real **"Điểm thưởng"** teaser (`key: 'loyalty'`, optional `onLoyalty` prop → shell flow
+  `{ name: 'loyalty' }` → `mfe_wallet/LoyaltyRewards`), and the remaining "Ưu đãi & hoàn tiền —
+  Voucher đối tác" teaser, which still goes to coming-soon.
+- **Screen**: points + cashback value, tier chip, rolling-12-month bill spend with progress to the
+  next tier, redeem form (min points, live "Nhận về" preview), earn rules + full tier table, point
+  history (earned per bill with the tier used; redemptions incl. FAILED/refunded), and a plain
+  footnote that it's a simulation with no partners. Shows a warning when loyalty-service couldn't
+  sync with wallet-service (`synced=false`).
+- `LOYALTY_REDEMPTION` added to api-client `TransactionType` + `TransactionRow` ("Hoàn tiền từ điểm
+  thưởng", sign +1); `describeApiError` gets a `'loyalty-redeem'` context.
+- **Build arg**: `mfe-wallet/Dockerfile` now also takes `VITE_LOYALTY_SERVICE_URL`; the shell must be
+  rebuilt for the new flow.
+- **Verified**: `tsc` + build for mfe-wallet, shell builds. Headless Chromium against the harness and
+  real local loyalty-service, wallet-service and Postgres. Not yet verified through minikube/Ingress.

@@ -91,6 +91,10 @@ bnplService:
   # without waiting a month (set, test, then revert to 0 — same pattern as the TTLs above).
   clockOffsetDays: 0
 
+loyaltyService:
+  port: 8099
+  replicas: 1
+
 frontend:
   port: 80
   replicas: 1
