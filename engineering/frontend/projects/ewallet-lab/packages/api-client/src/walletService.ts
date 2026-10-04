@@ -5,7 +5,14 @@ export type WalletResponse = {
   balance: number;
 };
 
-export type TransactionType = 'TOPUP' | 'WITHDRAW' | 'TRANSFER_OUT' | 'TRANSFER_IN' | 'BILL_PAYMENT';
+export type TransactionType =
+  | 'TOPUP'
+  | 'WITHDRAW'
+  | 'TRANSFER_OUT'
+  | 'TRANSFER_IN'
+  | 'BILL_PAYMENT'
+  | 'BNPL_REPAYMENT'
+  | 'LOYALTY_REDEMPTION';
 
 export type Transaction = {
   id: string;

@@ -182,5 +182,39 @@ services:
       USER_SERVICE_URL: http://user-service:8090
       WALLET_SERVICE_URL: http://wallet-service:8091
 
+  bnpl-service:
+    build: ./bnpl-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      wallet-service:
+        condition: service_started
+    ports:
+      - "8098:8098"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ewallet_bnpl
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      WALLET_SERVICE_URL: http://wallet-service:8091
+
+  loyalty-service:
+    build: ./loyalty-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      wallet-service:
+        condition: service_started
+    ports:
+      - "8099:8099"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ewallet_loyalty
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      WALLET_SERVICE_URL: http://wallet-service:8091
+
 volumes:
   ewallet-lab-postgres:

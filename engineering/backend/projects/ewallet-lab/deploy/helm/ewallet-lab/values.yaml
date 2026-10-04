@@ -82,6 +82,19 @@ luckyMoneyService:
   # configurable so the expiry behavior itself can be verified in seconds during testing.
   ttlHours: 48
 
+bnplService:
+  port: 8098
+  replicas: 1
+  # Issue #18 — MOCK "Ví Trả Sau". Fixed limit for every user (MoMo's published max), no scoring.
+  creditLimit: 20000000
+  # TEST ONLY: shifts bnpl-service's "now" forward N days to exercise due dates / late-fee tiers
+  # without waiting a month (set, test, then revert to 0 — same pattern as the TTLs above).
+  clockOffsetDays: 0
+
+loyaltyService:
+  port: 8099
+  replicas: 1
+
 frontend:
   port: 80
   replicas: 1

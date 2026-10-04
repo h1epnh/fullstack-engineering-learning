@@ -11,6 +11,8 @@ const WalletHistory = lazy(() => import('mfe_wallet/History'));
 const WalletAllServices = lazy(() => import('mfe_wallet/AllServices'));
 const WalletNotifications = lazy(() => import('mfe_wallet/Notifications'));
 const WalletReceiveQr = lazy(() => import('mfe_wallet/ReceiveQr'));
+const WalletBnpl = lazy(() => import('mfe_wallet/BnplWallet'));
+const WalletLoyalty = lazy(() => import('mfe_wallet/LoyaltyRewards'));
 const TopupApp = lazy(() => import('mfe_topup/App'));
 const TransferApp = lazy(() => import('mfe_transfer/App'));
 const BillPaymentApp = lazy(() => import('mfe_bill_payment/App'));
@@ -59,6 +61,8 @@ type Flow =
   | { name: 'all-services' }
   | { name: 'notifications' }
   | { name: 'receive' }
+  | { name: 'bnpl' }
+  | { name: 'loyalty' }
   | { name: 'coming-soon'; feature: string };
 
 /**
@@ -174,6 +178,22 @@ export default function App() {
     );
   }
 
+  if (flow.name === 'loyalty') {
+    return (
+      <Suspense fallback={<ProgressBar label="Đang tải mfe-wallet…" />}>
+        <WalletLoyalty session={session} onBack={() => setFlow({ name: 'none' })} />
+      </Suspense>
+    );
+  }
+
+  if (flow.name === 'bnpl') {
+    return (
+      <Suspense fallback={<ProgressBar label="Đang tải mfe-wallet…" />}>
+        <WalletBnpl session={session} onBack={() => setFlow({ name: 'none' })} />
+      </Suspense>
+    );
+  }
+
   return (
     <div>
       {tab === 'home' && (
@@ -187,6 +207,8 @@ export default function App() {
             onMoreServices={() => setFlow({ name: 'all-services' })}
             onComingSoon={(feature) => setFlow({ name: 'coming-soon', feature })}
             onOpenNotifications={() => setFlow({ name: 'notifications' })}
+            onBnpl={() => setFlow({ name: 'bnpl' })}
+            onLoyalty={() => setFlow({ name: 'loyalty' })}
           />
         </Suspense>
       )}

@@ -1,0 +1,66 @@
+spring:
+  application:
+    name: ewallet-lab-loyalty-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5434}/${DB_NAME:ewallet_loyalty}
+    username: ${DB_USER:ewallet_loyalty}
+    password: ${DB_PASSWORD:ewallet_loyalty}
+  jpa:
+    # Off on purpose: with open-in-view, one persistence context spans the whole HTTP request, so a
+    # row read earlier in the request (e.g. the account lookup before a redemption) is handed back
+    # STALE by the later SELECT ... FOR UPDATE inside the mutation transaction — found under real
+    # Postgres contention as StaleObjectStateException (raw 500). Each @Transactional step must
+    # start from a fresh persistence context.
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+server:
+  port: 8099
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+ewallet-lab:
+  wallet-service:
+    base-url: ${WALLET_SERVICE_URL:http://localhost:8091}
+  # Issue #19 — "Điểm thưởng", a MOCK in-house loyalty program. Rates are inspired by public numbers
+  # of real programs (see backend DESIGN.md "Điểm thưởng" for sources + verification level), but the
+  # program, tier names and redemption are self-designed — no real partner or brand behind it.
+  loyalty:
+    # Base earn rate: 1 point per 10.000đ of eligible spend (inspired by a verified airline-program
+    # base rate). Eligible spend = BILL_PAYMENT only — see DESIGN.md for why P2P/top-up don't earn.
+    spend-per-point: ${LOYALTY_SPEND_PER_POINT:10000}
+    # Redemption: 1 point = 100đ cashback into the main wallet (=> 1% base cashback). Self-designed.
+    point-value-vnd: ${LOYALTY_POINT_VALUE_VND:100}
+    min-redeem-points: ${LOYALTY_MIN_REDEEM_POINTS:100}
+    # Tier = eligible spend over a rolling 12-month window. Higher tier earns more per 10.000đ.
+    # Names are generic on purpose (no third-party program's tier brand).
+    tier-window-months: 12
+    tiers:
+      - name: Thành viên
+        min-spend: 0
+        multiplier: 1.0
+      - name: Thân thiết
+        min-spend: 5000000
+        multiplier: 1.2
+      - name: Ưu tiên
+        min-spend: 20000000
+        multiplier: 1.5
+      - name: Đặc biệt
+        min-spend: 50000000
+        multiplier: 2.0
+    zone: Asia/Ho_Chi_Minh

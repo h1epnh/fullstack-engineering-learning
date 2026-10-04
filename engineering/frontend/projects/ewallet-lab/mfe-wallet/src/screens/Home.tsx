@@ -44,7 +44,10 @@ const MAIN_GRID: { key: string; icon: string; label: string; more?: boolean; rea
 
 const FEED_TEASERS: { key: string; icon: string; title: string; subtitle: string }[] = [
   { key: 'movie-tickets', icon: 'local_movies', title: 'Vé xem phim & sự kiện', subtitle: 'Xem danh sách rạp, lịch chiếu' },
-  { key: 'suggested', icon: 'redeem', title: 'Ưu đãi & hoàn tiền', subtitle: 'Voucher đối tác, tích điểm' },
+  // Issue #19: "tích điểm" split out into its own, real entry; the rest stays a coming-soon teaser.
+  { key: 'loyalty', icon: 'loyalty', title: 'Điểm thưởng', subtitle: 'Tích điểm khi thanh toán hoá đơn, đổi hoàn tiền' },
+  { key: 'suggested', icon: 'redeem', title: 'Ưu đãi & hoàn tiền', subtitle: 'Voucher đối tác' },
+  // Untouched by issue #18 on purpose: this teaser also advertises "vay nhanh", which is out of scope.
   { key: 'finance-insurance', icon: 'credit_card', title: 'Ví Trả Sau, vay nhanh', subtitle: 'Sản phẩm tài chính đối tác' },
 ];
 
@@ -71,13 +74,34 @@ function todaysTip(): string {
   return 'Cuối ngày rồi, xem lại chi tiêu hôm nay trước khi nghỉ ngơi nhé.';
 }
 
-function MiniWallet({ label, value, comingSoon }: { label: string; value: string; comingSoon?: boolean }) {
-  return (
-    <div style={{ flex: 1, textAlign: 'center', opacity: comingSoon ? 0.5 : 1 }}>
+function MiniWallet({
+  label,
+  value,
+  comingSoon,
+  onClick,
+}: {
+  label: string;
+  value: string;
+  comingSoon?: boolean;
+  onClick?: () => void;
+}) {
+  const content = (
+    <>
       <div style={{ fontSize: 11.5, color: 'var(--el-faint)', marginBottom: 3 }}>{label}</div>
       <div style={{ fontSize: 14.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
-    </div>
+    </>
   );
+  if (onClick) {
+    return (
+      <button
+        onClick={onClick}
+        style={{ flex: 1, textAlign: 'center', background: 'none', border: 0, padding: 0, color: 'inherit', cursor: 'pointer' }}
+      >
+        {content}
+      </button>
+    );
+  }
+  return <div style={{ flex: 1, textAlign: 'center', opacity: comingSoon ? 0.5 : 1 }}>{content}</div>;
 }
 
 function FeedTeaser({
@@ -142,6 +166,8 @@ export default function Home({
   onMoreServices,
   onComingSoon,
   onOpenNotifications,
+  onBnpl,
+  onLoyalty,
 }: {
   session: Session;
   onTopup: () => void;
@@ -151,6 +177,11 @@ export default function Home({
   onMoreServices: () => void;
   onComingSoon: (feature: string) => void;
   onOpenNotifications: () => void;
+  /** Issue #18 — optional so an older shell (deployed separately) still works: falls back to the
+   * generic coming-soon screen. */
+  onBnpl?: () => void;
+  /** Issue #19 — optional for the same reason as onBnpl. */
+  onLoyalty?: () => void;
 }) {
   const [balance, setBalance] = useState<number | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -224,7 +255,11 @@ export default function Home({
         <div style={{ display: 'flex' }}>
           <MiniWallet label="Ví chính" value={loading ? '···' : formatVnd(balance ?? 0)} />
           <div style={{ width: 1, background: 'var(--el-line)' }} />
-          <MiniWallet label="Ví Trả Sau" value="Chưa mở" comingSoon />
+          <MiniWallet
+            label="Ví Trả Sau"
+            value="Mô phỏng ›"
+            onClick={onBnpl ?? (() => onComingSoon('bnpl'))}
+          />
           <div style={{ width: 1, background: 'var(--el-line)' }} />
           <MiniWallet label="Túi Thần Tài" value="Chưa mở" comingSoon />
         </div>
@@ -311,7 +346,7 @@ export default function Home({
           icon={t.icon}
           title={t.title}
           subtitle={t.subtitle}
-          onClick={() => onComingSoon(t.key)}
+          onClick={() => (t.key === 'loyalty' && onLoyalty ? onLoyalty() : onComingSoon(t.key))}
         />
       ))}
     </Screen>

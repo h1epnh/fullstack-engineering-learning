@@ -271,3 +271,68 @@ payment-request-service, why lazy-expiry, sourced amount/48h limits) are in back
   `VITE_LUCKY_MONEY_SERVICE_URL` build-arg) and redeployed, running bundle grepped for new strings
   ("Giật lì xì", "Nhận lì xì", "escrow"), and the full send→escrow→claim and send→expire→refund
   HTTP flows exercised end-to-end through real Ingress (`http://api.ewallet-lab.local`).
+
+## 10. Ví Trả Sau — mock BNPL (issue #18) — `BnplWallet.tsx`, calls bnpl-service directly
+
+> **Disclaimer (mandatory, also on-screen):** this is a **learning simulation**. It is **NOT** a real
+> lending / consumer-credit product, and **NO real bank or finance company** is behind this lab's
+> "Ví Trả Sau". Limit/interest/fee numbers come from MoMo's public page for study only; the lab is
+> not connected to any credit institution.
+
+Backend decisions (why a standalone `bnpl-service`, the late-fee model, claim-before-debit, the
+`BNPL_REPAYMENT` monthly-limit exemption, sources) are in backend `DESIGN.md`'s "Ví Trả Sau" section
+— this section is the UI side only.
+
+- **Entry point**: `Home.tsx`'s multi-wallet strip "Ví Trả Sau" `MiniWallet` is now clickable (shows
+  "Mô phỏng ›") → shell flow `{ name: 'bnpl' }` → `mfe_wallet/BnplWallet` (new expose, no new
+  remote). `onBnpl` is an *optional* Home prop so an older shell deployed separately falls back to
+  the generic coming-soon screen instead of crashing. The `FEED_TEASERS` "Ví Trả Sau, vay nhanh"
+  teaser is **deliberately untouched** (it also advertises "vay nhanh", out of scope).
+- **Disclaimer is not small print** (issue #18 Constraints):
+  - a **blocking modal** (`role="dialog"`, `aria-modal`) before the first open, listing the 3 required
+    points (`DISCLAIMER_POINTS`); "Xác nhận" stays disabled until the user ticks "Tôi đã đọc và hiểu…".
+    The backend independently refuses `/open` without `acceptedDisclaimer: true`.
+  - a **persistent amber banner** (`DISCLAIMER_BANNER`, bold, 2px border — not grey text) at the top
+    of every state of the screen: not opened, opened, draw form, repay form.
+- **States**: not opened (terms summary: 20tr fixed limit, 0% if on time, 33.000đ/month with
+  activity, due day 1 of next month, 4 late-fee tiers) → opened (available/total limit, total due,
+  nearest due date with "QUÁ HẠN" flag, "Mua sắm trả sau (mô phỏng)" form, "Trả nợ từ ví chính"
+  form with a "fill full amount" shortcut, statement cards per month with late-fee rate/days late,
+  recent draws, repayment history incl. FAILED attempts).
+- Client-side checks (integer amounts, ≥1.000đ draw, ≤ available limit, ≤ total due) are UX only;
+  the server validates independently. Errors go through `describeApiError`'s new `'bnpl-open' |
+  'bnpl-draw' | 'bnpl-repay'` contexts.
+- **`BNPL_REPAYMENT`** added to `TransactionType` in api-client and `TransactionRow`'s `TYPE_META`
+  (label "Trả nợ Ví Trả Sau", sign −1) — without it History would fall back to a "+" sign.
+- **Build arg**: `mfe-wallet/Dockerfile` now takes `VITE_BNPL_SERVICE_URL` (CLAUDE.md's most
+  recurring bug). Build with
+  `--build-arg VITE_WALLET_SERVICE_URL=http://api.ewallet-lab.local --build-arg VITE_BNPL_SERVICE_URL=http://api.ewallet-lab.local`.
+  The shell must be rebuilt too (new flow + `remotes.d.ts`).
+- **Verified**: `tsc --noEmit` + `npm run build` clean for mfe-wallet; shell builds. Driven in
+  headless Chromium against the standalone harness + real local `bnpl-service`/`wallet-service`/
+  Postgres: open via modal (confirm disabled until checkbox), draw, failed repay (empty wallet →
+  409 copy + FAILED row in history). **Not yet verified** through minikube/Ingress
+  (`shell.ewallet-lab.local`) — no Docker daemon in the environment this was built in.
+
+## 11. Điểm thưởng (issue #19) — `LoyaltyRewards.tsx`, calls loyalty-service directly
+
+A mock, in-house loyalty program — **no real partner, brand or voucher catalog**; the only reward is
+cashback into the user's own main wallet. Rules, sources and the race strategy are in backend
+`DESIGN.md`'s "Điểm thưởng (issue #19)" section.
+
+- **Entry point / no misleading UI**: `Home.tsx`'s old `suggested` teaser ("Ưu đãi & hoàn tiền —
+  Voucher đối tác, tích điểm") claimed "tích điểm" while only opening coming-soon. It is now split:
+  a real **"Điểm thưởng"** teaser (`key: 'loyalty'`, optional `onLoyalty` prop → shell flow
+  `{ name: 'loyalty' }` → `mfe_wallet/LoyaltyRewards`), and the remaining "Ưu đãi & hoàn tiền —
+  Voucher đối tác" teaser, which still goes to coming-soon.
+- **Screen**: points + cashback value, tier chip, rolling-12-month bill spend with progress to the
+  next tier, redeem form (min points, live "Nhận về" preview), earn rules + full tier table, point
+  history (earned per bill with the tier used; redemptions incl. FAILED/refunded), and a plain
+  footnote that it's a simulation with no partners. Shows a warning when loyalty-service couldn't
+  sync with wallet-service (`synced=false`).
+- `LOYALTY_REDEMPTION` added to api-client `TransactionType` + `TransactionRow` ("Hoàn tiền từ điểm
+  thưởng", sign +1); `describeApiError` gets a `'loyalty-redeem'` context.
+- **Build arg**: `mfe-wallet/Dockerfile` now also takes `VITE_LOYALTY_SERVICE_URL`; the shell must be
+  rebuilt for the new flow.
+- **Verified**: `tsc` + build for mfe-wallet, shell builds. Headless Chromium against the harness and
+  real local loyalty-service, wallet-service and Postgres. Not yet verified through minikube/Ingress.

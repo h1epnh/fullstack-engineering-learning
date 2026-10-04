@@ -16,7 +16,11 @@ export function describeApiError(
     | 'bill-payment'
     | 'payment-link'
     | 'payment-reminder'
-    | 'lucky-money',
+    | 'lucky-money'
+    | 'bnpl-open'
+    | 'bnpl-draw'
+    | 'bnpl-repay'
+    | 'loyalty-redeem',
 ): string {
   if (status === undefined) {
     return 'Không kết nối được tới máy chủ. Kiểm tra lại các service đã chạy chưa rồi thử lại.';
@@ -34,6 +38,31 @@ export function describeApiError(
     if (context === 'lucky-money') {
       return 'Số dư không đủ để gửi lì xì, hoặc lì xì này đã được nhận/đã hết hạn rồi.';
     }
+  }
+  if (status === 409) {
+    if (context === 'bnpl-open') return 'Ví Trả Sau (mô phỏng) đã được mở cho tài khoản này rồi.';
+    if (context === 'bnpl-draw') return 'Số tiền vượt hạn mức khả dụng của Ví Trả Sau.';
+    if (context === 'bnpl-repay') {
+      return 'Ví chính không đủ số dư để trả nợ (hoặc Ví Trả Sau không còn dư nợ). Nạp thêm tiền vào ví chính rồi thử lại.';
+    }
+  }
+  if (status === 409 && context === 'loyalty-redeem') {
+    return 'Không đủ điểm để đổi số điểm này.';
+  }
+  if (status === 400 && context === 'loyalty-redeem') {
+    return 'Số điểm đổi chưa đạt mức tối thiểu.';
+  }
+  if (status === 502 && context === 'loyalty-redeem') {
+    return 'Chưa cộng được tiền vào ví chính — điểm đã được hoàn lại, thử lại sau.';
+  }
+  if (status === 400 && context === 'bnpl-open') {
+    return 'Cần đọc và xác nhận điều khoản mô phỏng trước khi mở Ví Trả Sau.';
+  }
+  if (status === 400 && context === 'bnpl-draw') {
+    return 'Số tiền phải là số nguyên, tối thiểu 1.000đ.';
+  }
+  if (status === 400 && context === 'bnpl-repay') {
+    return 'Số tiền trả phải là số nguyên dương và không vượt quá tổng dư nợ hiện tại.';
   }
   if (status === 400 && context === 'withdraw') {
     return 'Chưa liên kết tài khoản ngân hàng.';

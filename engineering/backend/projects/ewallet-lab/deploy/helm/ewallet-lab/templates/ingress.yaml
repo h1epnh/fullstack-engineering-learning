@@ -108,3 +108,11 @@ spec:
             pathType: Prefix
             backend:
               service: { name: lucky-money-service, port: { number: 8097 } }
+          - path: /bnpl
+            pathType: Prefix
+            backend:
+              service: { name: bnpl-service, port: { number: 8098 } }
+          - path: /loyalty
+            pathType: Prefix
+            backend:
+              service: { name: loyalty-service, port: { number: 8099 } }
