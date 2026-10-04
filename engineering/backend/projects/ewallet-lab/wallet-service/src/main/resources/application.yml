@@ -45,3 +45,18 @@ ewallet-lab:
   # equals this monthly cap for TRANSFER_OUT, so 2 max-size transfers in the same month is
   # enough to exercise the "exceeded" path with real numbers).
   monthly-outbound-limit: 100000000
+  # Issue #13 — "Túi Thần Tài" (savings pocket). Rate sourced from ZaloPay's "Tài Khoản Tích Lũy"
+  # (fetched directly from zalopay.vn, 4%/năm) — NOT MoMo's ~6%/năm figure, which agent-designer
+  # could only find via third-party search snippets, never verified directly against momo.vn. See
+  # backend DESIGN.md's "Túi Thần Tài" section. accrual-period-seconds defaults to a real day
+  # (86400s) — override-able for verification only (same "shrink a real duration, then revert"
+  # pattern used for lucky-money's TTL in issue #10), NOT a change to the annual-rate math itself.
+  savings-pocket:
+    annual-rate: 0.04
+    min-open-amount: 10000
+    accrual-period-seconds: 86400
+  # Issue #12 — "Ví Gia Đình". Read-only lookup wallet-service makes before every
+  # TRANSFER_OUT/BILL_PAYMENT/WITHDRAW debit to check for a parent-set monthly limit. See
+  # FamilyWalletServiceClient's javadoc for the fail-open behavior if this is unreachable.
+  family-wallet-service:
+    base-url: ${FAMILY_WALLET_SERVICE_URL:http://localhost:8098}

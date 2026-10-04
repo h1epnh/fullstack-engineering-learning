@@ -21,6 +21,21 @@ export type PaymentRequest = {
   expiresAt: string | null;
   paidAt: string | null;
   paidByUserId: string | null;
+  /** Issue #11 — non-null only for a split-bill share (kind is still `LINK`, see backend
+   * PaymentRequest.groupId's javadoc for why no new enum value was added). */
+  groupId: string | null;
+  groupTotal: number | null;
+  groupLabel: string | null;
+};
+
+/** Issue #11 — "Danh sách đã thu" for one split-bill group. */
+export type SplitGroup = {
+  groupId: string;
+  groupLabel: string;
+  groupTotal: number;
+  totalCollected: number;
+  totalRemaining: number;
+  shares: PaymentRequest[];
 };
 
 export const paymentRequestService = {
@@ -72,4 +87,49 @@ export const paymentRequestService = {
 
   payReminder: (id: string, payerUserId: string) =>
     http.post<PaymentRequest>(`${API_BASE.paymentRequest}/payment-requests/reminders/${id}/pay`, { payerUserId }),
+
+  // ---- Issue #11: split-bill ----
+
+  /** Even split: pass `peopleCount` (2–20, self-chosen limit — no real MoMo number to bind to,
+   * see backend DESIGN.md). Custom split: pass `amounts` instead (2–20 entries) — send exactly one
+   * of the two, never both/neither (validated server-side, see CreateSplitRequestDto's javadoc). */
+  createSplitEven: (
+    creatorUserId: string,
+    creatorPhone: string,
+    creatorName: string,
+    label: string,
+    totalAmount: number,
+    peopleCount: number,
+    message?: string,
+  ) =>
+    http.post<SplitGroup>(`${API_BASE.paymentRequest}/payment-requests/splits`, {
+      creatorUserId,
+      creatorPhone,
+      creatorName,
+      label,
+      totalAmount,
+      peopleCount,
+      message,
+    }),
+
+  createSplitCustom: (
+    creatorUserId: string,
+    creatorPhone: string,
+    creatorName: string,
+    label: string,
+    amounts: number[],
+    message?: string,
+  ) =>
+    http.post<SplitGroup>(`${API_BASE.paymentRequest}/payment-requests/splits`, {
+      creatorUserId,
+      creatorPhone,
+      creatorName,
+      label,
+      amounts,
+      message,
+    }),
+
+  /** "Danh sách đã thu" — every share's current status + collected/remaining totals. */
+  getSplitGroup: (groupId: string) =>
+    http.get<SplitGroup>(`${API_BASE.paymentRequest}/payment-requests/splits/${groupId}`),
 };

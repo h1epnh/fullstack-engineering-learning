@@ -4,10 +4,13 @@ import { createRoot } from 'react-dom/client';
 import AllServices from './screens/AllServices';
 import BnplWallet from './screens/BnplWallet';
 import LoyaltyRewards from './screens/LoyaltyRewards';
+import FamilyWallet from './screens/FamilyWallet';
 import History from './screens/History';
 import Home from './screens/Home';
 import Notifications from './screens/Notifications';
 import ReceiveQr from './screens/ReceiveQr';
+import SavingsPocket from './screens/SavingsPocket';
+import SpendingReport from './screens/SpendingReport';
 
 const mockSession: Session = {
   id: crypto.randomUUID(),
@@ -16,7 +19,18 @@ const mockSession: Session = {
 };
 
 function Harness() {
-  const [tab, setTab] = useState<'home' | 'history' | 'all-services' | 'notifications' | 'receive' | 'bnpl' | 'loyalty'>('home');
+  const [tab, setTab] = useState<
+    | 'home'
+    | 'history'
+    | 'all-services'
+    | 'notifications'
+    | 'receive'
+    | 'bnpl'
+    | 'loyalty'
+    | 'savings-pocket'
+    | 'family-wallet'
+    | 'spending-report'
+  >('home');
   return (
     <div>
       <div style={{ display: 'flex', gap: 8, padding: 12, background: '#fffbe6' }}>
@@ -27,6 +41,9 @@ function Harness() {
         <button onClick={() => setTab('receive')}>ReceiveQr</button>
         <button onClick={() => setTab('bnpl')}>BnplWallet</button>
         <button onClick={() => setTab('loyalty')}>LoyaltyRewards</button>
+        <button onClick={() => setTab('savings-pocket')}>SavingsPocket</button>
+        <button onClick={() => setTab('family-wallet')}>FamilyWallet</button>
+        <button onClick={() => setTab('spending-report')}>SpendingReport</button>
         <span style={{ fontSize: 12 }}>standalone dev harness — no shell, mock session</span>
       </div>
       {tab === 'home' && (
@@ -41,6 +58,9 @@ function Harness() {
           onOpenNotifications={() => setTab('notifications')}
           onBnpl={() => setTab('bnpl')}
           onLoyalty={() => setTab('loyalty')}
+          onSavingsPocket={() => setTab('savings-pocket')}
+          onFamilyWallet={() => setTab('family-wallet')}
+          onSpendingReport={() => setTab('spending-report')}
         />
       )}
       {tab === 'history' && <History session={mockSession} />}
@@ -49,6 +69,9 @@ function Harness() {
       {tab === 'receive' && <ReceiveQr session={mockSession} onBack={() => setTab('home')} />}
       {tab === 'bnpl' && <BnplWallet session={mockSession} onBack={() => setTab('home')} />}
       {tab === 'loyalty' && <LoyaltyRewards session={mockSession} onBack={() => setTab('home')} />}
+      {tab === 'savings-pocket' && <SavingsPocket session={mockSession} onBack={() => setTab('home')} />}
+      {tab === 'family-wallet' && <FamilyWallet session={mockSession} onBack={() => setTab('home')} />}
+      {tab === 'spending-report' && <SpendingReport session={mockSession} onBack={() => setTab('home')} />}
     </div>
   );
 }

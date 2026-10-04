@@ -52,6 +52,30 @@ public class PaymentRequest {
     @Column(name = "target_phone")
     private String targetPhone;
 
+    /**
+     * Issue #11 (split-bill) — nullable, only set for a share created via {@link #newSplitShare}.
+     * Deliberately reuses {@link PaymentRequestKind#LINK} rather than adding a new enum value
+     * (see backend DESIGN.md's "Chia tiền" section for why: avoids the Postgres CHECK-constraint
+     * ALTER dance documented in CLAUDE.md for adding enum values to an existing table, and each
+     * share genuinely IS a LINK — payable by anyone with a valid account, no target resolution).
+     * All shares of one split have the same {@code groupId}; {@code id} (the LINK "token") stays
+     * unique per share so each is independently payable through the existing
+     * {@code /links/{token}/pay} endpoint with no new pay code path.
+     */
+    @Column(name = "group_id")
+    private UUID groupId;
+
+    /** Sum of all shares' amounts at creation time — denormalized so the "Danh sách đã thu" summary
+     * doesn't need to re-sum every read, and so it stays correct even if a share's row changes. */
+    @Column(name = "group_total", precision = 19, scale = 2)
+    private BigDecimal groupTotal;
+
+    /** User-supplied label for the whole split (e.g. "Tiền ăn tối") — separate from {@code message},
+     * which stays per-share-identical free text passed straight through like LINK/REMINDER already
+     * do. Null for non-split LINK/REMINDER. */
+    @Column(name = "group_label")
+    private String groupLabel;
+
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal amount;
 
@@ -123,6 +147,26 @@ public class PaymentRequest {
         return r;
     }
 
+    /** Issue #11 — one share of a split-bill group. Reuses {@code LINK} semantics wholesale
+     * (payable by anyone, same {@code expiresAt} TTL, same {@code checkExpiry}/{@code pay} code
+     * paths) — see this class's {@code groupId} javadoc for why. */
+    public static PaymentRequest newSplitShare(UUID groupId, UUID creatorUserId, String creatorPhone,
+                                                String creatorName, BigDecimal shareAmount, BigDecimal groupTotal,
+                                                String groupLabel, String message, Instant expiresAt) {
+        PaymentRequest r = new PaymentRequest();
+        r.kind = PaymentRequestKind.LINK;
+        r.groupId = groupId;
+        r.creatorUserId = creatorUserId;
+        r.creatorPhone = creatorPhone;
+        r.creatorName = creatorName;
+        r.amount = shareAmount;
+        r.groupTotal = groupTotal;
+        r.groupLabel = groupLabel;
+        r.message = message;
+        r.expiresAt = expiresAt;
+        return r;
+    }
+
     public void markExpired() {
         this.status = PaymentRequestStatus.EXPIRED;
     }
@@ -184,6 +228,18 @@ public class PaymentRequest {
 
     public String getTargetPhone() {
         return targetPhone;
+    }
+
+    public UUID getGroupId() {
+        return groupId;
+    }
+
+    public BigDecimal getGroupTotal() {
+        return groupTotal;
+    }
+
+    public String getGroupLabel() {
+        return groupLabel;
     }
 
     public BigDecimal getAmount() {

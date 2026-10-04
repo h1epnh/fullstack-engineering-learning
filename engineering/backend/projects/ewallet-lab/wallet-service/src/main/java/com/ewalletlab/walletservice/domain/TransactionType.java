@@ -10,11 +10,16 @@ public enum TransactionType {
      * transfer whose async IPN reports failure after the wallet was already debited synchronously.
      * See topup-service's BankTransferOutIpnController. */
     REFUND,
-    /** Issue #18 — repaying the MOCK "Ví Trả Sau" credit line (bnpl-service) from the main wallet.
-     * Deliberately NOT in WalletMutationExecutor's MONTHLY_LIMIT_TYPES: Điều 26 Thông tư
-     * 40/2024/TT-NHNN excludes "trả nợ vay đến hạn/quá hạn tại TCTD" from the 100tr/tháng cap.
-     * Existing Postgres DBs need the transactions_type_check constraint widened by hand — see
-     * backend DESIGN.md "Ví Trả Sau". */
+    /**
+     * Issue #18 — "Ví Trả Sau" (BNPL) repayment, real money leaving the main wallet to pay down a
+     * mock credit-line balance held by {@code bnpl-service}. Deliberately NOT {@code WITHDRAW}
+     * (means "cash out to a bank account") or {@code TRANSFER_OUT} (means "P2P to another user") —
+     * reusing either would mislabel this in the user-facing ledger. See backend DESIGN.md's "Ví Trả
+     * Sau" section: counted in {@link StepUpPolicy}'s scope (issue #15 — no exemption found for QĐ
+     * 2345/QĐ-NHNN), but deliberately EXCLUDED from {@code WalletMutationExecutor}'s
+     * {@code MONTHLY_LIMIT_TYPES} (issue #7 — Điều 26 Thông tư 40/2024/TT-NHNN's own exception list
+     * for "trả nợ vay đến hạn/quá hạn tại TCTD").
+     */
     BNPL_REPAYMENT,
     /** Issue #19 — cashback credited to the main wallet when "Điểm thưởng" points are redeemed
      * (loyalty-service). Incoming money: not spending, not in MONTHLY_LIMIT_TYPES, and not a type

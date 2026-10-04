@@ -95,6 +95,18 @@ loyaltyService:
   port: 8099
   replicas: 1
 
+# NOTE: originally also defaulted to port 8098 (a stashed branch that diverged from bnpl-service
+# before either was committed/merged) — reassigned to 8100 to avoid colliding with bnplService.
+familyWalletService:
+  port: 8100
+  replicas: 1
+
+# NOTE: same stashed-branch collision as familyWalletService above (originally 8099, same as
+# loyaltyService) — reassigned to 8101.
+fundService:
+  port: 8101
+  replicas: 1
+
 frontend:
   port: 80
   replicas: 1

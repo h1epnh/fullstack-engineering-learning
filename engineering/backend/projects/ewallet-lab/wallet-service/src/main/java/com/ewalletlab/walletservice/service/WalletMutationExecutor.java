@@ -45,12 +45,17 @@ class WalletMutationExecutor {
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
     private final BigDecimal monthlyOutboundLimit;
+    private final StepUpPolicy stepUpPolicy;
+    private final FamilyWalletServiceClient familyWalletServiceClient;
 
     WalletMutationExecutor(WalletRepository walletRepository, TransactionRepository transactionRepository,
-                            @Value("${ewallet-lab.monthly-outbound-limit:100000000}") BigDecimal monthlyOutboundLimit) {
+                            @Value("${ewallet-lab.monthly-outbound-limit:100000000}") BigDecimal monthlyOutboundLimit,
+                            StepUpPolicy stepUpPolicy, FamilyWalletServiceClient familyWalletServiceClient) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.monthlyOutboundLimit = monthlyOutboundLimit;
+        this.stepUpPolicy = stepUpPolicy;
+        this.familyWalletServiceClient = familyWalletServiceClient;
     }
 
     @Transactional
@@ -75,15 +80,46 @@ class WalletMutationExecutor {
      * before calling this method) would reopen exactly that race.
      */
     @Transactional
-    Wallet debitOnce(UUID userId, BigDecimal amount, TransactionType type, String reference, String note) {
+    Wallet debitOnce(UUID userId, BigDecimal amount, TransactionType type, String reference, String note,
+                      boolean stepUpConfirmed) {
         Wallet wallet = getOrCreateWalletInternal(userId);
         if (MONTHLY_LIMIT_TYPES.contains(type)) {
             BigDecimal spentThisMonth = transactionRepository.sumAmountByWalletIdAndTypeInSince(
                 wallet.getId(), MONTHLY_LIMIT_TYPES, currentMonthStart());
-            if (spentThisMonth.add(amount).compareTo(monthlyOutboundLimit) > 0) {
+            BigDecimal projectedSpend = spentThisMonth.add(amount);
+            if (projectedSpend.compareTo(monthlyOutboundLimit) > 0) {
                 throw new IllegalStateException(
                     "Đã vượt hạn mức giao dịch chuyển tiền/thanh toán %s/tháng theo Điều 26 Thông tư 40/2024/TT-NHNN (sửa bởi Thông tư 41/2025/TT-NHNN)"
                         .formatted(formatVnd(monthlyOutboundLimit)));
+            }
+            // Issue #12 — "Ví Gia Đình" (VNPay-inspired, NOT MoMo). Reuses the exact same
+            // spentThisMonth/projectedSpend already computed above for the legal limit — a
+            // parent-set limit is the identical measurement (outbound spend this calendar month),
+            // just a second, independently-configured ceiling. Computed inside this same
+            // @Transactional method for the same race-safety reason as the legal-limit block: a
+            // losing optimistic-lock retry re-runs this whole method (including this sum) against
+            // the winner's now-committed transaction row. See FamilyWalletServiceClient's javadoc
+            // for why an unreachable family-wallet-service fails OPEN here (empty Optional) rather
+            // than blocking every debit in the system.
+            familyWalletServiceClient.findLimit(userId).ifPresent(familyLimit -> {
+                if (projectedSpend.compareTo(familyLimit.monthlyLimit()) > 0) {
+                    throw new IllegalStateException(
+                        "Đã vượt hạn mức chi tiêu/tháng do quản trị viên Ví Gia Đình đặt (%s), dù số dư ví vẫn đủ"
+                            .formatted(formatVnd(familyLimit.monthlyLimit())));
+                }
+            });
+        }
+        // Issue #15 — same "compute inside this same @Transactional method, not a separate
+        // pre-check" reasoning as the monthly-limit block above: if this weren't in here, 2
+        // concurrent debits both near the daily step-up threshold could both read the same
+        // "not required yet" total and both slip through unconfirmed. Computing it here means a
+        // losing optimistic-lock retry re-runs this whole method (including this sum) against the
+        // winner's now-committed transaction row.
+        if (StepUpPolicy.STEP_UP_DEBIT_TYPES.contains(type)) {
+            BigDecimal spentToday = transactionRepository.sumAmountByWalletIdAndTypeInSince(
+                wallet.getId(), StepUpPolicy.STEP_UP_TYPES, StepUpPolicy.currentDayStart());
+            if (stepUpPolicy.requiresStepUp(spentToday, amount) && !stepUpConfirmed) {
+                throw new StepUpRequiredException(stepUpPolicy.describeRequirement());
             }
         }
         wallet.debit(amount);

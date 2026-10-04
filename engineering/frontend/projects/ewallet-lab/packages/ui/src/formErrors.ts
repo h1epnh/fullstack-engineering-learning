@@ -20,7 +20,9 @@ export function describeApiError(
     | 'bnpl-open'
     | 'bnpl-draw'
     | 'bnpl-repay'
-    | 'loyalty-redeem',
+    | 'loyalty-redeem'
+    | 'savings-pocket'
+    | 'family-wallet',
 ): string {
   if (status === undefined) {
     return 'Không kết nối được tới máy chủ. Kiểm tra lại các service đã chạy chưa rồi thử lại.';
@@ -37,6 +39,12 @@ export function describeApiError(
     }
     if (context === 'lucky-money') {
       return 'Số dư không đủ để gửi lì xì, hoặc lì xì này đã được nhận/đã hết hạn rồi.';
+    }
+    if (context === 'savings-pocket') {
+      return 'Số dư không đủ, hoặc Túi Thần Tài đã được mở trước đó, hoặc số tiền mở lần đầu chưa đạt tối thiểu.';
+    }
+    if (context === 'family-wallet') {
+      return 'Thành viên này đã thuộc về một Ví Gia Đình khác (mỗi thành viên chỉ thuộc 1 gia đình).';
     }
   }
   if (status === 409) {
@@ -73,6 +81,9 @@ export function describeApiError(
   ) {
     return 'Không thể tự thanh toán/tự nhắc/tự gửi lì xì cho chính mình.';
   }
+  if (status === 400 && context === 'family-wallet') {
+    return 'Không thể đặt hạn mức cho chính mình.';
+  }
   if (status === 403 && (context === 'payment-link' || context === 'payment-reminder' || context === 'lucky-money')) {
     return 'Bạn không có quyền thực hiện thao tác này trên yêu cầu.';
   }
@@ -83,6 +94,12 @@ export function describeApiError(
     if (context === 'payment-reminder') return 'Không tìm thấy người dùng hoặc lời nhắc này.';
     if (context === 'lucky-money') {
       return 'Không tìm thấy người dùng Ewallet Lab với số điện thoại này (lab không hỗ trợ mời SMS cho SĐT chưa có tài khoản), hoặc không tìm thấy lì xì này.';
+    }
+    if (context === 'savings-pocket') {
+      return 'Chưa mở Túi Thần Tài.';
+    }
+    if (context === 'family-wallet') {
+      return 'Không tìm thấy tài khoản Ewallet Lab với số điện thoại này.';
     }
   }
   if (status === 400) {

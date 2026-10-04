@@ -19,6 +19,11 @@ public record BankTransferOutRequestDto(
     @NotNull UUID userId,
     @NotBlank String bankCode,
     @NotBlank @Pattern(regexp = "\\d{6,19}", message = "Số tài khoản phải là 6-19 chữ số") String accountNumber,
-    @NotNull @DecimalMin("0.01") @DecimalMax("50000000") BigDecimal amount
+    @NotNull @DecimalMin("0.01") @DecimalMax("50000000") BigDecimal amount,
+    /** Issue #15 — see wallet-service's AdjustBalanceRequest javadoc; null/missing = "chưa xác nhận". */
+    Boolean stepUpConfirmed
 ) {
+    public boolean isStepUpConfirmed() {
+        return Boolean.TRUE.equals(stepUpConfirmed);
+    }
 }

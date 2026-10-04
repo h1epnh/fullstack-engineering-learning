@@ -36,13 +36,23 @@ public class WithdrawalController {
         if (linkedBankAccountRepository.findByUserId(request.userId()).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chưa liên kết tài khoản ngân hàng");
         }
-        WalletServiceClient.DebitResult result =
-            walletServiceClient.debit(request.userId(), request.amount(), "Rút tiền qua topup-service");
+        WalletServiceClient.DebitResult result = walletServiceClient.debit(
+            request.userId(), request.amount(), "Rút tiền qua topup-service", request.isStepUpConfirmed());
         return new WithdrawalResponseDto(result.userId(), result.balance());
     }
 
     @ExceptionHandler(HttpClientErrorException.Conflict.class)
     public ResponseEntity<String> handleInsufficientBalance(HttpClientErrorException.Conflict e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body("Số dư không đủ để rút");
+    }
+
+    /** Issue #15 — wallet-service surfaces "step-up required" as 428, forward its own message
+     * (already the precise, sourced Vietnamese copy) instead of re-wording it here. */
+    @ExceptionHandler(HttpClientErrorException.class)
+    public ResponseEntity<String> handleWalletServiceError(HttpClientErrorException e) {
+        if (e.getStatusCode().value() == 428) {
+            return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED).body(e.getResponseBodyAsString());
+        }
+        throw e;
     }
 }

@@ -1,5 +1,6 @@
 package com.ewalletlab.paymentrequestservice.web;
 
+import com.ewalletlab.paymentrequestservice.domain.PaymentRequest;
 import com.ewalletlab.paymentrequestservice.service.PaymentRequestService;
 import com.ewalletlab.paymentrequestservice.web.dto.*;
 import jakarta.validation.Valid;
@@ -7,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
@@ -37,7 +39,7 @@ public class PaymentRequestController {
 
     @PostMapping("/links/{token}/pay")
     public PaymentRequestDto payLink(@PathVariable UUID token, @Valid @RequestBody PayRequestDto request) {
-        return PaymentRequestDto.from(service.payLink(token, request.payerUserId()));
+        return PaymentRequestDto.from(service.payLink(token, request.payerUserId(), request.isStepUpConfirmed()));
     }
 
     @PostMapping("/links/{token}/cancel")
@@ -64,7 +66,23 @@ public class PaymentRequestController {
 
     @PostMapping("/reminders/{id}/pay")
     public PaymentRequestDto payReminder(@PathVariable UUID id, @Valid @RequestBody PayRequestDto request) {
-        return PaymentRequestDto.from(service.payReminder(id, request.payerUserId()));
+        return PaymentRequestDto.from(service.payReminder(id, request.payerUserId(), request.isStepUpConfirmed()));
+    }
+
+    // ---- Issue #11: split-bill ----
+
+    /** Creates N independently-payable shares — each share's own {@code id} is a normal LINK
+     * token, paid via the existing {@code POST /links/{id}/pay} above, no separate pay endpoint. */
+    @PostMapping("/splits")
+    public SplitGroupDto createSplit(@Valid @RequestBody CreateSplitRequestDto request) {
+        List<PaymentRequest> shares = service.createSplit(request);
+        return SplitGroupDto.from(shares);
+    }
+
+    /** "Danh sách đã thu" — every share's current status + collected/remaining totals. */
+    @GetMapping("/splits/{groupId}")
+    public SplitGroupDto getSplitGroup(@PathVariable UUID groupId) {
+        return SplitGroupDto.from(service.getSplitGroup(groupId));
     }
 
     /**
@@ -78,5 +96,15 @@ public class PaymentRequestController {
     public ResponseEntity<String> handleConcurrentModification(ObjectOptimisticLockingFailureException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
             .body("Yêu cầu đang được xử lý ở giao dịch khác, vui lòng thử lại");
+    }
+
+    /** Issue #15 interaction (see PayRequestDto's javadoc) — without this, Spring's default
+     * `/error` JSON body omits the `message` field, so a 428 "step-up required" response would
+     * reach the frontend with no usable text for its confirmation modal. Also fixes the same
+     * (previously harmless, since the frontend only used canned copy per status code) gap for every
+     * other {@code ResponseStatusException} this controller/service already throws. */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<String> handleResponseStatusException(ResponseStatusException e) {
+        return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
     }
 }

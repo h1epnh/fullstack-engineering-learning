@@ -22,6 +22,22 @@ public record AdjustBalanceRequest(
     @NotNull @DecimalMin("0.01") @DecimalMax("200000000") BigDecimal amount,
     @NotNull TransactionType type,
     String reference,
-    String note
+    String note,
+    /**
+     * Issue #15 (mô phỏng QĐ 2345/QĐ-NHNN's step-up authentication) — only meaningful on
+     * {@code /debit} for a type in {@link com.ewalletlab.walletservice.service.WalletMutationExecutor}'s
+     * step-up scope. {@code null}/missing is treated as "not confirmed", same as {@code false} —
+     * callers only need to set this to {@code true} when retrying a request after the user has
+     * gone through the (simulated) step-up confirmation. Not used by {@code /credit}: the only
+     * credit-scoped type in step-up scope is TOPUP, whose actual credit happens asynchronously via
+     * Kafka (see wallet-service's TopupConfirmedListener) with no HTTP caller present to carry this
+     * flag — TOPUP's step-up gate instead runs synchronously in topup-service at initiation time,
+     * against wallet-service's read-only GET /wallets/{userId}/step-up-check. See backend
+     * DESIGN.md's "Step-up xác thực" section for the full reasoning.
+     */
+    Boolean stepUpConfirmed
 ) {
+    public boolean isStepUpConfirmed() {
+        return Boolean.TRUE.equals(stepUpConfirmed);
+    }
 }

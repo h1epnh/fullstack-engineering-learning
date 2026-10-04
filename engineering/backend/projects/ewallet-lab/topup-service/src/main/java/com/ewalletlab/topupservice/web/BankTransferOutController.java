@@ -32,7 +32,8 @@ public class BankTransferOutController {
     @PostMapping
     public ResponseEntity<BankTransferOutResponseDto> initiate(@Valid @RequestBody BankTransferOutRequestDto request) {
         BankTransferOutRequest result = bankTransferOutService.initiate(
-            request.userId(), request.bankCode(), request.accountNumber(), request.amount());
+            request.userId(), request.bankCode(), request.accountNumber(), request.amount(),
+            request.isStepUpConfirmed());
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(BankTransferOutResponseDto.from(result));
     }
 
@@ -46,5 +47,15 @@ public class BankTransferOutController {
     @ExceptionHandler(HttpClientErrorException.Conflict.class)
     public ResponseEntity<String> handleInsufficientBalance(HttpClientErrorException.Conflict e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body("Số dư không đủ để chuyển khoản");
+    }
+
+    /** Issue #15 — see WithdrawalController's identical handler for why this forwards
+     * wallet-service's own message instead of re-wording it. */
+    @ExceptionHandler(HttpClientErrorException.class)
+    public ResponseEntity<String> handleWalletServiceError(HttpClientErrorException e) {
+        if (e.getStatusCode().value() == 428) {
+            return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED).body(e.getResponseBodyAsString());
+        }
+        throw e;
     }
 }

@@ -1,0 +1,38 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '3.4.1'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.ewalletlab'
+version = '0.0.1-SNAPSHOT'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+// Issue #14 — "Quỹ nhóm" (fund-service). Own Postgres DB from day one, same pattern as
+// bill-payment-service/payment-request-service/lucky-money-service/family-wallet-service. Owns
+// Fund/FundMember/FundTransaction; never writes to wallet-service's own tables directly — it only
+// calls wallet-service's existing /credit and /debit (see DESIGN.md's architecture decision note
+// on issue #14, option (a)).
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	runtimeOnly 'org.postgresql:postgresql'
+
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}

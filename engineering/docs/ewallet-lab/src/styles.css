@@ -132,6 +132,18 @@ code{
   font-size:11.5px; letter-spacing:.08em; text-transform:uppercase;
   color:var(--faint); font-weight:600; margin:0 0 22px 40px;
 }
+
+/* ---------- Developer/Business space switch (issue #17) ---------- */
+.space-toggle{
+  display:flex; gap:4px; margin:4px 0 12px; padding:3px;
+  background:var(--surface-2); border:1px solid var(--line); border-radius:9px;
+}
+.space-toggle button{
+  flex:1; font:inherit; font-family:var(--font-display); font-size:12.5px; font-weight:700;
+  color:var(--muted); background:transparent; border:0; border-radius:7px; padding:7px 0; cursor:pointer;
+}
+.space-toggle button.active{ background:var(--accent); color:#eafff5; box-shadow:var(--shadow); }
+
 .env-pill{
   display:inline-flex; align-items:center; gap:6px;
   font-size:11.5px; font-weight:600; color:var(--amber);
@@ -160,8 +172,8 @@ code{
 .nav-dot{ width:6px;height:6px;border-radius:50%;background:var(--faint); flex:none; }
 .nav-link.active .nav-dot{ background:var(--accent); }
 .nav-badge{
-  margin-left:auto; font-size:10px; font-weight:700; letter-spacing:.04em;
-  padding:1px 6px; border-radius:99px; background:var(--surface-2); color:var(--faint);
+  margin-left:auto; font-size:10px; font-weight:700; letter-spacing:.04em; white-space:nowrap;
+  padding:1px 6px; border-radius:99px; background:var(--surface-2); color:var(--faint); flex:none;
 }
 .nav-link.soon .nav-badge{ background:var(--amber-soft); color:var(--amber); }
 
@@ -318,6 +330,18 @@ pre.code .c{ color:var(--faint); }
 .rm-status.done{ background:var(--accent-soft); color:var(--accent-ink); }
 .rm-body b{ display:block; font-family:var(--font-display); font-size:13.6px; margin-bottom:2px; }
 .rm-body p{ margin:0; font-size:12.8px; color:var(--muted); max-width:56ch; }
+
+/* ---------- Business space feature cards (issue #17) ---------- */
+.biz-feature{
+  background:var(--surface); border:1px solid var(--line); border-radius:12px;
+  padding:16px 18px; margin:0 0 14px; box-shadow:var(--shadow);
+}
+.biz-feature-head{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.biz-feature-head h3{ margin:0; font-size:15px; }
+.biz-feature-what{ font-size:13.3px; color:var(--muted); margin:0 0 10px; max-width:none; }
+.biz-feature-rules{ margin:0 0 10px; padding-left:1.1em; max-width:none; }
+.biz-feature-rules li{ font-size:13px; margin-bottom:6px; max-width:60ch; }
+.biz-feature-source{ font-size:11.5px; color:var(--faint); margin:0; font-style:italic; }
 
 .kv-grid{ display:grid; grid-template-columns:auto 1fr; gap:6px 16px; font-size:13px; margin:0 0 20px; }
 .kv-grid dt{ color:var(--faint); font-weight:600; margin:0; }

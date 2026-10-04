@@ -6,6 +6,7 @@ import com.ewalletlab.paymentrequestservice.domain.PaymentRequestStatus;
 import com.ewalletlab.paymentrequestservice.repository.PaymentRequestRepository;
 import com.ewalletlab.paymentrequestservice.web.dto.CreateLinkRequestDto;
 import com.ewalletlab.paymentrequestservice.web.dto.CreateReminderRequestDto;
+import com.ewalletlab.paymentrequestservice.web.dto.CreateSplitRequestDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,8 +16,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -74,10 +78,10 @@ public class PaymentRequestService {
      * an oversight. The only checks are: request still PENDING (not already paid/cancelled/expired)
      * and payer isn't the creator themselves.
      */
-    public PaymentRequest payLink(UUID token, UUID payerUserId) {
+    public PaymentRequest payLink(UUID token, UUID payerUserId, boolean stepUpConfirmed) {
         PaymentRequest r = findLinkOrThrow(token);
         r = checkExpiry(r);
-        return pay(r, payerUserId);
+        return pay(r, payerUserId, stepUpConfirmed);
     }
 
     public PaymentRequest cancelLink(UUID token, UUID creatorUserId) {
@@ -146,14 +150,78 @@ public class PaymentRequestService {
 
     /** Only the reminded user ({@code targetUserId}) may pay — unlike a LINK, a REMINDER already
      * names a specific payer at creation time. */
-    public PaymentRequest payReminder(UUID id, UUID payerUserId) {
+    public PaymentRequest payReminder(UUID id, UUID payerUserId, boolean stepUpConfirmed) {
         PaymentRequest r = repository.findById(id)
             .filter(pr -> pr.getKind() == PaymentRequestKind.REMINDER)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy lời nhắc trả tiền này"));
         if (!payerUserId.equals(r.getTargetUserId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chỉ người được nhắc mới có thể trả khoản này");
         }
-        return pay(r, payerUserId);
+        return pay(r, payerUserId, stepUpConfirmed);
+    }
+
+    // ---- Issue #11: split-bill ----
+
+    private static final int SPLIT_MIN_PEOPLE = 2;
+    private static final int SPLIT_MAX_PEOPLE = 20;
+
+    public List<PaymentRequest> createSplit(CreateSplitRequestDto request) {
+        List<BigDecimal> shareAmounts = resolveShareAmounts(request);
+        UUID groupId = UUID.randomUUID();
+        BigDecimal groupTotal = shareAmounts.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        Instant expiresAt = Instant.now().plus(Duration.ofHours(linkTtlHours));
+        List<PaymentRequest> shares = shareAmounts.stream()
+            .map(amount -> PaymentRequest.newSplitShare(groupId, request.creatorUserId(), request.creatorPhone(),
+                request.creatorName(), amount, groupTotal, request.label(), request.message(), expiresAt))
+            .toList();
+        return repository.saveAll(shares);
+    }
+
+    /**
+     * Exactly one of "even split" ({@code totalAmount} + {@code peopleCount}) or "custom"
+     * ({@code amounts}) must be supplied — see CreateSplitRequestDto's javadoc. Not expressible as
+     * bean validation because it's a cross-field rule, same reasoning bill-payment-service uses for
+     * validating {@code amount} server-side instead of trusting the client.
+     */
+    private List<BigDecimal> resolveShareAmounts(CreateSplitRequestDto request) {
+        boolean hasCustom = request.amounts() != null && !request.amounts().isEmpty();
+        boolean hasEvenSplit = request.totalAmount() != null && request.peopleCount() != null;
+        if (hasCustom == hasEvenSplit) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Phải gửi đúng 1 trong 2: (totalAmount + peopleCount) để chia đều, hoặc amounts để chia tuỳ chỉnh");
+        }
+        if (hasCustom) {
+            if (request.amounts().size() < SPLIT_MIN_PEOPLE || request.amounts().size() > SPLIT_MAX_PEOPLE) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Số người chia phải từ %d đến %d".formatted(SPLIT_MIN_PEOPLE, SPLIT_MAX_PEOPLE));
+            }
+            return request.amounts();
+        }
+        int n = request.peopleCount();
+        if (n < SPLIT_MIN_PEOPLE || n > SPLIT_MAX_PEOPLE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Số người chia phải từ %d đến %d".formatted(SPLIT_MIN_PEOPLE, SPLIT_MAX_PEOPLE));
+        }
+        // Round down to the nearest đồng per share, then fold the leftover remainder into the
+        // FIRST share so the shares always sum to EXACTLY totalAmount (no rounding drift) —
+        // an arbitrary but documented choice, not a bug if the first share looks a few đồng larger.
+        BigDecimal per = request.totalAmount().divide(BigDecimal.valueOf(n), 0, RoundingMode.DOWN);
+        BigDecimal remainder = request.totalAmount().subtract(per.multiply(BigDecimal.valueOf(n)));
+        List<BigDecimal> shares = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            shares.add((i == 0 ? per.add(remainder) : per).setScale(2));
+        }
+        return shares;
+    }
+
+    /** "Danh sách đã thu" — every share of a group plus its current status, lazily expiring any
+     * share whose TTL has passed (same {@link #checkExpiry} every LINK read already goes through). */
+    public List<PaymentRequest> getSplitGroup(UUID groupId) {
+        List<PaymentRequest> shares = repository.findByGroupIdOrderByCreatedAtAsc(groupId);
+        if (shares.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy nhóm chia tiền này");
+        }
+        return shares.stream().map(this::checkExpiry).toList();
     }
 
     private UserServiceClient.UserResponse lookupTarget(String phone) {
@@ -175,7 +243,7 @@ public class PaymentRequestService {
      * fails, the claim is released back to PENDING so the request isn't stuck "PAID" with no money
      * actually moved.
      */
-    private PaymentRequest pay(PaymentRequest r, UUID payerUserId) {
+    private PaymentRequest pay(PaymentRequest r, UUID payerUserId, boolean stepUpConfirmed) {
         if (r.getStatus() != PaymentRequestStatus.PENDING) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                 switch (r.getStatus()) {
@@ -195,13 +263,22 @@ public class PaymentRequestService {
 
         TransferServiceClient.TransferResult result;
         try {
-            result = transferServiceClient.transfer(payerUserId, claimed.getCreatorPhone(), claimed.getAmount());
+            result = transferServiceClient.transfer(payerUserId, claimed.getCreatorPhone(), claimed.getAmount(), stepUpConfirmed);
         } catch (HttpClientErrorException.Conflict e) {
             mutationExecutor.releaseClaim(id);
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Số dư không đủ để thanh toán");
         } catch (HttpClientErrorException.NotFound e) {
             mutationExecutor.releaseClaim(id);
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy người nhận (creator) của yêu cầu này");
+        } catch (HttpClientErrorException e) {
+            mutationExecutor.releaseClaim(id);
+            // Issue #15 interaction — see PayRequestDto's javadoc. Forward transfer-service's own
+            // sourced message instead of re-wording it; 428 (not a named HttpClientErrorException
+            // subclass) needs an explicit status check.
+            if (e.getStatusCode().value() == 428) {
+                throw new ResponseStatusException(HttpStatus.valueOf(428), e.getResponseBodyAsString());
+            }
+            throw e;
         } catch (RuntimeException e) {
             mutationExecutor.releaseClaim(id);
             throw e;

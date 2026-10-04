@@ -58,9 +58,16 @@ public class BillPaymentService {
             debitResult = walletServiceClient.debit(
                 request.userId(), amount,
                 request.category() + ":" + request.customerCode(),
-                "Thanh toán hoá đơn " + describeCategory(request.category()) + " (mock biller)");
+                "Thanh toán hoá đơn " + describeCategory(request.category()) + " (mock biller)",
+                request.isStepUpConfirmed());
         } catch (HttpClientErrorException.Conflict e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Số dư không đủ để thanh toán hoá đơn");
+        } catch (HttpClientErrorException e) {
+            // Issue #15 — see transfer-service's TransferService for the same pattern/reasoning.
+            if (e.getStatusCode().value() == 428) {
+                throw new ResponseStatusException(HttpStatus.valueOf(428), e.getResponseBodyAsString());
+            }
+            throw e;
         }
 
         BillPayment saved = billPaymentRepository.save(

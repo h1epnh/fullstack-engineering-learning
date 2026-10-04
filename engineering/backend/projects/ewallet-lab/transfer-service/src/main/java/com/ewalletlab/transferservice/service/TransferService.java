@@ -72,9 +72,19 @@ public class TransferService {
         try {
             return walletServiceClient.debit(
                 request.fromUserId(), request.amount(), recipient.id().toString(),
-                "Chuyển tiền cho " + recipient.name());
+                "Chuyển tiền cho " + recipient.name(), request.isStepUpConfirmed());
         } catch (HttpClientErrorException.Conflict e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Số dư không đủ để chuyển");
+        } catch (HttpClientErrorException e) {
+            // Issue #15 — wallet-service surfaces "step-up required" as 428 (see
+            // StepUpRequiredException's javadoc), distinct from the 409 above. No named subclass
+            // for 428 exists on HttpClientErrorException, so check the status explicitly; forward
+            // wallet-service's own message (already the precise, sourced Vietnamese copy) rather
+            // than re-wording it here.
+            if (e.getStatusCode().value() == 428) {
+                throw new ResponseStatusException(HttpStatus.valueOf(428), e.getResponseBodyAsString());
+            }
+            throw e;
         }
     }
 }

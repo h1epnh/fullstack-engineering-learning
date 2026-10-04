@@ -7,7 +7,9 @@ import com.ewalletlab.billpaymentservice.web.dto.BillLookupResponse;
 import com.ewalletlab.billpaymentservice.web.dto.BillPayRequestDto;
 import com.ewalletlab.billpaymentservice.web.dto.BillPaymentReceiptDto;
 import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
@@ -37,5 +39,13 @@ public class BillPaymentController {
     @GetMapping("/history/{userId}")
     public List<BillPayment> history(@PathVariable UUID userId) {
         return billPaymentService.history(userId);
+    }
+
+    /** Issue #15 — see transfer-service's TransferController for the identical fix/reasoning
+     * (BillPaymentService also throws ResponseStatusException directly for insufficient-balance
+     * and step-up-required, which would otherwise lose their message in Spring's default body). */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<String> handleResponseStatusException(ResponseStatusException e) {
+        return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
     }
 }

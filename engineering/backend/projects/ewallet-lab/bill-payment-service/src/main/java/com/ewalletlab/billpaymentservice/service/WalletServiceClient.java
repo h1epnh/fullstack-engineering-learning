@@ -21,11 +21,12 @@ public class WalletServiceClient {
     public record DebitResult(UUID userId, BigDecimal balance) {
     }
 
-    private record AdjustBalanceRequest(BigDecimal amount, String type, String reference, String note) {
+    private record AdjustBalanceRequest(BigDecimal amount, String type, String reference, String note,
+                                         Boolean stepUpConfirmed) {
     }
 
-    public DebitResult debit(UUID userId, BigDecimal amount, String reference, String note) {
-        AdjustBalanceRequest request = new AdjustBalanceRequest(amount, "BILL_PAYMENT", reference, note);
+    public DebitResult debit(UUID userId, BigDecimal amount, String reference, String note, boolean stepUpConfirmed) {
+        AdjustBalanceRequest request = new AdjustBalanceRequest(amount, "BILL_PAYMENT", reference, note, stepUpConfirmed);
         return restClient.post()
             .uri("/wallets/{userId}/debit", userId)
             .body(request)

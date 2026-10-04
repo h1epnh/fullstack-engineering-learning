@@ -1,4 +1,4 @@
-import { type Transaction, walletService } from '@ewallet-lab/api-client';
+import { type Transaction, savingsPocketService, walletService } from '@ewallet-lab/api-client';
 import type { Session } from '@ewallet-lab/session';
 import {
   Card,
@@ -38,7 +38,8 @@ const MAIN_GRID: { key: string; icon: string; label: string; more?: boolean; rea
   { key: 'bill-payment', icon: 'receipt_long', label: 'Thanh toán\nhoá đơn', real: true },
   { key: 'phone-topup', icon: 'call', label: 'Nạp tiền\nđiện thoại' },
   { key: 'phone-data', icon: 'signal_cellular_alt', label: 'Data 4G/5G' },
-  { key: 'spending', icon: 'bar_chart', label: 'Quản lý\nchi tiêu' },
+  { key: 'family-wallet', icon: 'family_restroom', label: 'Ví Gia\nđình', real: true },
+  { key: 'spending', icon: 'bar_chart', label: 'Quản lý\nchi tiêu', real: true },
   { key: 'more-services', icon: 'more_horiz', label: 'Xem thêm\ndịch vụ', more: true },
 ];
 
@@ -168,6 +169,9 @@ export default function Home({
   onOpenNotifications,
   onBnpl,
   onLoyalty,
+  onSavingsPocket,
+  onFamilyWallet,
+  onSpendingReport,
 }: {
   session: Session;
   onTopup: () => void;
@@ -182,21 +186,29 @@ export default function Home({
   onBnpl?: () => void;
   /** Issue #19 — optional for the same reason as onBnpl. */
   onLoyalty?: () => void;
+  onSavingsPocket: () => void;
+  onFamilyWallet: () => void;
+  onSpendingReport: () => void;
 }) {
   const [balance, setBalance] = useState<number | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const [pocketOpened, setPocketOpened] = useState(false);
+  const [pocketBalance, setPocketBalance] = useState(0);
 
   async function refresh() {
     setLoading(true);
-    const [balanceRes, txRes] = await Promise.all([
+    const [balanceRes, txRes, pocketRes] = await Promise.all([
       walletService.getBalance(session.id),
       walletService.getTransactions(session.id),
+      savingsPocketService.view(session.id),
     ]);
     setBalance(balanceRes.balance);
     setTransactions(txRes);
     setReadIds(loadReadIds(session.id));
+    setPocketOpened(pocketRes.opened);
+    setPocketBalance(pocketRes.balance);
     setLoading(false);
   }
 
@@ -211,6 +223,8 @@ export default function Home({
     if (item.more) onMoreServices();
     else if (item.key === 'transfer') onTransfer();
     else if (item.key === 'bill-payment') onBillPayment();
+    else if (item.key === 'family-wallet') onFamilyWallet();
+    else if (item.key === 'spending') onSpendingReport();
     else if (item.real) onTransfer();
     else onComingSoon(item.key);
   }
@@ -261,7 +275,11 @@ export default function Home({
             onClick={onBnpl ?? (() => onComingSoon('bnpl'))}
           />
           <div style={{ width: 1, background: 'var(--el-line)' }} />
-          <MiniWallet label="Túi Thần Tài" value="Chưa mở" comingSoon />
+          <MiniWallet
+            label="Túi Thần Tài"
+            value={loading ? '···' : pocketOpened ? formatVnd(pocketBalance) : 'Chưa mở'}
+            onClick={onSavingsPocket}
+          />
         </div>
       </Card>
 

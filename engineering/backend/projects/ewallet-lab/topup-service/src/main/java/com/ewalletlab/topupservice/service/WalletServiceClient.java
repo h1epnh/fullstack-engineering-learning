@@ -27,15 +27,26 @@ public class WalletServiceClient {
     public record DebitResult(UUID userId, BigDecimal balance) {
     }
 
-    private record AdjustBalanceRequest(BigDecimal amount, String type, String reference, String note) {
+    /** Issue #15 — GET /wallets/{userId}/step-up-check's response shape (see wallet-service's
+     * StepUpCheckResponse). Used as a pre-flight for TOPUP: unlike the debit-path types
+     * (TRANSFER_OUT/BILL_PAYMENT/WITHDRAW), TOPUP's actual credit happens asynchronously via Kafka
+     * once mock-bank-gateway's IPN lands, with no HTTP caller present at that point to carry a
+     * stepUpConfirmed flag — so the gate has to run here, synchronously, before initiating the
+     * collection at all. */
+    public record StepUpCheckResult(boolean required, BigDecimal dailyTotalSoFar,
+                                     BigDecimal singleThreshold, BigDecimal dailyThreshold) {
     }
 
-    public DebitResult debit(UUID userId, BigDecimal amount, String note) {
-        return debit(userId, amount, "WITHDRAW", note);
+    private record AdjustBalanceRequest(BigDecimal amount, String type, String reference, String note,
+                                         Boolean stepUpConfirmed) {
     }
 
-    public DebitResult debit(UUID userId, BigDecimal amount, String type, String note) {
-        AdjustBalanceRequest request = new AdjustBalanceRequest(amount, type, null, note);
+    public DebitResult debit(UUID userId, BigDecimal amount, String note, boolean stepUpConfirmed) {
+        return debit(userId, amount, "WITHDRAW", note, stepUpConfirmed);
+    }
+
+    public DebitResult debit(UUID userId, BigDecimal amount, String type, String note, boolean stepUpConfirmed) {
+        AdjustBalanceRequest request = new AdjustBalanceRequest(amount, type, null, note, stepUpConfirmed);
         return restClient.post()
             .uri("/wallets/{userId}/debit", userId)
             .body(request)
@@ -45,13 +56,21 @@ public class WalletServiceClient {
 
     /** Used to refund a sender when an outbound bank transfer's IPN reports failure — the debit
      * already happened synchronously before the bank's async confirmation, so a failure has to be
-     * compensated here, not just recorded (see BankTransferOutIpnController). */
+     * compensated here, not just recorded (see BankTransferOutIpnController). Never needs step-up
+     * (it's a compensating refund, not new outbound spend). */
     public DebitResult credit(UUID userId, BigDecimal amount, String type, String note) {
-        AdjustBalanceRequest request = new AdjustBalanceRequest(amount, type, null, note);
+        AdjustBalanceRequest request = new AdjustBalanceRequest(amount, type, null, note, false);
         return restClient.post()
             .uri("/wallets/{userId}/credit", userId)
             .body(request)
             .retrieve()
             .body(DebitResult.class);
+    }
+
+    public StepUpCheckResult stepUpCheck(UUID userId, BigDecimal amount) {
+        return restClient.get()
+            .uri("/wallets/{userId}/step-up-check?amount={amount}", userId, amount.toPlainString())
+            .retrieve()
+            .body(StepUpCheckResult.class);
     }
 }

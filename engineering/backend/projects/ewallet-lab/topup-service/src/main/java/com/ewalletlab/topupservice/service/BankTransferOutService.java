@@ -34,11 +34,13 @@ public class BankTransferOutService {
         this.walletServiceClient = walletServiceClient;
     }
 
-    public BankTransferOutRequest initiate(UUID userId, String bankCode, String accountNumber, BigDecimal amount) {
-        // Real, synchronous debit — a 409 here (insufficient balance) propagates to the caller
-        // before any gateway call or row is created, same fail-fast behavior as WithdrawalController.
+    public BankTransferOutRequest initiate(UUID userId, String bankCode, String accountNumber, BigDecimal amount,
+                                            boolean stepUpConfirmed) {
+        // Real, synchronous debit — a 409 (insufficient balance) or 428 (issue #15 step-up
+        // required) here propagates to the caller before any gateway call or row is created, same
+        // fail-fast behavior as WithdrawalController.
         walletServiceClient.debit(userId, amount, "WITHDRAW",
-            "Chuyển khoản ra " + bankCode + " ****" + last4(accountNumber));
+            "Chuyển khoản ra " + bankCode + " ****" + last4(accountNumber), stepUpConfirmed);
 
         String orderId = "bto-" + UUID.randomUUID();
         BankTransferOutRequest request = repository.save(

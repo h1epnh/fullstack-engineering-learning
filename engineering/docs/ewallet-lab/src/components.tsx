@@ -176,6 +176,42 @@ export function FlowDiagram({ steps }: { steps: FlowStepData[] }) {
   );
 }
 
+/** Business-space feature card (issue #17): "Đã có"/"Sắp có" status pill (reuses roadmap's
+ * .rm-status done/planned colors) + what-it-does + the business rule(s) that govern it + the
+ * source it was translated from (backend DESIGN.md section / MoMo / NHNN Thông tư-Quyết định...).
+ * `rules`/`source` are optional because "Sắp có" entries only need a name + short reason. */
+export function BizFeature({
+  status,
+  title,
+  what,
+  rules,
+  source,
+}: {
+  status: 'done' | 'planned';
+  title: string;
+  what: ReactNode;
+  rules?: ReactNode[];
+  source?: ReactNode;
+}) {
+  return (
+    <div className="biz-feature">
+      <div className="biz-feature-head">
+        <span className={`rm-status ${status}`}>{status === 'done' ? 'Đã có' : 'Sắp có'}</span>
+        <h3>{title}</h3>
+      </div>
+      <p className="biz-feature-what">{what}</p>
+      {rules && rules.length > 0 && (
+        <ul className="biz-feature-rules">
+          {rules.map((r, i) => (
+            <li key={i}>{r}</li>
+          ))}
+        </ul>
+      )}
+      {source && <p className="biz-feature-source">Nguồn/căn cứ: {source}</p>}
+    </div>
+  );
+}
+
 export function RoadmapList({ children }: { children: ReactNode }) {
   return <div className="roadmap-list">{children}</div>;
 }

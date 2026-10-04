@@ -673,3 +673,546 @@ constraint giống `BNPL_REPAYMENT` (thêm `'LOYALTY_REDEMPTION'` vào danh sác
 - chuyển tặng điểm cho người khác
 
 **Chưa verify qua minikube/Ingress.**
+## Step-up xác thực khi giao dịch lớn — mô phỏng QĐ 2345/QĐ-NHNN (issue #15)
+
+**Đây KHÔNG phải điểm rẽ kiến trúc cần persistence mới** — không có bảng/service mới nào được tạo.
+Toàn bộ logic sống trong `wallet-service` (nơi đã có sẵn `Transaction` ledger từ issue #7) cộng với
+1 điểm gọi read-only mới từ `topup-service` (lý do vì sao xem bên dưới).
+
+**Nguồn đã xác minh trực tiếp** (agent-designer, fetch trực tiếp thitruongtaichinhtiente.vn):
+Quyết định 2345/QĐ-NHNN (18/12/2023, hiệu lực 01/07/2024) — 1 giao dịch chuyển tiền/thanh
+toán/**nạp ví điện tử** vượt **10.000.000đ**, HOẶC tổng các giao dịch đó trong **1 ngày** đạt/vượt
+**20.000.000đ** (áp dụng từ giao dịch kế tiếp trong ngày), bắt buộc xác thực sinh trắc học — dưới
+ngưỡng đó OTP là đủ. Số liệu dùng nguyên văn, không làm tròn/đổi khác.
+
+**Mô phỏng, không phải tích hợp thật**: lab này KHÔNG có sinh trắc học/WebAuthn thật ở bất kỳ đâu.
+"Xác thực bổ sung" chỉ là 1 field `stepUpConfirmed` trên request — thiếu/`false` khi ngưỡng bị vượt
+→ lỗi rõ ràng yêu cầu xác nhận; `true` → coi như "đã xác thực thành công" và cho qua. Copy trên UI
+(xem frontend DESIGN.md) nói rõ đây là mô phỏng, không ngụ ý tích hợp sinh trắc học thật.
+
+**Phạm vi — rộng hơn issue #7 một cách có chủ đích**: `StepUpPolicy.STEP_UP_TYPES` =
+`{TRANSFER_OUT, BILL_PAYMENT, WITHDRAW, TOPUP}` — **có bao gồm TOPUP**, khác #7 (chỉ 3 loại
+outbound) vì nguồn QĐ 2345 nói rõ áp dụng cho "nạp tiền vào ví điện tử". Cả 4 loại cộng dồn chung
+**1 pool duy nhất theo ngày** (không tách riêng inbound/outbound) — phản ánh đúng cách quy định mô
+tả "tổng giá trị giao dịch trong ngày", không phải 2 hạn mức độc lập.
+
+**"Trong 1 ngày" = ngày dương lịch theo giờ server** (`LocalDate.now().atStartOfDay(...)`, reset
+lúc nửa đêm) — cùng cách diễn giải "reset theo lịch, không phải rolling window" mà issue #7 đã dùng
+cho "trong 1 tháng", để 2 quy tắc reset trong dự án nhất quán với nhau.
+
+**2 cơ chế enforce khác nhau, tuỳ thuộc bản chất đồng bộ/bất đồng bộ của từng loại giao dịch**:
+
+1. **TRANSFER_OUT/BILL_PAYMENT/WITHDRAW (debit, đồng bộ end-to-end)** — check nằm **bên trong cùng
+   `@Transactional` method** với chính lần debit đang xét (`WalletMutationExecutor.debitOnce`),
+   đúng y hệt cách issue #7 đã làm cho hạn mức tháng (tính tổng, so ngưỡng, rồi mới `wallet.debit()`
+   — không tính riêng rồi debit sau). Race condition được xử lý bằng đúng cơ chế optimistic-lock +
+   retry đã có (issue #5): nếu 2 debit đồng thời cùng gần ngưỡng, người thua race
+   `walletRepository.save()` sẽ được `WalletService.withOptimisticLockRetry` chạy lại toàn bộ
+   `debitOnce` (kể cả phần tính tổng) trên 1 transaction hoàn toàn mới, thấy đúng giao dịch đã
+   commit của người thắng trước đó. `AdjustBalanceRequest` (request nội bộ mọi service gọi vào
+   `wallet-service`'s `/debit`) có thêm field `stepUpConfirmed` (nullable, null = false) — mỗi
+   service gọi vào (`transfer-service`, `topup-service`'s `/withdrawals`/`/bank-transfers`,
+   `bill-payment-service`) tự thêm field cùng tên trên DTO công khai của nó và forward nguyên vẹn.
+   Vượt ngưỡng mà chưa confirm → `StepUpRequiredException` → **HTTP 428** (Precondition Required,
+   RFC 6585) — cố tình khác 409 (đã dùng cho số dư không đủ và hạn mức tháng) để caller phân biệt
+   được "cần xác nhận rồi gọi lại y hệt request này" khỏi "bị từ chối hẳn, đừng gọi lại y hệt".
+2. **TOPUP (credit, bất đồng bộ)** — khác hẳn: tiền chỉ thực sự được cộng vào ví **sau khi IPN của
+   mock-bank-gateway xác nhận**, qua Kafka, tiêu thụ trong chính `wallet-service` (xem
+   `TopupConfirmedListener`) — **không có HTTP caller nào đang chờ ở thời điểm đó** để mang theo
+   field `stepUpConfirmed`. Nhét check vào `creditOnce` cho TOPUP sẽ vô dụng về mặt UX (không ai
+   ở đó để xác nhận). Vì vậy: `topup-service`'s `TopupService.initiate()` tự gọi 1 endpoint
+   **read-only mới** trên wallet-service, `GET /wallets/{userId}/step-up-check?amount=X`
+   (`WalletService.stepUpCheck`, dùng chung `StepUpPolicy`/cùng JPQL sum), **TRƯỚC KHI** tạo
+   `TopupRequest` row hay gọi `mock-bank-gateway` — nếu cần xác nhận mà chưa có, trả 428 ngay, không
+   để lại state PENDING nào (fail-fast, giống cách #6's `@DecimalMax` chặn trước khi tạo gì cả).
+   **Hạn chế đã biết, ghi rõ chứ không giấu**: vì đây là read rồi mới act (không nằm trong 1
+   transaction với chính hành động ghi sổ thật — vốn xảy ra sau này, bất đồng bộ), 2 request TOPUP
+   đồng thời từ cùng 1 user, mỗi cái riêng lẻ dưới ngưỡng, có thể cùng đọc thấy "chưa cần xác nhận"
+   trước khi IPN của cái nào đó kịp confirm và cập nhật ledger — khác hẳn nhánh (1) vốn đóng được
+   race này hoàn toàn nhờ tính trong cùng transaction với hành động ghi sổ thật. Đóng hoàn toàn gap
+   này cần `topup-service` giữ 1 khoá/tổng tạm tính xuyên suốt round-trip IPN — ngoài phạm vi issue
+   này, chấp nhận như giới hạn quy mô lab của kiến trúc topup bất đồng bộ sẵn có.
+
+**Vì sao không có Helm/env var mới để hạ ngưỡng test nhanh** (khác cách hạ TTL ở #3/#8/#10): ngưỡng
+10tr/20tr là số liệu pháp luật đã xác minh, không phải tham số tuỳ ý như thời hạn hết hạn — hạ số
+để test nhanh sẽ làm sai lệch chính con số cần verify. Test thay vào đó dùng số tiền thật gần/vượt
+ngưỡng (xem phần verify dưới).
+
+**Đã verify thật** (cluster-internal + Ingress thật `http://api.ewallet-lab.local`, user mới đăng
+ký qua Ingress):
+- Chuyển 5.000.000đ (dưới cả 2 ngưỡng) qua `transfer-service`'s `/transfers` → **200**, không có
+  field `stepUpConfirmed` trong request cũng qua bình thường.
+- Chuyển 15.000.000đ (>10tr/lần) không kèm `stepUpConfirmed` → **428**, message dẫn đúng QĐ
+  2345/QĐ-NHNN; gọi lại y hệt request kèm `stepUpConfirmed: true` → **200**, balance đổi đúng.
+- 3 lần chuyển 7.000.000đ liên tiếp cùng ngày (cộng dồn 21tr, vượt 20tr từ lần thứ 3) — lần 1, 2
+  → 200 (chưa tới 20tr); lần 3 → **428** dù bản thân 7tr < 10tr/lần — đúng nhánh "cộng dồn ngày",
+  không phải nhánh "đơn lẻ"; kèm `stepUpConfirmed: true` → 200.
+- Test cộng dồn xuyên loại: debit trực tiếp `WITHDRAW` 12.000.000đ (kèm confirm, >10tr/lần) rồi
+  TOPUP 9.000.000đ (chưa kèm confirm) → **428** dù riêng khoản TOPUP đó < 10tr/lần và < 20tr một
+  mình — xác nhận WITHDRAW + TOPUP cộng chung 1 pool ngày, đúng thiết kế "1 pool, không tách
+  inbound/outbound".
+- TOPUP pre-flight: gọi `POST /topups` với amount 15.000.000đ, không kèm `stepUpConfirmed` → **428**
+  ngay, không có `TopupRequest` row nào được tạo (xác nhận qua `GET /topups/{orderId}` sau đó không
+  áp dụng vì orderId chưa từng sinh ra) và `mock-bank-gateway` không nhận request nào; gọi lại kèm
+  `stepUpConfirmed: true` → **202 ACCEPTED**, luồng IPN chạy tiếp bình thường như cũ.
+- Ranh giới ngày: verify logic tương tự cách #7 đã verify ranh giới tháng (đọc `currentDayStart()`
+  qua code review + test cộng dồn trong cùng ngày như trên); không giả lập vượt qua nửa đêm thật
+  (không có cơ chế hạ "ngày" xuống ngắn hơn để test nhanh, đúng lý do đã nêu ở trên).
+- Insufficient-balance (409) và monthly-limit (409, issue #7) vẫn phân biệt rõ với step-up (428) —
+  test 1 giao dịch vừa vượt hạn mức tháng vừa vượt ngưỡng step-up: monthly-limit check chạy trước
+  trong `debitOnce` nên trả 409 (không phải 428) — thứ tự có chủ đích: hạn mức tháng là chặn cứng
+  không thể "xác nhận cho qua", step-up có thể vượt qua bằng xác nhận, nên step-up không có lý do
+  chạy trước một chặn cứng hơn.
+- **Thứ tự step-up vs insufficient-balance (khác biệt cần lưu ý)**: trong `debitOnce`, step-up check
+  chạy TRƯỚC `wallet.debit(amount)` (nơi check số dư) — nghĩa là 1 user vừa thiếu số dư vừa cần
+  step-up sẽ thấy **428 trước**, không phải 409; chỉ sau khi xác nhận step-up và gọi lại mới thấy
+  409 thật. Verify thật: user có 9.000.000đ balance, transfer 15.000.000đ (chưa kèm confirm) →
+  **428** (không phải 409 dù rõ ràng không đủ tiền); kèm `stepUpConfirmed: true` → **409** ("Số dư
+  không đủ để chuyển"). Đây là trade-off chấp nhận được cho lab (tốn thêm 1 lượt xác nhận trước khi
+  biết thiếu tiền) chứ không phải bug — đảo ngược thứ tự (check balance trước) cũng hợp lý không
+  kém, nhưng sẽ phá vỡ tính nhất quán "mọi rule không phải balance đều chạy trước balance trong
+  `debitOnce`" (đúng thứ tự monthly-limit → step-up → balance hiện tại).
+
+## Chia tiền (split-bill, issue #11) — `payment-request-service`
+
+**Không phải điểm rẽ kiến trúc** — issue #11 tự nêu rõ đây KHÔNG cần hỏi trước (khác #12/#13/#14):
+tái dùng đúng `payment-request-service` đã có (DB `ewallet_payment_request`), không service mới,
+không DB mới.
+
+**MoMo THẬT đã NGỪNG tính năng "Chia tiền" từ 31/08/2025** (nguồn:
+momo.vn/tin-tuc/thong-bao/chia-tien-nhom-sieu-nhanh-va-de-dang-voi-qr-tren-7811) — đây là bài tập
+domain model (nhóm tạm thời + link/QR + trạng thái thu), không phải bám 1 feature MoMo còn sống.
+UX trước khi ngừng (nguồn: momo.vn/tin-tuc/thong-bao/ra-mat-tinh-nang-chia-tien-voi-qr-nhan-tu-moi-app-6952):
+tạo mã trong màn "Nhận tiền" → nhập tổng tiền + số người chia (tự chia đều, hoặc nhập tuỳ chỉnh
+từng người) + lời nhắn → tạo QR → chia sẻ → theo dõi "Danh sách đã thu".
+
+**Model: mỗi share là 1 `PaymentRequest` bình thường, kind vẫn là `LINK`** — KHÔNG thêm enum value
+mới (`SPLIT_SHARE`), tránh đúng cái bẫy Postgres CHECK constraint đã ghi trong CLAUDE.md (thêm giá
+trị enum mới cho DB đang chạy cần `ALTER TABLE ... DROP/ADD CONSTRAINT` thủ công). Mỗi share bản
+chất ĐÚNG LÀ 1 LINK — payable bởi bất kỳ ai có tài khoản Ewallet Lab hợp lệ, không resolve target
+trước — nên tái dùng `PaymentRequestKind.LINK` là chính xác về domain, không phải một sự lách luật.
+3 cột mới, đều nullable, thêm vào bảng `payment_requests` hiện có (Hibernate `ddl-auto: update` tự
+generate, xác nhận qua `\d+ payment_requests`, không cần fix constraint gì vì không đụng enum):
+
+- `group_id` (UUID) — chung cho mọi share của 1 lần tạo; `id` của từng share (token LINK) vẫn là
+  duy nhất, dùng thẳng làm URL `.../pay/<id>` y hệt LINK bình thường — **không có endpoint pay
+  riêng cho split-share**, `POST /payment-requests/links/{id}/pay` đã có sẵn xử lý đúng.
+- `group_total` — tổng tiền của cả nhóm tại thời điểm tạo (denormalized, để tính tổng đã
+  thu/còn thiếu không cần re-sum mỗi lần đọc).
+- `group_label` — tên khoản chia do người tạo đặt (khác `message`, vẫn giữ nguyên là lời nhắn
+  tự do dùng chung style LINK/REMINDER).
+
+**API mới, chỉ 2 endpoint**:
+- `POST /payment-requests/splits` — tạo N share cùng lúc. Chấp nhận đúng 1 trong 2 chế độ (validate
+  thủ công trong service, không dùng bean validation vì là cross-field rule — cùng lý do
+  bill-payment-service tự tính lại `amount` server-side thay vì tin client):
+  - **Chia đều**: `totalAmount` + `peopleCount` (2–20) — chia `totalAmount` cho `peopleCount`,
+    làm tròn XUỐNG tới đồng, phần dư gộp vào share ĐẦU TIÊN để tổng luôn khớp chính xác
+    `totalAmount` (không trôi số do làm tròn) — lựa chọn tuỳ ý, ghi rõ ở đây để không ai nhầm là
+    bug nếu thấy share đầu tiên lớn hơn vài đồng.
+  - **Tuỳ chỉnh**: `amounts` (danh sách 2–20 số tiền cụ thể) — `group_total` = tổng danh sách.
+  - Gửi cả 2 hoặc không gửi cái nào → 400.
+- `GET /payment-requests/splits/{groupId}` — "Danh sách đã thu": từng share (đã áp lazy-expiry
+  giống mọi LINK khác) + `totalCollected`/`totalRemaining` tính từ tổng các share `PAID`.
+
+**Giới hạn số người 2–20: TỰ CHỌN, không phải số MoMo từng công bố** — không tìm được nguồn công
+khai cho giới hạn thật của tính năng đã ngừng này (khác lucky-money's 1-20tr/48h, vốn đã xác minh
+trực tiếp). Ghi rõ ở đây, không trình bày như đã xác minh.
+
+**Race condition — MIỄN PHÍ, không cần code mới**: vì mỗi share tái dùng nguyên vẹn
+`PaymentRequestService.pay()`/`PaymentRequestMutationExecutor.claimPendingOnce` đã có (fix CRITICAL
+từ issue #3/#8 — claim-trước-move-tiền-sau, `@Version` optimistic lock), bắn N request đồng thời
+vào CÙNG 1 share tự động chỉ 1/N thắng, N-1 còn lại 409 sạch — không có code path debit/credit
+riêng nào được viết cho split-bill.
+
+**Đã KHÔNG làm** (ngoài scope MVP, không phải thiếu sót): giới hạn số người chia tuỳ theo hạn mức
+pháp luật giao dịch/tháng (issue #7 vẫn áp dụng độc lập per-share vì mỗi share settle qua
+`transfer-service`'s `/transfers` thật); huỷ 1 share riêng lẻ trong nhóm (creator vẫn có thể gọi
+`POST /payment-requests/links/{id}/cancel` sẵn có cho từng share, không có endpoint "huỷ cả nhóm").
+
+**Fix phụ phát hiện khi làm #11 (tương tác với issue #15)**: `payment-request-service`'s `pay()` gọi
+`transfer-service`'s `/transfers` thật — sau khi #15 landing, giao dịch lớn có thể trả về 428 (step-up
+required) mà `pay()` trước đó chỉ bắt `Conflict`/`NotFound`, mọi lỗi khác (kể cả 428) rơi vào nhánh
+generic rethrow → surface thành 500 thô. Đã thêm: `PayRequestDto`/`TransferServiceClient` có thêm
+`stepUpConfirmed` (forward y hệt cách #15 làm ở transfer-service/topup-service/bill-payment-service),
+bắt riêng 428 → `ResponseStatusException(428, message)` thay vì để rơi xuống 500. Đây là fix một gap
+thật trong đúng code path #11 khai thác nhiều (mọi lần `pay()`), không phải scope creep — áp dụng
+luôn cho LINK/REMINDER hiện có (trước đây "vô hại" vì frontend chỉ dùng canned message theo status
+code, chưa từng cần message thật). **Chưa nối `StepUpModal` vào `PaymentLinkPay.tsx`/
+`PaymentReminderHome.tsx`** (frontend) — ghi nhận là gap còn lại, không phải yêu cầu của issue #11.
+Cũng thêm `@ExceptionHandler(ResponseStatusException.class)` vào `PaymentRequestController` (như đã
+làm ở `TransferController`/`TopupController`/`BillPaymentController` cho #15) để message thật được
+forward thay vì Spring's `/error` JSON mặc định nuốt mất field `message`.
+
+**Đã verify thật** (Ingress thật `http://api.ewallet-lab.local`, user đăng ký qua chính Ingress):
+- Chia đều 300.000đ/3 người → 3 share 100.000đ mỗi share, `GET /splits/{groupId}` đúng
+  `totalCollected=0`. Payer trả 1 share → `PAID`, `totalCollected` cập nhật đúng, share khác vẫn
+  `PENDING`. Trả lại share đã trả → 409 sạch ("đã được thanh toán rồi").
+- Chia tuỳ chỉnh `amounts=[20000,30000]` → 2 share đúng số tiền, `groupTotal=50000`.
+- Validate: gửi cả `totalAmount+peopleCount` LẪN `amounts` → 400; gửi không cái nào → 400;
+  `peopleCount=1` (dưới min) → 400 (bean validation).
+- **Race condition** (yêu cầu bắt buộc của Acceptance criteria): bắn 8 request `pay` đồng thời vào
+  CÙNG 1 share (100.000đ) → **1/8 trả 200 (PAID), 7/8 trả 409 sạch** — balance payer chỉ trừ đúng
+  1 lần (2.000.000 → 1.900.000, không double-debit), balance creator chỉ cộng đúng 1 lần. Xác nhận
+  cơ chế race-condition-safe của #3/#8/#10 áp dụng nguyên vẹn cho split-bill không cần code mới.
+
+## Túi Thần Tài (issue #13) — bảng `savings_pockets` trong `wallet-service`
+
+**Điểm rẽ kiến trúc — đã dừng lại hỏi trước khi code** (issue #13 tự đánh dấu bắt buộc, theo đúng
+bài học #3/#8/#10 "đừng tự chọn"). 2 lựa chọn nêu ra trên issue:
+
+- **(a) Bảng mới trong chính `wallet-service`** (`SavingsPocket` 1-1 với `Wallet`, cùng DB).
+- **(b) Service mới `savings-pocket-service`** (DB riêng, gọi lại `wallet-service`'s credit/debit
+  để di chuyển tiền giữa "2 túi", đúng pattern `payment-request-service`/`lucky-money-service`).
+
+**Người vận hành chốt (a)** qua comment trực tiếp trên issue #13: bảng mới `SavingsPocket` trong
+chính `wallet-service`, KHÔNG tạo service riêng — lý do được nêu rõ: tránh 2 nguồn số dư rời rạc
+cần đồng bộ qua network cho 1 thao tác di chuyển tiền vốn tần suất cao (nạp/rút Túi Thần Tài có thể
+xảy ra thường xuyên hơn nhiều so với payment-request/lucky-money, vốn là các giao dịch một-lần).
+Trade-off được ghi nhận: `wallet-service` phình phạm vi trách nhiệm (từ "chỉ biết 1 số dư/user"
+sang "biết cả sub-ledger + lãi suất") — chấp nhận cho quy mô lab này.
+
+**Vì túi sống trong CÙNG service/DB với `Wallet`**, mọi thao tác nạp/rút giữa "ví chính" và "Túi
+Thần Tài" là 1 transaction local duy nhất chạm 2 hàng có `@Version` (`Wallet` + `SavingsPocket`) —
+không có network call nào xen giữa đọc và ghi, nên **không có check-then-act race window kiểu
+#3/#8/#10** cho các thao tác `deposit`/`withdraw` (race duy nhất còn lại nằm ở bước tạo hàng mới
+lúc `open`, xem phần fix bug bên dưới). `SavingsPocketMutationExecutor` tách riêng khỏi
+`SavingsPocketService` với cùng lý do `WalletMutationExecutor` tách khỏi `WalletService` (issue
+#5): retry optimistic-lock cần mỗi lần thử chạy trong 1 transaction hoàn toàn mới, đọc lại từ đầu
+cả `Wallet` lẫn `SavingsPocket` cùng `@Version` của chúng.
+
+**Nguồn lãi suất — đã xác minh trực tiếp, cố tình dùng số của ZaloPay chứ không phải MoMo**:
+
+- **Dùng: ZaloPay "Tài Khoản Tích Lũy", 4%/năm**, hiệu lực từ 13/03/2024 — trích nguyên văn:
+  "tỷ suất sinh lời là 4%/năm" (nguồn: zalopay.vn/tai-khoan-tich-luy-dieu-chinh-muc-sinh-loi-moi-4767,
+  fetch trực tiếp). ZaloPay còn có sản phẩm khác lãi cao hơn ("Số dư sinh lời", 4.7%/năm từ
+  01/08/2024, zalopay.vn/dich-vu/so-du-sinh-loi) nhưng KHÔNG dùng số đó — chọn "Tài Khoản Tích Luỹ"
+  vì gần đúng bản chất "1 khoản tách riêng khỏi số dư chính, rút bất kỳ lúc nào" của Túi Thần Tài
+  hơn là "Số dư sinh lời" (vốn sinh lời trên toàn bộ số dư ví, không phải 1 sub-ledger riêng).
+- **KHÔNG dùng: MoMo "Túi Thần Tài" thật, 6%/năm** — con số này CÓ xuất hiện trên trang tin tức
+  chính thức của momo.vn (momo.vn/tin-tuc/tin-tuc-su-kien/tui-than-tai-tang-han-muc-len-den-50-trieu-ty-2594),
+  nhưng cố tình không dùng: lab chỉ mượn TÊN tính năng ("Túi Thần Tài" — chức năng, không phải
+  logo/màu thương hiệu, đúng ranh giới CLAUDE.md), việc còn lấy đúng luôn cả con số lãi suất thật
+  của MoMo sẽ khiến mô phỏng bám sát 1-1 vào đúng 1 sản phẩm tài chính thật của bên thứ ba thay vì
+  chỉ là bài tập domain (sub-ledger + lãi kép) — dùng số của đối thủ (ZaloPay) giữ đúng tinh thần
+  "functional pattern, không phải bản sao y hệt" đã áp dụng cho toàn bộ UI/IA của dự án.
+- Cấu hình qua `ewallet-lab.savings-pocket.annual-rate` (default `0.04`), KHÔNG hardcode trong Java
+  — `@Value` chỉ áp dụng default khi thiếu property, giống pattern `ttl-hours`/`accrual-period` của
+  #10.
+- **Tuyên bố rõ ràng: đây là lãi suất MÔ PHỎNG cho mục đích học tập.** Không có quỹ đầu tư hay
+  ngân hàng lưu ký thật nào đứng sau khoản tiền trong `savings_pockets` — tiền vẫn nằm nguyên trong
+  cùng 1 database Postgres của `wallet-service`, chỉ được cộng thêm "lãi" ảo theo công thức đơn
+  giản mỗi chu kỳ, khác hẳn thực tế MoMo/ZaloPay (tiền được chuyển vào tiền gửi tiết kiệm thật tại
+  ngân hàng đối tác). Dòng disclaimer này cũng hiển thị nguyên văn trên UI (`SavingsPocket.tsx`,
+  xem frontend DESIGN.md), không chỉ nằm trong tài liệu kỹ thuật.
+
+**Cơ chế tính lãi — lazy-compute khi đọc/ghi, KHÔNG dùng `@Scheduled`** (agent-dev tự chọn theo
+đúng quyền issue #13 giao, lý do ghi ở đây): mọi lần `view`/`deposit`/`withdraw` đều gọi
+`applyAccrual` trước, "bắt kịp" mọi chu kỳ TRỌN VẸN đã trôi qua kể từ `lastAccrualAt` bằng công
+thức lãi kép `interest = balance * annualRate / 365` mỗi chu kỳ (mặc định 1 ngày,
+`ewallet-lab.savings-pocket.accrual-period-seconds`, rút ngắn được để verify không phải chờ ngày
+thật — cùng pattern "rút ngắn TTL rồi revert" đã dùng cho lucky money #10), rồi PERSIST luôn kết
+quả (không chỉ tính tạm để hiển thị) — cùng lý do chọn lazy-check thay vì polling job ở #10: dự án
+chưa có hạ tầng job scheduler nào khác, thêm 1 `@Scheduled` riêng cho 1 sub-ledger là over-engineer
+so với quy mô lab, và lazy-compute vẫn cho kết quả CHÍNH XÁC same-as-scheduled tại bất kỳ thời điểm
+đọc nào (khác trade-off "tiền treo tới khi có người đọc" của #10 — ở đây không có escrow chờ nhận,
+chỉ là lãi chưa cộng dồn vào 1 con số hiển thị, vô hại nếu chưa ai mở lại túi).
+
+**Bug fix — race condition khi `open` đồng thời (agent-tester phát hiện, KHÔNG phải rò tiền,
+nhưng trả 500 thô thay vì 409 sạch)**: `openOnce()` làm đúng "check-then-act" —
+`pocketRepository.findByWalletId(...).isPresent()` rồi mới `save(new SavingsPocket(...))` — không
+gì bảo vệ khoảng giữa 2 bước đó ngoài UNIQUE constraint của Postgres trên `savings_pockets.wallet_id`.
+Bắn 20 request đồng thời `open` cho 1 user mới → 1×200 + 10×409 (thua optimistic-lock retry ở bước
+debit ví) + **9×500** (`DataIntegrityViolationException` từ UNIQUE constraint, không nằm trong
+danh sách exception `SavingsPocketController` bắt). Số dư cuối cùng luôn đúng (không rò/nhân bản
+tiền — insert vi phạm constraint khiến cả transaction rollback, kể cả bước debit ví trước đó), chỉ
+sai ở mã lỗi trả về. Fix: `SavingsPocketService.withRetry` bắt thêm
+`org.springframework.dao.DataIntegrityViolationException`, dịch thành `IllegalStateException("Túi
+Thần Tài đã được mở trước đó")` (không retry — đây là xung đột thật, không phải lock tạm thời) để
+`SavingsPocketController`'s `@ExceptionHandler(IllegalStateException.class)` đã có sẵn map đúng
+409. Đây là bài học MỚI thêm vào CLAUDE.md: unique constraint có thể vi phạm ngay lần TẠO MỚI đầu
+tiên (không chỉ lúc update), `DataIntegrityViolationException` cần được bắt riêng cho path đó.
+
+**Đã verify thật** (Ingress thật `http://api.ewallet-lab.local`, user đăng ký qua chính Ingress):
+- Luồng tiền cơ bản đúng từng đồng: open 500.000đ (dưới 10.000đ tối thiểu → 409) → deposit
+  +300.000đ → túi 800.000đ, ví chính giảm đúng 300.000 → withdraw 200.000đ → túi 600.000đ, ví
+  chính tăng đúng 200.000. Overdraft (rút 700.000 khi túi có 600.000) → 409. Deposit vượt số dư ví
+  chính → 409. Edge case amount=0/âm → 400; vượt `@DecimalMax` → 400. Double-open (sequential) →
+  409.
+- Lãi tích luỹ THẬT, không phải field trang trí: hạ tạm `accrual-period-seconds` (10s/30s), nạp
+  túi lên 15.600.000đ, `GET .../savings-pocket` lặp lại → balance tự tăng dần CHỈ do thời gian trôi
+  qua (không deposit/withdraw), khớp đúng công thức, `lastAccrualAt` thực sự advance và persist. Đã
+  revert env var sau test.
+- Race condition `deposit`/`withdraw` ở tải 30 request đồng thời vào cùng 1 túi → đúng
+  15×200 + 15×409, số dư khớp chính xác từng đồng — optimistic-lock retry an toàn ở tải cao.
+- **Sau fix**: bắn lại 20 request đồng thời `POST .../savings-pocket/open` cho 1 user mới (nạp ví
+  5.000.000đ, amount=100.000/request) → **1×200 + 19×409, KHÔNG còn request nào trả 500** — túi mở
+  đúng 1 lần (100.000đ), ví chính trừ đúng đúng 1 lần 100.000đ, lặp lại 3 lần liên tiếp cho 3 user
+  mới khác nhau đều cho kết quả giống hệt (1×200 + 19×409).
+
+## Ví Gia Đình (issue #12) — service mới `family-wallet-service`, enforce ngay tại `wallet-service`
+
+**Nguồn — đối thủ VNPay, KHÔNG PHẢI MoMo** (khác toàn bộ phần còn lại của lab): chủ ví chính mở "Ví
+thành viên" cho cha/mẹ/con cái/người thân, đặt hạn mức chi tiêu riêng, xem được thành viên chi tiêu
+gì — nguồn: vnpay.vn/mo-vi-thanh-vien-cho-bo-me-con-cai-ngay-tren-vi-dien-tu-vnpay-x5cufcpbp1a (đã
+fetch/tìm lại trực tiếp để xác nhận, không suy đoán từ trí nhớ): "người dùng có thể mở ví thành
+viên cho cha, mẹ, con cái... từ đó cấp hạn mức chi tiêu", "ví chính của bố mẹ có thể kiểm soát và
+nắm bắt được thông tin về việc chi tiêu của con cái".
+
+**Điểm rẽ kiến trúc — đã dừng lại hỏi trước khi code** (issue #12 tự đánh dấu bắt buộc, `AskUserQuestion`
+không khả dụng trong phiên đó → comment 3 lựa chọn lên issue, đúng fallback #3/#10/#13, không tự
+chọn). 3 lựa chọn nêu trên issue, người vận hành chốt qua comment:
+
+- **Phạm vi — (a) Overlay quyền hạn trên model 1-wallet-per-user hiện có**: service mới
+  `family-wallet-service` (DB riêng `ewallet_family_wallet`), chỉ lưu
+  `{parentUserId, memberUserId, monthlyLimit}`, cộng dồn chi tiêu bằng cách đọc lại
+  `wallet-service`'s `Transaction` ledger — **KHÔNG đụng `Wallet.userId`'s `unique = true`**.
+  Member vẫn là 1 user độc lập, tự đăng ký/đăng nhập, tự có ví riêng — khác VNPay thật ở chỗ member
+  phải tự có tài khoản Ewallet Lab trước (lab không có "mở ví hộ" thật). KHÔNG chọn (b) true
+  sub-wallet (member không cần tài khoản riêng — phạm vi lớn hơn nhiều, cần nới constraint/khái
+  niệm user mới, không làm trong 1 lượt) hay (c) thu hẹp bỏ phần xem lịch sử (issue vẫn giữ đủ Task
+  gốc bao gồm xem lịch sử).
+- **Nơi enforce hạn mức — (ii) chặn ngay tại `wallet-service`'s debit path**, KHÔNG phải mỗi
+  service debit (transfer/topup/bill-payment) tự hỏi trước. 1 điểm sửa duy nhất
+  (`WalletMutationExecutor.debitOnce`), đổi lại `wallet-service` phải biết khái niệm "family" tồn
+  tại — giống hệt cách `wallet-service` đã biết gọi ra ngoài cho step-up (#15). Trade-off được nêu
+  rõ trên issue: gọn hơn (ii) đổi lấy việc phá 1 phần ranh giới "wallet-service không biết gì về
+  family" — chấp nhận cho quy mô lab này, thay vì rải logic gọi family-wallet-service vào 3 service
+  khác nhau.
+
+**`family-wallet-service` không bao giờ tự di chuyển tiền** — không có code path nào gọi
+`wallet-service`'s `/credit`/`/debit`. Nó chỉ là 1 bảng `family_links` phẳng
+(`{id, parentUserId, memberUserId (unique), memberPhone, memberName, monthlyLimit, createdAt}`) +
+API đọc/ghi permission, và 1 endpoint đọc-only nội bộ
+`GET /family-wallets/members/{memberUserId}/limit` để `wallet-service` hỏi trước khi debit.
+`memberUserId` **unique** — 1 thành viên chỉ thuộc 1 gia đình tại 1 thời điểm (giản lược MVP, không
+nằm trong Task gốc nhưng cần thiết để "hạn mức nào áp dụng" không mơ hồ nếu 2 parent cùng thêm 1
+member).
+
+**`wallet-service`'s `FamilyWalletServiceClient` fail-open, không phải fail-closed, khi
+`family-wallet-service` lỗi/timeout**: 404 (không phải thành viên gia đình nào — trường hợp phổ
+biến tuyệt đối) và lỗi hạ tầng (connection refused/timeout/5xx) đều được xử lý GIỐNG NHAU — "không
+áp hạn mức lần này" — thay vì chặn toàn bộ debit của mọi user chỉ vì 1 service phụ trợ nhỏ tạm thời
+down. Trade-off có chủ đích, ghi rõ ở đây: mở ra 1 khoảng hẹp nơi thành viên có thể vượt hạn mức
+ĐÚNG lúc `family-wallet-service` gặp sự cố — chấp nhận cho quy mô lab, thay vì buộc luồng debit lõi
+(dùng bởi TOÀN BỘ user, không riêng gì gia đình) phải hard-depend vào uptime của 1 tính năng add-on.
+
+**Hạn mức gia đình dùng lại đúng phép đo "chi tiêu tháng này" đã có từ issue #7** (Điều 26 Thông tư
+40/2024/TT-NHNN): cùng `spentThisMonth`/`projectedSpend` tính TRONG CÙNG 1 câu query/transaction
+cho hạn mức pháp luật, family limit chỉ là 1 ceiling thứ 2, độc lập, tính thêm ngay sau đó — không
+phải 2 lần tính riêng rẽ có thể lệch nhau. Tính bên trong CÙNG `@Transactional debitOnce` (không
+phải pre-check tách rời) vì đúng lý do race-safety đã áp dụng cho #7/#15: 1 lần retry thua
+optimistic-lock sẽ chạy lại toàn bộ method này (kể cả 2 phép tính spend) trên dữ liệu đã commit của
+người thắng.
+
+**Bug fix — race condition khi thêm thành viên MỚI đồng thời (cùng loại lỗi vừa phát hiện+fix ở
+#13, tự kiểm tra trước khi báo xong theo đúng yêu cầu của lượt việc này)**: `addOrUpdateMember` ban
+đầu cũng là check-then-act — `findByMemberUserId(...).isEmpty()` rồi mới insert `FamilyLink` mới —
+chỉ được bảo vệ bởi UNIQUE constraint của Postgres trên `family_links.member_user_id`. 2 request
+đồng thời "thêm cùng 1 member chưa từng được link" (vd. parent bấm "Lưu" 2 lần liên tiếp, hoặc 2
+parent khác nhau cùng lúc thêm đúng 1 member) đều có thể đọc `isEmpty()` trước khi 1 trong 2 insert
+commit → request thua nhận `DataIntegrityViolationException` thô (500) thay vì rơi đúng vào nhánh
+"đã tồn tại" (update nếu cùng parent, 409 nếu khác parent). Fix theo ĐÚNG pattern
+`WalletMutationExecutor`/`SavingsPocketMutationExecutor` đã dùng: tách `FamilyLinkMutationExecutor`
+(bean `@Transactional` riêng, 1-attempt) khỏi `FamilyWalletService` (retry loop, tối đa 3 lần) —
+`FamilyWalletService.addOrUpdateMember` bắt `DataIntegrityViolationException` và retry, mỗi lần thử
+lại chạy trong transaction MỚI nên đọc lại `findByMemberUserId` thấy đúng bản ghi vừa commit của
+người thắng, rơi đúng vào nhánh update/409 thay vì lỗi thô. Sau `MAX_UPSERT_ATTEMPTS` (3) lần vẫn
+xung đột mới trả 409 sạch ("Xung đột khi thêm thành viên Ví Gia Đình (trùng thời điểm)").
+
+**Ngoài phạm vi MVP** (ghi rõ theo đúng yêu cầu của issue #12 — đây là giới hạn có chủ đích, không
+phải bug bị bỏ sót):
+
+- **Tạo "ví con" không cần tài khoản riêng**: member trong MVP này LUÔN LÀ 1 user đã tồn tại của hệ
+  thống (đã tự đăng ký qua `user-service`, tự có `Wallet` riêng) — không giả lập trẻ em/thành viên
+  chưa có tài khoản. Đây chính là lý do chọn phương án (a) overlay thay vì (b) true sub-wallet (xem
+  phần "Điểm rẽ kiến trúc" ở trên).
+- **Giao diện app riêng cho trẻ em**: không có. Member dùng chung đúng 1 bộ giao diện
+  `mfe-transfer`/`mfe-topup`/`mfe-bill-payment` như mọi user khác của Ewallet Lab — không có theme/
+  luồng rút gọn nào dành riêng cho trẻ em.
+- **Thông báo real-time khi member chi tiêu**: không có. Parent chỉ xem được lịch sử chi tiêu của
+  member khi CHỦ ĐỘNG mở màn "Ví Gia đình" và bấm "Xem lịch sử chi tiêu" (poll thủ công qua 1 API
+  call) — không có push notification/websocket/polling nền nào báo ngay khi member vừa thực hiện
+  giao dịch.
+
+## Quỹ nhóm (issue #14) — service mới `fund-service`
+
+**Nguồn UX — đã fetch TRỰC TIẾP momo.vn/quy-nhom** (khác với lúc issue #14 được tạo, lúc đó
+agent-designer chỉ có search-snippet, độ tin cậy thấp hơn — đã nâng cấp lên "đã xác minh trực
+tiếp" trước khi code phần frontend, đúng khuyến nghị của Constraints). Trích các điểm chính:
+
+- Luồng tạo quỹ: mở MoMo → tìm "Quỹ nhóm" → "Tạo quỹ mới" → nhập thông tin cơ bản → đồng ý điều
+  khoản → hoàn tất + mời bạn bè.
+- Minh bạch: "hiển thị toàn bộ lịch sử nạp/rút của thành viên; minh bạch tài chính mà không cần chủ
+  quỹ tự tính toán thủ công".
+- Hạn mức thật (lab KHÔNG áp dụng các con số này, chỉ ghi nhận để không bịa số khác): tối đa 2 quỹ
+  tự tạo/tài khoản, tối đa 20 quỹ tham gia/tài khoản, tối đa 200 thành viên/quỹ, tối thiểu 1.000đ/
+  giao dịch, tối đa 25.000.000đ/quỹ.
+- **Rút tiền**: thành viên GỬI YÊU CẦU rút, chủ quỹ phải DUYỆT mới được rút — không phải member tự
+  rút trực tiếp. Chủ quỹ giải thể quỹ bằng cách rút hết số dư còn lại về ví cá nhân.
+- **Không đề cập lãi suất hay giới hạn thời gian tồn tại nào** trong tài liệu chính thức — khớp với
+  quyết định "không làm lãi suất trong ticket này" của issue #14.
+
+**MVP của lab đơn giản hoá HƠN NỮA so với MoMo thật** (operator đã xác nhận trên issue #14, giữ
+nguyên style "MVP: chỉ creator được rút/giải thể, không voting/đa chữ ký" đề xuất ban đầu): không
+có luồng "member request rút tiền + creator duyệt" nào cả — creator rút trực tiếp, member hoàn
+toàn không có quyền khởi tạo một yêu cầu rút. Đơn giản hơn MoMo thật, không phải tương đương.
+
+**Điểm rẽ kiến trúc — đã dừng lại hỏi trước khi code** (issue #14 tự đánh dấu bắt buộc).
+2 lựa chọn nêu trên issue, người vận hành chốt qua comment:
+
+- **(a) Service mới `fund-service`** (DB riêng `ewallet_fund`), sở hữu `Fund`/`FundMember`/
+  `FundTransaction`, tự gọi lại `wallet-service`'s `/credit`/`/debit` để di chuyển tiền thật — ĐÃ
+  CHỌN. Đúng convention project (mỗi domain mới = 1 service, giống `lucky-money-service`/
+  `family-wallet-service`), domain N-N thành viên tách biệt rõ ràng khỏi `payment-request-service`
+  (1-1).
+- (b) Mở rộng `payment-request-service` — KHÔNG chọn, đúng khuyến nghị "không khuyến nghị" của
+  issue (domain N-N thành viên, tồn tại lâu dài, không có expiry — khác hẳn 1-1 request/1 payer có
+  thể hết hạn của payment-request-service).
+- **Quyền rút tiền — giữ nguyên MVP mặc định của issue**: chỉ creator được rút/giải thể quỹ, không
+  voting/đa chữ ký (operator xác nhận lại trong comment chốt kiến trúc, không yêu cầu khác).
+
+**`fund-service` gọi `wallet-service`'s `/credit`/`/debit` trực tiếp, KHÔNG qua transfer-service's
+saga** — cùng lý do `lucky-money-service` (issue #10) làm vậy: "phía bên kia" của một lần di
+chuyển tiền không phải là 1 `Wallet` khác mà là `Fund.balance` nằm trong chính DB của
+`fund-service` — transfer-service's API chỉ model "wallet-to-wallet", không áp dụng được ở đây.
+Dùng lại nguyên `TransactionType` đã có: `TRANSFER_OUT` (member góp tiền ra khỏi ví), `TRANSFER_IN`
+(creator rút/giải thể về ví), `REFUND` (hoàn tiền nếu bước local sau khi debit đã thành công lại
+thất bại) — không bịa giá trị enum mới, đúng CLAUDE.md.
+
+**Thứ tự external-call vs local-commit được chọn RIÊNG cho từng loại thao tác** (để đảm bảo không
+bao giờ có "tiền sinh ra từ hư không" hay "tiền biến mất" nếu bước thứ 2 thất bại — cùng tinh thần
+saga/compensation `transfer-service` và escrow `lucky-money-service` đã dùng):
+
+- **Góp quỹ (`contribute`)**: debit ví member TRƯỚC (escrow-tại-nguồn, giống `lucky-money-service`'s
+  `send`), rồi mới cộng `Fund.balance` cục bộ. Nếu bước cục bộ thất bại (quỹ vừa bị giải thể đồng
+  thời, hoặc hết lượt retry optimistic-lock) — toàn bộ transaction cục bộ ROLLBACK (không có gì
+  được ghi), nên chỉ cần hoàn lại đúng 1 bước: credit `REFUND` về ví member. Không cần method
+  "revert" nào trên `Fund` cho path này.
+- **Rút quỹ (`withdraw`)/Giải thể (`dissolve`)**: trừ `Fund.balance` cục bộ TRƯỚC (bảo vệ bằng
+  optimistic lock + validate số dư/trạng thái trong CÙNG 1 transaction, giống `WalletMutationExecutor`
+  xác nhận hạn mức #7/#15 trước khi debit), rồi mới gọi `wallet-service`'s `/credit` cho creator.
+  Nếu bước credit bên ngoài thất bại, bước cục bộ ĐÃ COMMIT nên cần bù trừ chủ động:
+  `Fund.revertWithdraw`/`revertDissolve` cộng lại đúng số tiền (và với dissolve, mở lại `ACTIVE`) —
+  wrapped trong cùng vòng lặp retry optimistic-lock vì `@Version` của `Fund` có thể đã đổi do 1
+  thao tác khác xen vào giữa lúc đó.
+
+**Bug fix — race condition khi mời thành viên MỚI đồng thời (CÙNG LOẠI LỖI đã gặp ở #12/#13, bài
+học mới ghi vào CLAUDE.md: constraint UNIQUE mới có thể vỡ ngay ở lần INSERT đầu tiên, không chỉ
+lúc update, và PHẢI tự test ≥20 request đồng thời trước khi báo xong)**: `addMemberOnce` ban đầu là
+check-then-act — `findByFundIdAndMemberUserId(...).isEmpty()` rồi mới insert `FundMember` mới —
+chỉ được bảo vệ bởi UNIQUE constraint của Postgres trên `(fund_id, member_user_id)`. Khác với
+`family-wallet-service`'s fix (dịch exception sang `IllegalStateException` rồi dừng, không retry,
+vì "đã thuộc gia đình khác" là xung đột thật), fix ở đây RETRY toàn bộ `addMemberOnce` khi gặp
+`DataIntegrityViolationException` — vì mời cùng 1 người vào cùng 1 quỹ là THAO TÁC IDEMPOTENT (lần
+thử lại sẽ thấy `findByFundIdAndMemberUserId` giờ trả về bản ghi vừa commit của người thắng, trả
+về luôn thay vì lỗi), không phải xung đột cần báo 409 ngay — hợp lý vì trong MVP này chỉ CREATOR
+mới được mời (không có 2 "chủ sở hữu" khác nhau tranh giành 1 member như family-wallet-service's
+trường hợp "2 parent khác nhau cùng mời 1 member").
+
+**Đã tự test TRƯỚC KHI báo xong** (yêu cầu bắt buộc của lượt việc này, tránh lặp lại bài học #13):
+bắn 30 request đồng thời (`xargs -P30`, không phải loop tuần tự có độ trễ) mời CÙNG 1 số điện
+thoại CHƯA từng là thành viên vào 1 quỹ — log xác nhận NHIỀU request thật sự vỡ UNIQUE constraint ở
+tầng Postgres (`duplicate key value violates unique constraint`, không phải chỉ tình cờ serialize),
+nhưng cả 30/30 request đều trả **200 sạch, không có request nào trả 500**, và bảng `fund_members`
+chỉ có đúng **1 hàng** cho (quỹ, member) đó.
+
+**Đã verify thật** (Ingress thật `http://api.ewallet-lab.local`, user đăng ký qua chính Ingress):
+- Tạo quỹ → creator tự động cũng là 1 `FundMember` (xuất hiện trong danh sách thành viên, có thể tự
+  góp quỹ như người khác). `creatorName`/`creatorPhone` tra qua `user-service`'s `GET /users/{id}`
+  (không tin tên do client tự gửi lên).
+- Mời 2 thành viên → cả 2 CÙNG LÚC góp quỹ (500.000đ + 300.000đ) → balance quỹ đúng 800.000đ, lịch
+  sử ghi đúng từng người/từng số tiền.
+- Creator rút 200.000đ → đúng, ví creator cộng đúng 200.000đ. Member (không phải creator) cố rút →
+  403 "Chỉ người tạo quỹ mới được rút tiền khỏi quỹ". Outsider (không phải thành viên quỹ) cố góp
+  quỹ hoặc xem quỹ → 403, KHÔNG debit nhầm ví outsider.
+- Race ≥8 request đồng thời: 8 lần góp quỹ đồng thời (2 member × 4 lần, 50.000đ/lần) → cả 8/8
+  thành công, balance cộng đúng tuyệt đối từng đồng (không double-credit). 8 lần rút đồng thời
+  (100.000đ/lần, quỹ dư đủ cho 8 lần) → 6×200 + 2×409 do hết lượt retry optimistic-lock dưới tải
+  tranh chấp cao trên CÙNG 1 hàng (không phải lỗi logic — cùng loại kết quả tải cao đã thấy ở
+  `SavingsPocket`/`Wallet`'s optimistic-lock retry, 2 request thua không làm rò/nhân bản tiền:
+  balance cuối khớp chính xác `balance_trước - 6×100.000`).
+- Giải thể quỹ bởi creator → balance quỹ về 0, status `DISSOLVED`, remainder cộng đúng vào ví
+  creator. Member cố giải thể → 403. Góp/rút vào quỹ đã giải thể → 409 "Quỹ nhóm này đã được giải
+  thể".
+- Validate: amount < 1.000đ (tối thiểu verify trực tiếp từ momo.vn/quy-nhom) hoặc âm → 400. Tạo quỹ
+  thiếu `name` → 400.
+- Build sạch `./gradlew build` trên `fund-service`, image rebuild đúng tag
+  `ewallet-lab/fund-service:local`, deploy thật lên namespace `ewallet-lab` (Helm template mới
+  `fund-service.yaml`, DB `ewallet_fund` tạo thủ công trên Postgres đang chạy — lưu ý vận hành
+  dưới đây).
+
+**Lưu ý vận hành — DB mới không tự tạo trên cluster ĐANG CHẠY**: `configmap-init-db.yaml`/
+`init-databases.sql` chỉ chạy lúc Postgres container khởi tạo volume RỖNG lần đầu (image Postgres
+chính thức chỉ chạy `/docker-entrypoint-initdb.d/*` khi datadir chưa có dữ liệu) — thêm
+`CREATE DATABASE ewallet_fund` vào 2 file này KHÔNG tự tạo DB trên 1 cluster đã chạy nhiều ngày với
+volume đã có dữ liệu (như cluster thật của lượt việc này, uptime 8 ngày). Đã chạy thủ công
+`CREATE DATABASE ewallet_fund;` qua `kubectl exec deploy/postgres -- psql -U postgres` trên cluster
+đang chạy — ghi rõ ở đây vì đây là bước dễ quên, chỉ lộ ra khi service mới báo lỗi kết nối DB khó
+hiểu dù Helm/configmap đã "đúng" trên giấy.
+
+**Ngoài phạm vi MVP** (ghi rõ theo đúng yêu cầu của issue #14):
+- **Không có lãi suất** ("Sinh Lời Trên Quỹ Nhóm") — để lại cho 1 ticket follow-up riêng nếu Túi
+  Thần Tài (#13) đã xong, tái dùng đúng cơ chế lazy-compute đó.
+- **Không có hạn mức số lượng quỹ/thành viên** như MoMo thật (2 quỹ tự tạo, 20 quỹ tham gia, 200
+  thành viên/quỹ, trần 25 triệu/quỹ) — không áp dụng trong MVP này, chỉ ghi nhận số liệu thật ở
+  trên để không ai sau này bịa số khác.
+- **Không có luồng "member request rút + creator duyệt"** — creator rút trực tiếp, không có bước
+  duyệt trung gian nào (xem phần "MVP đơn giản hoá hơn nữa" ở trên).
+- **`addMember` chỉ creator được gọi** — không có khái niệm "member tự rời quỹ" hay "creator xoá
+  thành viên" trong MVP này.
+
+## Quản lý chi tiêu (issue #16) — read-only, không bảng mới, không service mới
+
+**Nguồn — MoMo thật** (momo.vn/quan-ly-chi-tieu, agent-designer fetch trực tiếp 2026-10-03): tính
+năng thật có 4 tab (Sổ chi tiêu theo danh mục tự đặt, Ngân sách, Báo cáo tuần/tháng, Chatbot trợ lý
+chi tiêu AI), 3 điểm vào (Tôi > Tiện ích; Lịch sử GD; thanh tìm kiếm). MVP của lab này **chỉ làm
+phần "Báo cáo tự động"** — phần duy nhất tái dùng được 100% dữ liệu đã có (`Transaction` ledger
+trong `wallet-service`), không cần category tự do hay input thủ công.
+
+**Không phải điểm rẽ kiến trúc** (khác #12/#13/#14): endpoint mới `GET
+/wallets/{userId}/spending-report?period=week|month` hoàn toàn read-only trên `Transaction` đã có
+sẵn, không thêm bảng, không thêm service, không gọi cross-service.
+
+**Định nghĩa "chi tiêu" giữ nguyên đúng `mfe-wallet/Home.tsx`'s `SPEND_TYPES` đã có từ trước**:
+`WITHDRAW + TRANSFER_OUT + BILL_PAYMENT` — KHÔNG tính `TOPUP`/`TRANSFER_IN`/`REFUND`. Cố ý định
+nghĩa bằng 1 hằng số `SPEND_TYPES` RIÊNG trong `WalletService` thay vì tái dùng
+`StepUpPolicy.STEP_UP_TYPES` (issue #15, bao gồm cả TOPUP) hay issue #7's bộ hạn mức pháp luật
+(cùng 3 loại hôm nay nhưng là 1 khái niệm khác — "giới hạn pháp luật" không phải "báo cáo chi tiêu
+cho người dùng xem") — trùng nhau hôm nay là ngẫu nhiên, không có lý do phải luôn khoá cứng với
+nhau nếu 1 trong 2 đổi sau này.
+
+**"Tuần"/"tháng" dùng đúng quy ước "calendar reset" đã thống nhất trong toàn bộ dự án** (issue #7's
+tháng dương lịch, issue #15's ngày theo giờ server) — tuần reset vào đúng thứ Hai 00:00 giờ local
+server, theo chuẩn ISO-8601 (thứ Hai là ngày đầu tuần, đúng quy ước Việt Nam — khác US tuần bắt đầu
+Chủ Nhật). Không phải rolling window 7 ngày.
+
+**Query strategy**: group-by ở tầng DB (`TransactionRepository.sumAmountGroupedByTypeSince`, JPQL
+`GROUP BY t.type` với interface projection `SpendingBreakdownRow`), không load toàn bộ list rồi
+`reduce` trong Java — ledger của lab này nhỏ nên hiệu năng không phải vấn đề thật, nhưng chọn cách
+đúng ngay từ đầu rẻ hơn sửa sau. Loại không có giao dịch nào trong kỳ đơn giản không xuất hiện
+trong kết quả SQL — tầng service tự điền 0 cho đủ cả 3 loại để response luôn có shape ổn định
+(frontend không phải tự xử lý field thiếu).
+
+**Endpoint public, theo đúng convention hiện có của `wallet-service`** (userId path variable,
+không có auth middleware riêng) — không tự thêm lớp auth mới ngoài phạm vi ticket.
+
+**Ngoài phạm vi MVP** (ghi rõ theo đúng yêu cầu issue #16, không phải bug bị bỏ sót):
+- **Danh mục tự đặt tên** (category tự do) — ledger hiện tại chỉ có `TransactionType` cố định,
+  không có cột category tự do nào; thêm category thật cần 1 bảng mới + UI gán danh mục cho từng
+  giao dịch, ngoài phạm vi ticket này.
+- **"Ngân sách"** (đặt giới hạn chi tiêu theo category + cảnh báo vượt) — không làm.
+- **"Chatbot trợ lý chi tiêu"** (AI) — lab này không có hạ tầng AI/LLM tích hợp, không làm.
+- **"Thêm giao dịch thủ công ngoài MoMo"** (ghi chép tay không ảnh hưởng số dư ví) — cần 1 bảng
+  "manual entry" hoàn toàn tách biệt khỏi `Transaction` ledger thật (ledger thật chỉ ghi giao dịch
+  đã thực sự di chuyển tiền) — để dành cho 1 ticket riêng nếu muốn làm sau.
+- **So sánh với kỳ trước** (tuần/tháng trước) — nice-to-have theo issue, không bắt buộc cho MVP,
+  chưa làm.
+
+**Verify qua Ingress thật** (`http://api.ewallet-lab.local`, user đăng ký qua chính Ingress): tạo
+đủ 4 loại giao dịch (TOPUP 500.000đ, WITHDRAW 50.000đ, TRANSFER_OUT 30.000đ, BILL_PAYMENT 20.000đ)
+→ `GET .../spending-report?period=week` và `period=month` đều trả đúng `total=100.000đ`,
+`breakdown` đúng 3 giá trị (WITHDRAW/TRANSFER_OUT/BILL_PAYMENT), TOPUP không xuất hiện trong
+breakdown/total. `period=year` (giá trị không hợp lệ) → 400. CORS qua origin
+`http://shell.ewallet-lab.local` → `Access-Control-Allow-Origin` đúng, không cần đổi
+`ALLOWED_ORIGIN_PATTERN` (endpoint nằm trong `wallet-service` đã có CORS config sẵn).

@@ -20,14 +20,55 @@ npm run preview   # serve the dist/ build locally
 
 ```
 src/
-  nav.ts            single source of truth for sidebar + valid routes
-  pages/index.tsx    id -> page component registry (must match nav.ts ids)
-  pages/*.tsx        one component per page
-  components.tsx     shared content pieces (Note, Ep, FieldsTable, FlowDiagram, RoadmapItem...)
+  nav.ts             single source of truth for sidebar + valid routes, for BOTH spaces
+  pages/index.tsx    id -> page component registry (must match nav.ts ids), one flat map for both spaces
+  pages/*.tsx        one component per Developer page
+  pages/biz/*.tsx    one component per Business page
+  components.tsx     shared content pieces (Note, Ep, FieldsTable, FlowDiagram, RoadmapItem, BizFeature...)
   NavContext.tsx      lets any page link to another (<PageLink to="...">) without prop-drilling
-  App.tsx             layout (sidebar, mobile menu, theme toggle) + hash router
+  App.tsx             layout (sidebar, mobile menu, theme toggle, space switch) + hash router
   styles.css          ported from the original static site, class names unchanged
 ```
+
+## Developer/Business space switch (issue #17)
+
+The sidebar has a segmented control (under the brand mark, where a static "Developer Docs" label
+used to be) that switches between two independent spaces:
+
+- **Developer** (default) — exactly the content that existed before this switch: architecture,
+  service API references, deployment. Nothing changed here.
+- **Business** — a new space translating `ewallet-lab`'s actual product business rules (limits,
+  step-up auth, escrow/refund windows, family-wallet enforcement...) into non-technical language.
+  Every rule on these pages is translated from a specific section of the backend `DESIGN.md` — this
+  space is not feature marketing copy, and intentionally contains zero architecture/API detail
+  (that stays in Developer space).
+
+**Architecture decision — how one `NAV_GROUPS`/`PAGES` became two spaces** (the "điểm rẽ kiến trúc"
+the issue flagged, not a severity-4 architecture call like #12/#13/#14, so resolved directly rather
+than asking first, per the issue's own instruction):
+
+- Chose **option (a)** from the issue: a single flat `PAGES` registry shared by both spaces (every
+  Business page id is prefixed `biz-`, e.g. `biz-overview`, `biz-limits`, so ids never collide with
+  Developer's unprefixed ids), while `nav.ts`'s `NAV_GROUPS` became a function of the current
+  `space` state (`navGroupsFor(space)`, backed by two separate arrays, `DEV_NAV_GROUPS` and
+  `BIZ_NAV_GROUPS`) instead of one global constant.
+- Rejected **option (b)** (rendering Business as static content entirely outside the
+  `PAGES`/hash-router mechanism): it would have been slightly simpler for Business's current small
+  page count, but it throws away per-page deep-linking for Business content, which is exactly the
+  kind of link a reader would want to share (e.g. "read the limits page"). Option (a) costs one
+  prefix convention and gives deep-linking for free, since the hash router already exists.
+- **Space IS encoded into the hash**, the "cân nhắc thêm" the issue raised explicitly rather than
+  leaving it an unexamined default: Business pages use `#business/<id>` (e.g.
+  `#business/biz-limits`), fully shareable like any Developer link. Developer space deliberately
+  keeps the **original unprefixed hash shape** (`#overview`, no `#developer/` prefix) so every link
+  that existed before this change keeps resolving exactly as before — `nav.ts`'s `parseHash`/
+  `buildHash` encode this asymmetry explicitly (see their doc comments) rather than leaving it as
+  an implicit special case buried in `App.tsx`.
+- Space itself is **not** persisted to `localStorage` (unlike the theme toggle) — it's derived
+  purely from the current hash, and switching spaces via the segmented control navigates to that
+  space's default page (`DEFAULT_PAGE_BY_SPACE`), which updates the hash. This keeps a single
+  source of truth (the URL) instead of two potentially-conflicting ones (URL vs. stored
+  preference).
 
 ## Why React (not the original static HTML)
 

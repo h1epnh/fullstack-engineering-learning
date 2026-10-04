@@ -26,13 +26,14 @@ public class TransferServiceClient {
     public record TransferResult(UUID fromUserId, UUID toUserId, String toName, BigDecimal newBalance) {
     }
 
-    private record TransferRequest(UUID fromUserId, String toPhone, BigDecimal amount) {
+    private record TransferRequest(UUID fromUserId, String toPhone, BigDecimal amount, Boolean stepUpConfirmed) {
     }
 
-    public TransferResult transfer(UUID fromUserId, String toPhone, BigDecimal amount) {
+    /** {@code stepUpConfirmed} — issue #15 interaction (see PayRequestDto's javadoc). */
+    public TransferResult transfer(UUID fromUserId, String toPhone, BigDecimal amount, boolean stepUpConfirmed) {
         return restClient.post()
             .uri("/transfers")
-            .body(new TransferRequest(fromUserId, toPhone, amount))
+            .body(new TransferRequest(fromUserId, toPhone, amount, stepUpConfirmed))
             .retrieve()
             .body(TransferResult.class);
     }

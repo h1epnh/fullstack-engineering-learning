@@ -21,19 +21,23 @@ public class WalletServiceClient {
     public record WalletResult(UUID userId, BigDecimal balance) {
     }
 
-    private record AdjustBalanceRequest(BigDecimal amount, String type, String reference, String note) {
+    private record AdjustBalanceRequest(BigDecimal amount, String type, String reference, String note,
+                                         Boolean stepUpConfirmed) {
     }
 
-    public WalletResult debit(UUID userId, BigDecimal amount, String reference, String note) {
-        return adjust(userId, "debit", amount, "TRANSFER_OUT", reference, note);
+    /** Issue #15 — stepUpConfirmed only matters for debit (see wallet-service's AdjustBalanceRequest
+     * javadoc for why credit doesn't need it). */
+    public WalletResult debit(UUID userId, BigDecimal amount, String reference, String note, boolean stepUpConfirmed) {
+        return adjust(userId, "debit", amount, "TRANSFER_OUT", reference, note, stepUpConfirmed);
     }
 
     public WalletResult credit(UUID userId, BigDecimal amount, String type, String reference, String note) {
-        return adjust(userId, "credit", amount, type, reference, note);
+        return adjust(userId, "credit", amount, type, reference, note, false);
     }
 
-    private WalletResult adjust(UUID userId, String action, BigDecimal amount, String type, String reference, String note) {
-        AdjustBalanceRequest request = new AdjustBalanceRequest(amount, type, reference, note);
+    private WalletResult adjust(UUID userId, String action, BigDecimal amount, String type, String reference,
+                                 String note, boolean stepUpConfirmed) {
+        AdjustBalanceRequest request = new AdjustBalanceRequest(amount, type, reference, note, stepUpConfirmed);
         return restClient.post()
             .uri("/wallets/{userId}/{action}", userId, action)
             .body(request)

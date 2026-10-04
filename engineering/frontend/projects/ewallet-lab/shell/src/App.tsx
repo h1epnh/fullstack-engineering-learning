@@ -13,6 +13,9 @@ const WalletNotifications = lazy(() => import('mfe_wallet/Notifications'));
 const WalletReceiveQr = lazy(() => import('mfe_wallet/ReceiveQr'));
 const WalletBnpl = lazy(() => import('mfe_wallet/BnplWallet'));
 const WalletLoyalty = lazy(() => import('mfe_wallet/LoyaltyRewards'));
+const WalletSavingsPocket = lazy(() => import('mfe_wallet/SavingsPocket'));
+const WalletFamilyWallet = lazy(() => import('mfe_wallet/FamilyWallet'));
+const WalletSpendingReport = lazy(() => import('mfe_wallet/SpendingReport'));
 const TopupApp = lazy(() => import('mfe_topup/App'));
 const TransferApp = lazy(() => import('mfe_transfer/App'));
 const BillPaymentApp = lazy(() => import('mfe_bill_payment/App'));
@@ -63,6 +66,9 @@ type Flow =
   | { name: 'receive' }
   | { name: 'bnpl' }
   | { name: 'loyalty' }
+  | { name: 'savings-pocket' }
+  | { name: 'family-wallet' }
+  | { name: 'spending-report' }
   | { name: 'coming-soon'; feature: string };
 
 /**
@@ -194,6 +200,30 @@ export default function App() {
     );
   }
 
+  if (flow.name === 'savings-pocket') {
+    return (
+      <Suspense fallback={<ProgressBar label="Đang tải mfe-wallet…" />}>
+        <WalletSavingsPocket session={session} onBack={() => setFlow({ name: 'none' })} />
+      </Suspense>
+    );
+  }
+
+  if (flow.name === 'family-wallet') {
+    return (
+      <Suspense fallback={<ProgressBar label="Đang tải mfe-wallet…" />}>
+        <WalletFamilyWallet session={session} onBack={() => setFlow({ name: 'none' })} />
+      </Suspense>
+    );
+  }
+
+  if (flow.name === 'spending-report') {
+    return (
+      <Suspense fallback={<ProgressBar label="Đang tải mfe-wallet…" />}>
+        <WalletSpendingReport session={session} onBack={() => setFlow({ name: 'none' })} />
+      </Suspense>
+    );
+  }
+
   return (
     <div>
       {tab === 'home' && (
@@ -209,6 +239,9 @@ export default function App() {
             onOpenNotifications={() => setFlow({ name: 'notifications' })}
             onBnpl={() => setFlow({ name: 'bnpl' })}
             onLoyalty={() => setFlow({ name: 'loyalty' })}
+            onSavingsPocket={() => setFlow({ name: 'savings-pocket' })}
+            onFamilyWallet={() => setFlow({ name: 'family-wallet' })}
+            onSpendingReport={() => setFlow({ name: 'spending-report' })}
           />
         </Suspense>
       )}

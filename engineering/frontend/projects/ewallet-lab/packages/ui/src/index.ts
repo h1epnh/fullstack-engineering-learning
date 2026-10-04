@@ -9,5 +9,6 @@ export * from './StatusPill';
 export * from './Progress';
 export * from './Layout';
 export * from './TransactionRow';
+export * from './StepUpModal';
 export * from './formErrors';
 import './tokens.css';

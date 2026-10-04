@@ -18,6 +18,9 @@ declare module 'mfe_wallet/Home' {
     onOpenNotifications: () => void;
     onBnpl?: () => void;
     onLoyalty?: () => void;
+    onSavingsPocket: () => void;
+    onFamilyWallet: () => void;
+    onSpendingReport: () => void;
   }>;
   export default Home;
 }
@@ -35,6 +38,21 @@ declare module 'mfe_wallet/BnplWallet' {
 declare module 'mfe_wallet/ReceiveQr' {
   const ReceiveQr: ComponentType<{ session: Session; onBack: () => void }>;
   export default ReceiveQr;
+}
+
+declare module 'mfe_wallet/SavingsPocket' {
+  const SavingsPocket: ComponentType<{ session: Session; onBack: () => void }>;
+  export default SavingsPocket;
+}
+
+declare module 'mfe_wallet/FamilyWallet' {
+  const FamilyWallet: ComponentType<{ session: Session; onBack: () => void }>;
+  export default FamilyWallet;
+}
+
+declare module 'mfe_wallet/SpendingReport' {
+  const SpendingReport: ComponentType<{ session: Session; onBack: () => void }>;
+  export default SpendingReport;
 }
 
 declare module 'mfe_wallet/History' {

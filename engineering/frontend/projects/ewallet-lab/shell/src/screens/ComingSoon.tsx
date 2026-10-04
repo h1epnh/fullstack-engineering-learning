@@ -5,9 +5,10 @@ import { Button, Icon, Screen } from '@ewallet-lab/ui';
  * mfe-wallet/src/screens/Home.tsx MAIN_GRID/QUICK_ROW/FEED_TEASERS) — `transfer` and
  * `bill-payment` are now wired to real backends (transfer-service, bill-payment-service), and
  * `payment-link` (#3)/`payment-reminder` (#8) are now wired to payment-request-service, and
- * `lucky-money` (#10) is now wired to lucky-money-service (see mfe-transfer/src/App.tsx's
- * onComingSoon wrapper) — none of these 5 have an entry here anymore. Each remaining note is
- * honest about why, not a placeholder pretending a spec exists.
+ * `lucky-money` (#10) is now wired to lucky-money-service, and `fund` (#14) is now wired to
+ * fund-service (see mfe-transfer/src/App.tsx's onComingSoon wrapper) — none of these 6 have an
+ * entry here anymore. Each remaining note is honest about why, not a placeholder pretending a
+ * spec exists.
  */
 const COPY: Record<string, { icon: string; title: string; body: string }> = {
   suggested: {
@@ -84,16 +85,6 @@ const COPY: Record<string, { icon: string; title: string; body: string }> = {
     icon: 'card_giftcard',
     title: 'Gửi thiệp',
     body: 'Tính năng xã hội (thiệp kèm tiền mừng) — ngoài phạm vi lab tập trung vào giao dịch tài chính cốt lõi.',
-  },
-  'split-bill': {
-    icon: 'call_split',
-    title: 'Chia tiền',
-    body: 'Cần theo dõi nhóm/hoá đơn chung — chưa có domain model cho việc này trong lab.',
-  },
-  fund: {
-    icon: 'groups',
-    title: 'Quỹ',
-    body: 'Ví chung nhiều thành viên đóng góp — cần domain model và quyền truy cập riêng, chưa có trong lab.',
   },
 };
 

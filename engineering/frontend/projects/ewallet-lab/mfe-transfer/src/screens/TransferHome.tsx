@@ -8,9 +8,9 @@ import { QrScanner } from './QrScanner';
  * ComingSoon screen. Everything else here is still genuinely comingSoon. */
 const OTHER_SERVICES: { key: string; icon: string; label: string; wired?: boolean }[] = [
   { key: 'send-card', icon: 'card_giftcard', label: 'Gửi thiệp' },
-  { key: 'split-bill', icon: 'call_split', label: 'Chia tiền' },
+  { key: 'split-bill', icon: 'call_split', label: 'Chia tiền', wired: true },
   { key: 'payment-reminder', icon: 'notifications_active', label: 'Nhắc trả tiền', wired: true },
-  { key: 'fund', icon: 'groups', label: 'Quỹ' },
+  { key: 'fund', icon: 'groups', label: 'Quỹ', wired: true },
   { key: 'lucky-money', icon: 'redeem', label: 'Giật lì xì', wired: true },
   { key: 'payment-link', icon: 'link', label: 'Link nhận tiền', wired: true },
 ];

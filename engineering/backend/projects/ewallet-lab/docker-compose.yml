@@ -84,6 +84,7 @@ services:
       DB_USER: postgres
       DB_PASSWORD: postgres
       KAFKA_BOOTSTRAP: kafka:9092
+      FAMILY_WALLET_SERVICE_URL: http://family-wallet-service:8100
 
   topup-service:
     build: ./topup-service
@@ -214,6 +215,50 @@ services:
       DB_NAME: ewallet_loyalty
       DB_USER: postgres
       DB_PASSWORD: postgres
+      WALLET_SERVICE_URL: http://wallet-service:8091
+
+  # NOTE: originally also defaulted to port 8098 (a stashed branch that diverged from bnpl-service
+  # before either was committed) — reassigned to 8100 to avoid colliding with bnpl-service above.
+  family-wallet-service:
+    build: ./family-wallet-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+      wallet-service:
+        condition: service_started
+    ports:
+      - "8100:8100"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ewallet_family_wallet
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      USER_SERVICE_URL: http://user-service:8090
+      WALLET_SERVICE_URL: http://wallet-service:8091
+
+  # NOTE: originally also defaulted to port 8099 (same stashed-branch collision as
+  # family-wallet-service above) — reassigned to 8101 to avoid colliding with loyalty-service.
+  fund-service:
+    build: ./fund-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+      wallet-service:
+        condition: service_started
+    ports:
+      - "8101:8101"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ewallet_fund
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      USER_SERVICE_URL: http://user-service:8090
       WALLET_SERVICE_URL: http://wallet-service:8091
 
 volumes:

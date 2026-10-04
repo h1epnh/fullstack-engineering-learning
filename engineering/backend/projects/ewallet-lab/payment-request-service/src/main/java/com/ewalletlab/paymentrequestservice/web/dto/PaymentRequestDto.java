@@ -22,12 +22,17 @@ public record PaymentRequestDto(
     Instant createdAt,
     Instant expiresAt,
     Instant paidAt,
-    UUID paidByUserId
+    UUID paidByUserId,
+    /** Issue #11 — non-null only for a split-bill share; null for a plain LINK/REMINDER. */
+    UUID groupId,
+    BigDecimal groupTotal,
+    String groupLabel
 ) {
     public static PaymentRequestDto from(PaymentRequest r) {
         return new PaymentRequestDto(
             r.getId(), r.getKind(), r.getCreatorUserId(), r.getCreatorName(), r.getCreatorPhone(),
             r.getTargetUserId(), r.getTargetPhone(), r.getAmount(), r.getMessage(), r.getStatus(),
-            r.getCreatedAt(), r.getExpiresAt(), r.getPaidAt(), r.getPaidByUserId());
+            r.getCreatedAt(), r.getExpiresAt(), r.getPaidAt(), r.getPaidByUserId(),
+            r.getGroupId(), r.getGroupTotal(), r.getGroupLabel());
     }
 }

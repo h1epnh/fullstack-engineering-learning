@@ -36,6 +36,8 @@ spec:
               valueFrom: { secretKeyRef: { name: postgres-credentials, key: POSTGRES_PASSWORD } }
             - name: KAFKA_BOOTSTRAP
               value: "kafka:9092"
+            - name: FAMILY_WALLET_SERVICE_URL
+              value: "http://family-wallet-service:{{ .Values.familyWalletService.port }}"
             - name: ALLOWED_ORIGIN_PATTERN
               value: {{ .Values.corsAllowedOriginPattern | quote }}
           readinessProbe:

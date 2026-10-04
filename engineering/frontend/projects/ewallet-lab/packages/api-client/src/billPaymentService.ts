@@ -31,7 +31,14 @@ export const billPaymentService = {
     ),
 
   /** No `amount` param on purpose — the server recomputes it from the same deterministic
-   * formula the lookup used, so the payer can never pay a different amount than quoted. */
-  pay: (userId: string, category: BillCategory, customerCode: string) =>
-    http.post<BillPaymentReceipt>(`${API_BASE.billPayment}/bills/pay`, { userId, category, customerCode }),
+   * formula the lookup used, so the payer can never pay a different amount than quoted.
+   * `stepUpConfirmed` — issue #15: pass `true` when retrying after the user confirms the
+   * (simulated) step-up prompt shown for a 428 response. */
+  pay: (userId: string, category: BillCategory, customerCode: string, stepUpConfirmed?: boolean) =>
+    http.post<BillPaymentReceipt>(`${API_BASE.billPayment}/bills/pay`, {
+      userId,
+      category,
+      customerCode,
+      stepUpConfirmed,
+    }),
 };

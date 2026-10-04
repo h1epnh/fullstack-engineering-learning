@@ -336,3 +336,253 @@ cashback into the user's own main wallet. Rules, sources and the race strategy a
   rebuilt for the new flow.
 - **Verified**: `tsc` + build for mfe-wallet, shell builds. Headless Chromium against the harness and
   real local loyalty-service, wallet-service and Postgres. Not yet verified through minikube/Ingress.
+## 12. Step-up authentication modal (issue #15) — `StepUpModal` in `packages/ui`
+
+Mô phỏng bước "xác thực bổ sung" của QĐ 2345/QĐ-NHNN khi 1 giao dịch chuyển tiền/thanh toán/nạp ví
+vượt ngưỡng — xem backend `DESIGN.md`'s "Step-up xác thực..." cho nguồn số liệu, phạm vi, và lý do
+kiến trúc phía backend. Section này chỉ nói phần UI.
+
+- **`StepUpModal` (`packages/ui/src/StepUpModal.tsx`)** — 1 component dùng chung, không phải
+  federated (cùng trade-off duplicated-per-bundle đã nêu ở §3). Bottom-sheet cố định
+  (`position: fixed; inset: 0`) với icon `fingerprint`, hiển thị **nguyên văn message từ backend**
+  (không viết lại copy ở tầng frontend) + 1 dòng phụ nói rõ đây là mô phỏng, KHÔNG có sinh trắc
+  học/WebAuthn thật — tránh ngộ nhận đã tích hợp thật. 2 nút: "Tôi xác nhận đây là tôi" (gọi lại
+  đúng request ban đầu kèm `stepUpConfirmed: true`) và "Huỷ giao dịch" (quay lại màn nhập trước đó).
+- **`http.ts`'s `request()` giờ đọc `res.text()` cho response lỗi** thay vì luôn tạo message chung
+  chung — hầu hết `@ExceptionHandler` phía backend trả plain-text body là chính copy tiếng Việt đã
+  sourced (không phải JSON envelope); đọc `ApiError.message` này để hiển thị nguyên văn trong modal
+  thay vì đoán lại copy. `describeApiError` (dùng cho các lỗi khác, mã hoá theo `context`) không đổi
+  — 428 không đi qua `describeApiError`, nó có luồng riêng (xem dưới).
+- **Mỗi flow debit/topup tự quản lý 1 step `'step-up'` trong state machine của `App.tsx`** (transfer
+  + bank-transfer-out trong `mfe-transfer`, topup + withdraw trong `mfe-topup`, bill-pay trong
+  `mfe-bill-payment`) — không dùng modal chồng lên màn hiện tại, mà coi step-up là 1 "màn" đầy đủ
+  như các bước khác trong cùng state machine (nhất quán với cách toàn bộ app điều hướng bằng
+  `useState<Step>` phẳng, không có router — xem §6). Khi gọi service gặp `ApiError` với
+  `status === STEP_UP_REQUIRED_STATUS` (428, export từ `@ewallet-lab/api-client`), chuyển sang
+  step này thay vì hiện lỗi inline; `onConfirm` gọi lại đúng hàm submit với `stepUpConfirmed: true`;
+  `onCancel` quay về đúng step trước đó (giữ nguyên dữ liệu đã nhập — số tiền, người nhận/tài khoản
+  NH — để người dùng không phải nhập lại từ đầu nếu chọn Huỷ rồi thử lại).
+- **Không có build-arg/`VITE_*_SERVICE_URL` mới** — bước xác nhận không gọi thêm service mới nào từ
+  frontend (endpoint read-only `GET /wallets/{userId}/step-up-check` mới của wallet-service chỉ
+  được gọi từ `topup-service` phía server, không phải từ browser).
+- **Không verify bằng browser automation thật** — cùng loại gap đã ghi ở §7/§8/§9. Đã verify: build
+  sạch `npm run build -w mfe-transfer`/`-w mfe-topup`/`-w mfe-bill-payment`, cả 3 image rebuild
+  đúng tag và redeploy, bundle chạy thật grep ra đúng chuỗi mới ("Cần xác thực bổ sung", "Tôi xác
+  nhận đây là tôi", `stepUpConfirmed`), và toàn bộ luồng HTTP thật (428 → gọi lại kèm
+  `stepUpConfirmed: true` → 200) exercised qua Ingress thật cho cả transfer/topup/withdraw/
+  bank-transfer-out/bill-pay (xem backend DESIGN.md's phần verify cho số liệu cụ thể).
+
+## 13. Chia tiền (split-bill, issue #11) — 3 màn mới trong `mfe-transfer`
+
+MoMo THẬT đã NGỪNG tính năng này từ 31/08/2025 — xem backend DESIGN.md's "Chia tiền (split-bill,
+issue #11)" cho nguồn + lý do kiến trúc (mỗi share là 1 `PaymentRequest` kind=`LINK` bình thường,
+không service/DB mới). Section này chỉ nói phần UI.
+
+- **`split-bill` tile trong `TransferHome.tsx`'s `OTHER_SERVICES`** giờ `wired: true`, intercept
+  trong `App.tsx`'s `onComingSoon` wrapper (cùng pattern `payment-link`/`payment-reminder`/
+  `lucky-money`) — gỡ khỏi `shell/src/screens/ComingSoon.tsx`'s `COPY`.
+- **`SplitBillCreate.tsx`** — form với toggle "Chia đều" (tổng tiền + số người, preview mỗi người
+  trả bao nhiêu, làm tròn xuống + phần dư vào người đầu) / "Tuỳ chỉnh từng người" (danh sách input
+  động, thêm/bớt người, 2–20 người). Copy nói rõ "đơn giản hoá có chủ đích, không phải cơ chế bảo
+  mật thực tế" (đúng cảnh báo đã dùng ở `PaymentLinkCreate.tsx`, vì mỗi share bản chất là 1 LINK).
+- **`SplitBillCreated.tsx`** — sau khi tạo, hiện từng share (tên "Người N", số tiền) kèm nút "Sao
+  chép link" riêng (URL `.../pay/<shareId>`, y hệt `PaymentLinkCreated.tsx` — không phải component
+  dùng chung vì layout khác, nhưng cùng cơ chế: mỗi share's `id` chính là LINK token).
+- **`SplitBillGroup.tsx`** — "Danh sách đã thu": thanh tiến độ tự vẽ (không dùng component `Progress`
+  có sẵn — đó là `ProgressBar`, 1 spinner cho loading, không phải progress bar theo %) + danh sách
+  share kèm `StatusPill`. Refresh thủ công (nút "Làm mới") hoặc khi mount — không có push
+  notification, cùng gap "adapted, không giả vờ đã làm push" đã ghi ở §7 (payment-reminder).
+  Reachable từ màn kết quả ngay sau khi tạo, KHÔNG có route/deep-link riêng để quay lại xem sau
+  (đúng scope MVP — nếu cần, người tạo có thể lưu lại `groupId` thủ công, ngoài phạm vi issue #11).
+- **Việc trả 1 share KHÔNG có màn riêng** — payer mở đúng `.../pay/<shareId>` và rơi vào
+  `PaymentLinkPay.tsx` có sẵn (vì share là LINK thật), không có code UI mới cho việc "trả 1 phần
+  chia tiền" — đúng tinh thần "reuse toàn bộ, không viết code path debit/credit hay UI pay mới".
+- **`describeSplitError`** (App.tsx) — thay vì `describeApiError`'s copy chung theo status code,
+  hiện NGUYÊN VĂN message backend cho lỗi tạo split (400 "phải gửi đúng 1 trong 2 chế độ", "số
+  người chia phải từ 2 đến 20") — các message này đã đủ cụ thể/hữu ích từ backend, viết lại sẽ chỉ
+  làm mất thông tin. Khả thi nhờ `http.ts`'s `request()` giờ đọc `res.text()` vào `ApiError.message`
+  (thêm cho issue #15's step-up copy, tái dùng lại ở đây).
+- **Chưa nối `StepUpModal` vào luồng trả tiền split-share** (`PaymentLinkPay.tsx`) — ghi nhận ở
+  backend DESIGN.md's mục Chia tiền, đây là gap còn lại ngoài yêu cầu của issue #11 (chỉ ảnh hưởng
+  các share >10.000.000đ/lần hoặc khi cộng dồn ngày của payer vượt ngưỡng — khá hiếm với quy mô
+  chia tiền thông thường).
+- **Không có build-arg/`VITE_*_SERVICE_URL` mới** — chỉ dùng lại `VITE_PAYMENT_REQUEST_SERVICE_URL`
+  đã có sẵn từ issue #3/#8.
+- **Không verify bằng browser automation thật** — cùng loại gap đã ghi ở §7–§12. Đã verify:
+  build sạch `npm run build -w mfe-transfer` (+ `npx tsc --noEmit` sạch) và `-w shell`, cả 2 image
+  rebuild đúng tag và redeploy, bundle chạy thật grep ra đúng chuỗi mới ("Chia tiền", "Tuỳ chỉnh
+  từng người", "Danh sách đã thu", `createSplitEven`), và toàn bộ luồng HTTP thật (tạo split chia
+  đều + tuỳ chỉnh, trả từng share, `GET /splits/{groupId}` phản ánh đúng trạng thái, double-pay
+  409, và **8 request đồng thời vào cùng 1 share → 1/8 200 + 7/8 409 sạch**) exercised qua Ingress
+  thật (`http://api.ewallet-lab.local`) với nhiều user đăng ký qua chính Ingress.
+
+## 14. Túi Thần Tài (issue #13) — `SavingsPocket.tsx` trong `mfe-wallet`, gọi thẳng `wallet-service`
+
+Kiến trúc, nguồn lãi suất (ZaloPay 4%/năm đã verify vs MoMo 6%/năm cố tình không dùng), và cơ chế
+lazy-compute đều ở backend `DESIGN.md`'s "Túi Thần Tài" section — section này chỉ nói phần UI.
+
+- **`Home.tsx`'s "multi-wallet strip"** (`MiniWallet` — trước đây tĩnh, chỉ có "Ví chính") giờ có
+  thêm ô "Túi Thần Tài" **`onClick`-able** (gọi `onSavingsPocket`), hiện `formatVnd(pocketBalance)`
+  khi đã mở hoặc "Chưa mở" nếu chưa — khác "Ví Trả Sau" bên cạnh, vẫn cố tình để `comingSoon`
+  (`onClick` không set) vì ngoài phạm vi issue #13. `Home.tsx` gọi `savingsPocketService.view()`
+  cùng lúc với balance ví chính lúc mount để tô đúng số dư mà không cần người dùng mở màn trước.
+- **`SavingsPocket.tsx`** — 1 màn, 2 trạng thái: **chưa mở** (form nhập số tiền mở lần đầu, tối
+  thiểu 10.000đ — copy nói rõ "sinh lãi mỗi ngày (mô phỏng)") và **đã mở** (thẻ số dư + lãi suất
+  hiện tại, 2 nút "Nạp thêm"/"Rút về ví chính" dùng chung 1 form amount). Không có màn/step riêng
+  cho "xem lịch sử lãi" — mỗi lần `view`/`deposit`/`withdraw` chỉ trả về balance đã cộng lãi luỹ kế
+  tới thời điểm gọi (đúng cách backend tính, không có breakdown "lãi ngày X là bao nhiêu" ở tầng
+  UI hay API).
+- **Disclaimer mô phỏng hiện NGUYÊN VĂN trên UI, không chỉ trong tài liệu kỹ thuật**: dòng cuối màn
+  "đã mở" nói rõ "Lãi suất trên là MÔ PHỎNG cho mục đích học tập — không có quỹ đầu tư/ngân hàng
+  lưu ký thật đứng sau, khác thực tế MoMo/ZaloPay có đối tác quỹ/ngân hàng thật" — đúng yêu cầu của
+  Acceptance criteria issue #13 (tuyên bố rõ ràng, không chỉ ở DESIGN.md).
+- **Không có build-arg/`VITE_*_SERVICE_URL` mới** — `savingsPocketService.ts` tái dùng
+  `API_BASE.wallet` đã có sẵn (túi sống trong chính `wallet-service`, không phải service riêng,
+  đúng quyết định kiến trúc (a) trên issue #13).
+- **`describeApiError`'s `'savings-pocket'` context mới** trong `formErrors.ts` — copy lỗi riêng
+  cho 409 (số dư không đủ/đã mở trước đó/dưới mức tối thiểu — backend trả message tiếng Việt cụ thể
+  qua `res.text()`, không cần mã hoá lại ở tầng frontend cho case này).
+- **Không verify bằng browser automation thật** — cùng loại gap đã ghi ở §7–§13. Đã verify: build
+  sạch `npm run build -w mfe-wallet`, image rebuild đúng tag và redeploy, bundle chạy thật grep ra
+  đúng chuỗi mới ("Túi Thần Tài", "MÔ PHỎNG cho mục đích học tập"), và toàn bộ luồng HTTP thật
+  (mở/nạp/rút, lãi tích luỹ theo thời gian, 409 khi vượt hạn/không đủ số dư, và race 20 request mở
+  đồng thời sau khi fix — xem backend DESIGN.md's phần verify cho số liệu cụ thể) qua Ingress thật.
+
+## 15. Ví Gia Đình (issue #12) — `FamilyWallet.tsx` trong `mfe-wallet`, gọi `family-wallet-service`
+
+Nguồn (VNPay, KHÔNG PHẢI MoMo), 3 lựa chọn kiến trúc đã dừng lại hỏi trước khi code, và quyết định
+đã chọn (overlay (a) + enforce tại `wallet-service`'s debit path) đều ở backend `DESIGN.md`'s "Ví
+Gia Đình" section — section này chỉ nói phần UI.
+
+- **Tile "Ví Gia đình" hoàn toàn MỚI trong `Home.tsx`'s quick-action grid** (không map vào tile
+  `ComingSoon` nào có sẵn, đúng như Context của issue #12 đã lưu ý — tính năng này không tồn tại
+  trong danh sách MoMo comingSoon gốc vì nó không phải ý tưởng của MoMo). Icon
+  `family_restroom` (Material Symbols, đúng quy ước icon toàn dự án), `real: true` ngay từ đầu
+  (không qua trạng thái comingSoon).
+- **`FamilyWallet.tsx`** — màn của "parent": form thêm/cập nhật hạn mức (nhập SĐT thành viên +
+  hạn mức/tháng, upsert — 1 API call, không có toggle "thêm mới" vs "sửa" riêng ở UI, khớp đúng
+  `addOrUpdateMember`'s upsert semantics phía backend) + danh sách thành viên, mỗi thẻ hiện thanh
+  tiến độ "đã chi/hạn mức" (đỏ nếu ≥100%) và nút "Xem lịch sử chi tiêu" (toggle inline, gọi
+  `memberHistory`, tái dùng `TransactionRow` có sẵn từ `packages/ui` — không viết lại component
+  hiển thị giao dịch).
+- **Không có màn hình riêng cho "member"** — nếu 1 member vượt hạn mức, họ chỉ thấy lỗi 409 xuất
+  hiện Ở ĐÚNG màn hình chuyển tiền/thanh toán/rút tiền hiện có (`mfe-transfer`/`mfe-topup`/
+  `mfe-bill-payment`) qua đúng luồng lỗi 409 chung đã có sẵn (dùng chung fallback "Số dư không đủ…"
+  hiện có cho MỌI loại 409 khác từ `wallet-service`'s debit path, kể cả hạn mức tháng/pháp luật
+  issue #7) — KHÔNG có message/UI riêng phân biệt "vượt hạn mức gia đình" khỏi "vượt hạn mức pháp
+  luật"/"số dư không đủ" ở tầng member. Đây là giới hạn đã biết, ghi rõ ở đây để không ai nhầm là
+  bug: phân biệt rõ ràng cần backend trả về 1 field/error-code riêng cho từng loại 409, ngoài phạm
+  vi issue #12.
+- **`describeApiError`'s `'family-wallet'` context mới** — copy cho 400 ("không thể đặt hạn mức
+  cho chính mình"), 404 ("không tìm thấy tài khoản Ewallet Lab với SĐT này"), 409 ("thành viên này
+  đã thuộc gia đình khác").
+- **Build-arg MỚI**: `mfe-wallet/Dockerfile` thêm `ARG`/`ENV VITE_FAMILY_WALLET_SERVICE_URL` (đúng
+  lỗi tái diễn ghi trong CLAUDE.md — mỗi remote gọi thêm service mới phải tự thêm build-arg riêng,
+  không dùng chung với `VITE_WALLET_SERVICE_URL` dù cùng là "ví" về mặt tên gọi).
+- **Ngoài phạm vi MVP** (ghi rõ theo đúng yêu cầu của issue #12 — giới hạn có chủ đích, không phải
+  bug bị bỏ sót; chi tiết lý do ở backend `DESIGN.md`'s "Ví Gia Đình" section): (1) không có "ví
+  con" không cần tài khoản riêng — member luôn là 1 user đã tồn tại, tự đăng nhập bằng tài khoản
+  của chính mình, không có khái niệm "đăng nhập hộ"; (2) **không có giao diện app riêng cho trẻ
+  em** — `FamilyWallet.tsx` và toàn bộ luồng chi tiêu của member dùng chung đúng 1 bộ UI
+  `mfe-transfer`/`mfe-topup`/`mfe-bill-payment`/`mfe-wallet` như mọi user khác, không có theme/màn
+  hình rút gọn riêng; (3) **không có thông báo real-time khi member chi tiêu** — nút "Xem lịch sử
+  chi tiêu" trên `FamilyWallet.tsx` chỉ gọi API khi parent chủ động bấm (không poll nền, không
+  push/websocket), parent phải tự mở lại màn hình để thấy giao dịch mới của member.
+- **Không verify bằng browser automation thật** — cùng loại gap đã ghi ở §7–§14. Đã verify: build
+  sạch `npm run build -w mfe-wallet`, image rebuild đúng tag (kèm build-arg mới) và redeploy, bundle
+  chạy thật grep ra đúng chuỗi mới ("Ví Gia đình", "Xem lịch sử chi tiêu", ý tưởng VNPay), và toàn
+  bộ luồng HTTP thật (thêm thành viên, member chi tiêu dưới/vượt hạn mức, xem lịch sử, và race
+  thêm-thành-viên-đồng-thời sau khi fix — xem backend DESIGN.md's phần verify cho số liệu cụ thể)
+  qua Ingress thật với 2 user đăng ký qua chính Ingress (1 parent, 1 member).
+
+## 16. Quỹ nhóm (issue #14) — `FundHome.tsx`/`FundDetail.tsx` trong `mfe-transfer`, gọi `fund-service`
+
+Kiến trúc đã chốt, nguồn UX đã fetch trực tiếp momo.vn/quy-nhom, luồng tiền (debit-trước/credit-
+trước tuỳ thao tác), và bug fix race condition khi mời thành viên đồng thời đều ở backend
+`DESIGN.md`'s "Quỹ nhóm" section — section này chỉ nói phần UI.
+
+- **Tile "Quỹ" trong `mfe-transfer`'s `OTHER_SERVICES`** (vốn đã tồn tại sẵn, comingSoon) nay
+  `wired: true`, đi khỏi shell's `ComingSoon.tsx`. Khác với split-bill/payment-link (1 state máy
+  tuyến tính trong `App.tsx`), quỹ nhóm có 2 "screen" riêng trong `Step` union:
+  `fund-list` (danh sách quỹ của tôi + tạo quỹ mới, `FundHome.tsx`) và `fund-detail` (chi tiết 1
+  quỹ, `FundDetail.tsx`) — giống cấu trúc `split-group`/`split-create` của issue #11.
+- **`FundHome.tsx`**: `fundService.listForMember(session.id)` hiển thị mọi quỹ user đang tham gia
+  (creator hoặc member) + số dư + trạng thái (`DISSOLVED` hiện badge xám). Form tạo quỹ mới (tên +
+  mục đích không bắt buộc) — tạo xong tự mở luôn `FundDetail` của quỹ vừa tạo.
+- **`FundDetail.tsx`**: thẻ số dư quỹ, form "Góp quỹ" (mọi thành viên), form "Rút tiền"/nút "Giải
+  thể quỹ" (CHỈ hiện nếu `fund.creatorUserId === selfUserId`, khớp đúng MVP chỉ-creator-được-rút
+  của backend), danh sách thành viên, lịch sử giao dịch (ẩn/hiện, không tái dùng `TransactionRow`
+  của `packages/ui` vì `FundTransactionType` {CONTRIBUTION, WITHDRAWAL, DISSOLVE} khác hẳn
+  `TransactionType` {TOPUP, WITHDRAW, TRANSFER_OUT, TRANSFER_IN, BILL_PAYMENT} của ví chính — tự vẽ
+  1 bảng map icon/label/dấu +/- riêng cho loại này thay vì ép kiểu).
+- **Step-up (#15) xử lý CỤC BỘ ngay trong `FundDetail.tsx`, KHÔNG đẩy lên `App.tsx`'s `Step`
+  union** — khác với transfer/bank-transfer-out (vốn có 1 step `'step-up'` riêng ở tầng `App.tsx`).
+  Lý do: `StepUpModal` vốn đã là 1 overlay `position: fixed` (`zIndex: 1000`), không bắt buộc phải
+  là "cả màn hình" — composable trực tiếp bên trong bất kỳ screen nào đang giữ state liên quan
+  (amount vừa nhập, callback `onConfirm` retry đúng request cũ với `stepUpConfirmed: true`). Làm
+  cục bộ ở đây tránh phải nhồi thêm `fundId`/`amount` vào `App.tsx`'s `Step` union chỉ cho 1 luồng
+  — các luồng khác dùng `Step`-level vì chúng vốn đã đa bước (chọn người nhận → nhập tiền → xác
+  nhận), còn góp quỹ là 1 form đơn lẻ ngay trên cùng màn hình.
+- **`describeFundError` riêng, KHÔNG dùng `describeApiError`'s union type** — cùng lý do
+  `describeSplitError` của issue #11: `fund-service` trả về rất nhiều message 403/404/409 khác
+  nhau, đã cụ thể/có nguồn sẵn ở tầng Java (`FundMutationExecutor`/`FundService`), hiển thị nguyên
+  văn hữu ích hơn gộp vào vài bin chung của `describeApiError`. Đây là ngoại lệ đã có tiền lệ (#11),
+  không phải lần đầu lệch khỏi quy ước CLAUDE.md "luôn mở rộng `describeApiError`" — áp dụng khi số
+  lượng message riêng biệt đủ nhiều để việc gộp bin làm mất thông tin hữu ích.
+- **Build-arg MỚI**: `mfe-transfer/Dockerfile` thêm `ARG`/`ENV VITE_FUND_SERVICE_URL` — đã verify
+  grep bundle đang chạy thật trong cluster KHÔNG còn `localhost:8099` (giá trị default khi quên
+  build-arg), chỉ có `api.ewallet-lab.local`.
+- **Creator tự động là 1 `FundMember` của quỹ do chính họ tạo** (xem backend
+  `FundService.create`) — hiển thị nguyên trong danh sách thành viên kèm nhãn "(người tạo)", không
+  có UI đặc biệt nào khác biệt họ khỏi member thường ngoài 2 action rút/giải thể chỉ họ nhìn thấy.
+- **Ngoài phạm vi MVP** (giống phần tương ứng ở backend DESIGN.md): không có luồng "member yêu cầu
+  rút + creator duyệt" (MoMo thật có, lab bỏ hẳn bước duyệt trung gian — creator rút trực tiếp
+  không cần request từ member nào); không có màn hình riêng hiển thị hạn mức 2 quỹ tự tạo/20 quỹ
+  tham gia/200 thành viên/quỹ của MoMo thật (lab không giới hạn các con số này); không có UI sinh
+  lãi ("Sinh Lời Trên Quỹ Nhóm").
+- **Không verify bằng browser automation thật** — cùng loại gap đã ghi ở §7–§15. Đã verify: build
+  sạch `npm run build -w mfe-transfer` + `npx tsc --noEmit` sạch, image rebuild đúng tag (kèm
+  build-arg mới) và redeploy, grep bundle `mfe-transfer` đang chạy thật trong cluster ra đúng chuỗi
+  mới ("Quỹ nhóm", `fundService`) và đúng `api.ewallet-lab.local` (không phải `localhost:8099`), và
+  toàn bộ luồng HTTP thật (tạo quỹ, mời 2 thành viên, góp quỹ đồng thời, rút/giải thể bởi creator,
+  chặn member/outsider, race ≥8 và ≥20-30 concurrent) qua Ingress thật — xem backend DESIGN.md's
+  phần verify cho số liệu cụ thể.
+
+## 17. Quản lý chi tiêu (issue #16) — `SpendingReport.tsx` trong `mfe-wallet`, gọi `wallet-service`
+
+Nguồn MoMo thật, định nghĩa "chi tiêu", phạm vi cắt (chỉ làm "Báo cáo", không category/ngân sách/
+chatbot) và query strategy đều ở backend `DESIGN.md`'s "Quản lý chi tiêu" section — section này chỉ
+nói phần UI. Không phải điểm rẽ kiến trúc — không build-arg mới (gọi lại đúng
+`VITE_WALLET_SERVICE_URL` đã có sẵn, cùng service với `getBalance`/`getTransactions`).
+
+- **Tile "Quản lý chi tiêu" trong `Home.tsx`'s `MAIN_GRID`** đổi `real: true` (trước đó rơi vào
+  `ComingSoon` generic fallback vì `ComingSoon.tsx`'s `COPY` map chưa từng có entry `spending`).
+  `handleGridClick` thêm 1 nhánh rẽ riêng cho key `spending` (gọi `onSpendingReport`) — đặt TRƯỚC
+  nhánh `else if (item.real) onTransfer()` dùng chung cho các tile `real` khác, tránh bị nhánh đó
+  nuốt mất và điều hướng nhầm sang `mfe-transfer`.
+- **`SpendingReport.tsx`** — màn mới, expose qua Module Federation (`./SpendingReport` trong
+  `mfe-wallet/vite.config.ts`), wire ở `shell/src/App.tsx` (flow `'spending-report'`) giống đúng
+  pattern `FamilyWallet`/`SavingsPocket`. 2 nút toggle "Tuần này"/"Tháng này" (không dùng component
+  `Tabs` nào — codebase chưa có, tự vẽ 2 nút giống style segmented control), gọi
+  `walletService.getSpendingReport(session.id, period)` mỗi khi đổi period. Card tổng chi tiêu +
+  breakdown 3 loại (Rút tiền/Chuyển tiền/Thanh toán hoá đơn) với thanh tỷ lệ phần trăm trên tổng —
+  tái dùng đúng kiểu thanh progress thủ công (`div` cao 6px) đã dùng ở `FamilyWallet.tsx`'s hạn mức
+  gia đình, không phải component `ProgressBar` của `packages/ui` (component đó là spinner "đang
+  tải", không phải thanh phần trăm) — `ProgressBar` CÓ được tái dùng đúng vai trò của nó, cho
+  trạng thái loading khi đang gọi API.
+- **`walletService.getSpendingReport`** (api-client) — type `SpendingReport`/`SpendingPeriod` mới
+  trong `walletService.ts`, breakdown kiểu `Partial<Record<TransactionType, number>>` (không phải
+  `Record` đầy đủ, dù backend luôn trả đủ cả 3 key — giữ type phòng thủ phía frontend, không ép
+  buộc giả định về response shape của 1 service khác).
+- **Không có UI cho "so sánh kỳ trước"** — backend không trả field này (nice-to-have, không làm ở
+  MVP này), frontend không tự bịa UI cho dữ liệu không tồn tại.
+- **Không verify bằng browser automation thật** — cùng loại gap đã ghi ở §7–§16. Đã verify: build
+  sạch `npm run build -w mfe-wallet` + `npm run build -w shell` + `npx tsc --noEmit -p mfe-wallet`
+  sạch, image rebuild đúng tag (`mfe-wallet`, `shell`) và redeploy, grep bundle `mfe-wallet` đang
+  chạy thật trong cluster ra đúng chuỗi mới ("Tuần"/"Tháng"/"chi tiêu"/nguồn "quan-ly-chi-tieu")
+  trong chunk `SpendingReport-*.js`, và đúng path `spending-report` + base URL
+  `api.ewallet-lab.local` (không phải `localhost:8091`) trong chunk `walletService-*.js`. Verify
+  luồng HTTP thật qua Ingress (`http://api.ewallet-lab.local`, user đăng ký qua chính Ingress): tạo
+  đủ 4 loại giao dịch → `spending-report?period=week`/`month` đều trả đúng tổng + breakdown, TOPUP
+  không bị tính — xem backend DESIGN.md's phần verify cho số liệu cụ thể. CORS qua origin
+  `http://shell.ewallet-lab.local` xác nhận `Access-Control-Allow-Origin` đúng.

@@ -16,6 +16,13 @@ import java.util.UUID;
 public record TransferRequestDto(
     @NotNull UUID fromUserId,
     @NotBlank String toPhone,
-    @NotNull @DecimalMin("0.01") @DecimalMax("100000000") BigDecimal amount
+    @NotNull @DecimalMin("0.01") @DecimalMax("100000000") BigDecimal amount,
+    /** Issue #15 (mô phỏng step-up QĐ 2345/QĐ-NHNN) — null/missing = "chưa xác nhận", giống
+     * {@code false}. Client set true khi gọi lại sau khi người dùng đã qua bước xác thực bổ sung
+     * (giả lập). */
+    Boolean stepUpConfirmed
 ) {
+    public boolean isStepUpConfirmed() {
+        return Boolean.TRUE.equals(stepUpConfirmed);
+    }
 }

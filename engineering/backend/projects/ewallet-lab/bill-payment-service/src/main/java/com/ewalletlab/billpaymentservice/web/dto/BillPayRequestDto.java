@@ -14,6 +14,11 @@ import java.util.UUID;
 public record BillPayRequestDto(
     @NotNull UUID userId,
     @NotNull BillCategory category,
-    @NotBlank String customerCode
+    @NotBlank String customerCode,
+    /** Issue #15 — see wallet-service's AdjustBalanceRequest javadoc; null/missing = "chưa xác nhận". */
+    Boolean stepUpConfirmed
 ) {
+    public boolean isStepUpConfirmed() {
+        return Boolean.TRUE.equals(stepUpConfirmed);
+    }
 }

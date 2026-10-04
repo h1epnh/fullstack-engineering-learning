@@ -4,6 +4,7 @@
 #   --build-arg VITE_WALLET_SERVICE_URL=http://api.ewallet-lab.local \
 #   --build-arg VITE_BNPL_SERVICE_URL=http://api.ewallet-lab.local \
 #   --build-arg VITE_LOYALTY_SERVICE_URL=http://api.ewallet-lab.local \
+#   --build-arg VITE_FAMILY_WALLET_SERVICE_URL=http://api.ewallet-lab.local \
 #   -t ewallet-lab/mfe-wallet:local .
 FROM node:22-alpine AS build
 WORKDIR /repo
@@ -19,6 +20,9 @@ ENV VITE_BNPL_SERVICE_URL=${VITE_BNPL_SERVICE_URL}
 # Issue #19: LoyaltyRewards screen calls loyalty-service.
 ARG VITE_LOYALTY_SERVICE_URL
 ENV VITE_LOYALTY_SERVICE_URL=${VITE_LOYALTY_SERVICE_URL}
+# Issue #12 — "Ví Gia Đình" screen (FamilyWallet.tsx) calls family-wallet-service directly.
+ARG VITE_FAMILY_WALLET_SERVICE_URL
+ENV VITE_FAMILY_WALLET_SERVICE_URL=${VITE_FAMILY_WALLET_SERVICE_URL}
 RUN npm run build -w mfe-wallet
 
 FROM nginx:1.27-alpine

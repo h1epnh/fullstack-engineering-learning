@@ -1,6 +1,8 @@
 import {
   ApiError,
+  STEP_UP_REQUIRED_STATUS,
   type PaymentRequest,
+  type SplitGroup,
   type UserResponse,
   type VietQrBank,
   paymentRequestService,
@@ -10,15 +12,20 @@ import {
   walletService,
 } from '@ewallet-lab/api-client';
 import type { Session } from '@ewallet-lab/session';
-import { describeApiError } from '@ewallet-lab/ui';
+import { StepUpModal, describeApiError } from '@ewallet-lab/ui';
 import { useState } from 'react';
 import { BankTransferForm } from './screens/BankTransferForm';
 import { BankTransferOutStatusScreen } from './screens/BankTransferOutStatusScreen';
+import { FundDetail } from './screens/FundDetail';
+import { FundHome } from './screens/FundHome';
 import { LuckyMoneyHome } from './screens/LuckyMoneyHome';
 import { PaymentLinkCreate } from './screens/PaymentLinkCreate';
 import { PaymentLinkCreated } from './screens/PaymentLinkCreated';
 import { PaymentLinkPay } from './screens/PaymentLinkPay';
 import { PaymentReminderHome } from './screens/PaymentReminderHome';
+import { SplitBillCreate } from './screens/SplitBillCreate';
+import { SplitBillCreated } from './screens/SplitBillCreated';
+import { SplitBillGroup } from './screens/SplitBillGroup';
 import { TransferAmount } from './screens/TransferAmount';
 import { TransferDone } from './screens/TransferDone';
 import { TransferHome } from './screens/TransferHome';
@@ -36,7 +43,29 @@ type Step =
   // Issue #8 — payment-reminder
   | { name: 'payment-reminder' }
   // Issue #10 — lucky money
-  | { name: 'lucky-money' };
+  | { name: 'lucky-money' }
+  // Issue #11 — split-bill (MoMo thật đã ngừng tính năng này 31/08/2025, xem backend DESIGN.md)
+  | { name: 'split-create' }
+  | { name: 'split-created'; group: SplitGroup }
+  | { name: 'split-group'; groupId: string }
+  // Issue #14 — quỹ nhóm (fund-service). FundDetail handles its own data loading + issue #15's
+  // step-up locally (StepUpModal composed as an overlay, not a separate Step here — see
+  // FundDetail's javadoc for why that's safe/simpler than every other money-moving flow above).
+  | { name: 'fund-list' }
+  | { name: 'fund-detail'; fundId: string }
+  // Issue #15 — step-up authentication (mô phỏng QĐ 2345/QĐ-NHNN)
+  | { name: 'step-up'; message: string; onConfirm: () => Promise<void>; onCancel: () => void };
+
+/** Issue #11 — split-bill's 400s (cross-field validation like "gửi đúng 1 trong 2 chế độ" or
+ * "số người chia phải từ 2 đến 20") already have a precise, useful backend message (see
+ * CreateSplitRequestDto/PaymentRequestService.resolveShareAmounts) — showing it verbatim (now
+ * possible since http.ts's `request()` reads the response body into `ApiError.message`, added for
+ * issue #15's step-up copy) is more useful here than `describeApiError`'s generic per-status-code
+ * fallback. */
+function describeSplitError(e: unknown): string {
+  if (e instanceof ApiError) return e.message;
+  return 'Không kết nối được tới máy chủ. Kiểm tra lại các service đã chạy chưa rồi thử lại.';
+}
 
 /**
  * Exposed as `./App` (see vite.config.ts). Real P2P transfer — see
@@ -61,6 +90,54 @@ export default function App({
   const [step, setStep] = useState<Step>(
     initialPayToken ? { name: 'pay-link', token: initialPayToken } : { name: 'home' },
   );
+
+  /**
+   * Issue #15 — on a 428 response, park the UI on a `step-up` screen (a full "screen" like the
+   * rest of this state machine, not a modal layered over the previous one) instead of showing an
+   * inline error, so `onConfirm` can re-run the exact same request with `stepUpConfirmed: true`.
+   */
+  async function submitTransfer(recipient: UserResponse, amount: number, stepUpConfirmed: boolean): Promise<string | null> {
+    try {
+      const res = await transferService.transfer(session.id, recipient.phone, amount, stepUpConfirmed);
+      setStep({ name: 'done', toName: res.toName, amount, newBalance: res.newBalance });
+      return null;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === STEP_UP_REQUIRED_STATUS) {
+        setStep({
+          name: 'step-up',
+          message: e.message,
+          onConfirm: () => submitTransfer(recipient, amount, true).then(() => undefined),
+          onCancel: () => setStep({ name: 'amount', recipient }),
+        });
+        return null;
+      }
+      return describeApiError(e instanceof ApiError ? e.status : undefined, 'transfer');
+    }
+  }
+
+  async function submitBankTransferOut(
+    bank: VietQrBank,
+    accountNumber: string,
+    amount: number,
+    stepUpConfirmed: boolean,
+  ): Promise<string | null> {
+    try {
+      const res = await topupService.initiateBankTransferOut(session.id, bank.code, accountNumber, amount, stepUpConfirmed);
+      setStep({ name: 'bank-status', orderId: res.orderId });
+      return null;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === STEP_UP_REQUIRED_STATUS) {
+        setStep({
+          name: 'step-up',
+          message: e.message,
+          onConfirm: () => submitBankTransferOut(bank, accountNumber, amount, true).then(() => undefined),
+          onCancel: () => setStep({ name: 'bank', bank }),
+        });
+        return null;
+      }
+      return describeApiError(e instanceof ApiError ? e.status : undefined, 'bank-transfer-out');
+    }
+  }
 
   async function handleSearch(phone: string): Promise<string | null> {
     if (phone === session.phone) {
@@ -92,6 +169,14 @@ export default function App({
           }
           if (feature === 'lucky-money') {
             setStep({ name: 'lucky-money' });
+            return;
+          }
+          if (feature === 'split-bill') {
+            setStep({ name: 'split-create' });
+            return;
+          }
+          if (feature === 'fund') {
+            setStep({ name: 'fund-list' });
             return;
           }
           onComingSoon(feature);
@@ -154,21 +239,70 @@ export default function App({
     return <LuckyMoneyHome selfUserId={session.id} selfName={session.name} onBack={() => setStep({ name: 'home' })} />;
   }
 
+  if (step.name === 'split-create') {
+    return (
+      <SplitBillCreate
+        onBack={() => setStep({ name: 'home' })}
+        onSubmitEven={async (label, totalAmount, peopleCount, message) => {
+          try {
+            const group = await paymentRequestService.createSplitEven(
+              session.id, session.phone, session.name, label, totalAmount, peopleCount, message);
+            setStep({ name: 'split-created', group });
+            return null;
+          } catch (e) {
+            return describeSplitError(e);
+          }
+        }}
+        onSubmitCustom={async (label, amounts, message) => {
+          try {
+            const group = await paymentRequestService.createSplitCustom(
+              session.id, session.phone, session.name, label, amounts, message);
+            setStep({ name: 'split-created', group });
+            return null;
+          } catch (e) {
+            return describeSplitError(e);
+          }
+        }}
+      />
+    );
+  }
+
+  if (step.name === 'split-created') {
+    return (
+      <SplitBillCreated
+        group={step.group}
+        shellOrigin={window.location.origin}
+        onViewCollected={() => setStep({ name: 'split-group', groupId: step.group.groupId })}
+        onDone={() => setStep({ name: 'home' })}
+      />
+    );
+  }
+
+  if (step.name === 'split-group') {
+    return <SplitBillGroup groupId={step.groupId} onBack={() => setStep({ name: 'home' })} />;
+  }
+
+  if (step.name === 'fund-list') {
+    return (
+      <FundHome
+        selfUserId={session.id}
+        onOpenFund={(fundId) => setStep({ name: 'fund-detail', fundId })}
+        onBack={() => setStep({ name: 'home' })}
+      />
+    );
+  }
+
+  if (step.name === 'fund-detail') {
+    return <FundDetail fundId={step.fundId} selfUserId={session.id} onBack={() => setStep({ name: 'fund-list' })} />;
+  }
+
   if (step.name === 'bank') {
     return (
       <BankTransferForm
         bank={step.bank}
         senderName={session.name}
         onBack={() => setStep({ name: 'home' })}
-        onContinue={async (accountNumber, amount) => {
-          try {
-            const res = await topupService.initiateBankTransferOut(session.id, step.bank.code, accountNumber, amount);
-            setStep({ name: 'bank-status', orderId: res.orderId });
-            return null;
-          } catch (e) {
-            return describeApiError(e instanceof ApiError ? e.status : undefined, 'bank-transfer-out');
-          }
-        }}
+        onContinue={(accountNumber, amount) => submitBankTransferOut(step.bank, accountNumber, amount, false)}
       />
     );
   }
@@ -182,17 +316,13 @@ export default function App({
       <TransferAmount
         recipient={step.recipient}
         onBack={() => setStep({ name: 'home' })}
-        onSubmit={async (amount) => {
-          try {
-            const res = await transferService.transfer(session.id, step.recipient.phone, amount);
-            setStep({ name: 'done', toName: res.toName, amount, newBalance: res.newBalance });
-            return null;
-          } catch (e) {
-            return describeApiError(e instanceof ApiError ? e.status : undefined, 'transfer');
-          }
-        }}
+        onSubmit={(amount) => submitTransfer(step.recipient, amount, false)}
       />
     );
+  }
+
+  if (step.name === 'step-up') {
+    return <StepUpModal message={step.message} onConfirm={step.onConfirm} onCancel={step.onCancel} />;
   }
 
   return <TransferDone toName={step.toName} amount={step.amount} newBalance={step.newBalance} onDone={onDone} />;

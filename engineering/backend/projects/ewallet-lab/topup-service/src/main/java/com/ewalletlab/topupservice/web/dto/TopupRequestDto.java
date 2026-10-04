@@ -20,6 +20,12 @@ import java.util.UUID;
  */
 public record TopupRequestDto(
     @NotNull UUID userId,
-    @NotNull @DecimalMin("10000") @DecimalMax("50000000") BigDecimal amount
+    @NotNull @DecimalMin("10000") @DecimalMax("50000000") BigDecimal amount,
+    /** Issue #15 — mô phỏng QĐ 2345/QĐ-NHNN, áp dụng cả cho nạp ví (xem backend DESIGN.md's
+     * "Step-up xác thực" cho lý do phạm vi). null/missing = "chưa xác nhận". */
+    Boolean stepUpConfirmed
 ) {
+    public boolean isStepUpConfirmed() {
+        return Boolean.TRUE.equals(stepUpConfirmed);
+    }
 }
