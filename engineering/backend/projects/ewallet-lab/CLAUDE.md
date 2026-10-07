@@ -85,3 +85,26 @@ Field nào lấy từ MoMo/ngân hàng/quy định thật → phải fetch xác 
 DESIGN.md, đánh dấu rõ ràng phần nào là "đã xác minh" vs "tự thiết kế theo logic phổ quát". Không
 suy đoán tên field từ trí nhớ. Không bao giờ dùng tên/logo MoMo thật trong UI hay data — dự án là
 bản clone học tập, không phải sản phẩm thương mại đội lốt.
+
+## Kiến trúc doanh nghiệp & Căn chỉnh Kỹ thuật với Nghiệp vụ (Enterprise Architecture Alignment)
+
+Mọi thay đổi kỹ thuật của `agent-dev` phải tuân thủ 5 nguyên lý kiến trúc tài chính doanh nghiệp:
+
+1. **Sổ cái duy nhất (Single Source of Truth / Ledger Sanctity)**:
+   - `wallet-service` là nguồn sự thật DUY NHẤT về tiền mặt trong ví (Core General Ledger).
+   - Tuyệt đối không service phụ trợ nào (BNPL, Quỹ nhóm, Sàn đầu tư, Loyalty) được tự tạo "số dư tiền mặt ảo" cạnh tranh với `wallet-service`. Mọi tác vụ liên quan đến tiền mặt bắt buộc phải quy về `/debit` hoặc `/credit` tại `wallet-service`.
+
+2. **Căn chỉnh Chế độ Thất bại theo Bản chất Nghiệp vụ (Fail-Open vs Fail-Closed)**:
+   - *Tuân thủ pháp luật (Regulatory & Compliance)*: Bắt buộc **FAIL-CLOSED**. Hạn mức tháng TT 40/2024 (#7) và Step-up xác thực QĐ 2345 (#15) KHÔNG ĐƯỢC PHÉP bypass khi gặp lỗi hay gián đoạn.
+   - *Tính năng giá trị gia tăng (Auxiliary / Add-on services)*: Ưu tiên **FAIL-OPEN**. Ví dụ: `family-wallet-service` gặp sự cố không được phép làm tê liệt toàn bộ luồng thanh toán cốt lõi của hàng triệu user khác.
+
+3. **Cơ chế Triệt tiêu Tranh chấp Tiền tệ (Zero-Loss / Zero-Creation Concurrency)**:
+   - Mọi luồng di chuyển tiền xuyên service (distributed business process) phải tuân theo pattern: **Claim trước (local lock/optimistic lock) -> Di chuyển tiền (remote call) -> Commit/Revert (compensation)**.
+   - Tránh tuyệt đối check-then-act không có khoá dẫn đến bug "sinh tiền từ hư không" (như #10) hoặc "mất tiền mid-flight" (như #14).
+
+4. **Trách nhiệm Giải trình & Kiểm toán (Auditability & Traceability)**:
+   - Mọi lần ghi sổ cái bắt buộc kèm `reference` (ID giao dịch nghiệp vụ gốc), `TransactionType` đã được cấp phép, và `note` rõ ràng. Không ghi sổ "nặc danh".
+
+5. **Ngân sách Tài nguyên & Khả năng Phục hồi (Resource Isolation & Resilience)**:
+   - Toàn hệ thống dùng chung 1 Postgres server với `max_connections=200`: Mọi service Java bắt buộc giới hạn `hikari.maximum-pool-size: 5` để đảm bảo ngân sách connection khi rolling-restart.
+
