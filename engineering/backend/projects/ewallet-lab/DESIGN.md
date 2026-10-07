@@ -1252,6 +1252,87 @@ map lỗi) và gợi ý thử lại.
 **Tự verify lại — kết quả thật, xem comment agent-dev trên issue #14 cho số liệu/lệnh tái hiện đầy
 đủ.**
 
+**Bug fix thứ 3 — "tiền kẹt mid-flight" khi CHÍNH compensation cũng thua hết lượt retry (phát hiện
+bởi agent-tester, race ≥60 concurrent withdraw/1 fund — nặng hơn 2 bug trước vì đây là MẤT TIỀN
+THẬT, không chỉ lệch ledger)**: bug fix thứ 1/thứ 2 ở trên dùng `withRetry("compensate-withdraw",
+...)`/`withRetry("compensate-dissolve", ...)` — CÙNG `MAX_ATTEMPTS=4` với mọi operation thường
+khác trên `Fund`. Dưới tải ≥60 concurrent withdraw/1 fund, chính compensation (chạy SAU KHI đã
+local-commit, tức tiền đã THỰC SỰ bị trừ khỏi `Fund.balance`) cũng tranh chấp `@Version` với 56+
+withdraw khác đang chạy cùng lúc, và có thể thua hết 4 lượt retry — khi đó nó `throw` lại
+`ObjectOptimisticLockingFailureException` NGUYÊN BẢN, không được bắt riêng, bay thẳng qua
+`FundController`'s generic `@ExceptionHandler(ObjectOptimisticLockingFailureException.class)` → trả
+409 với message GIỐNG HỆT 1 conflict bình thường ("Quỹ nhóm đang được xử lý ở giao dịch khác, vui
+lòng thử lại"). Hậu quả xác nhận bằng SQL thật của agent-tester: `Fund.balance` đã trừ (không hoàn
+lại), `FundTransaction` WITHDRAWAL vẫn còn (ghi nhận đã rút), nhưng `wallet-service`'s `TRANSFER_IN`
+cho creator KHÔNG có dòng tương ứng — tiền biến mất khỏi hệ thống hoàn toàn (không trong fund, không
+trong ví), và client nhận đúng message "thử lại là xong" trong khi thực ra tiền đã mất, không tự
+phục hồi được bằng cách gọi lại API.
+
+Fix theo cả 3 hướng agent-tester đề xuất trên issue:
+
+1. **Retry budget riêng, mạnh hơn hẳn, cho compensation** — `FundService.compensateWithRetry`
+   (tách khỏi `withRetry` dùng chung cho operation thường): `MAX_COMPENSATION_ATTEMPTS=30` (so với
+   `MAX_ATTEMPTS=4` của operation thường) + backoff có JITTER (`20ms × lần thử`, trần `150ms`, cộng
+   jitter ngẫu nhiên `0-40ms`) — không dùng backoff thuần `base × i` như operation thường, vì dưới
+   tải cao hàng chục thread cùng thua optimistic-lock có xu hướng tỉnh dậy retry ĐÚNG CÙNG LÚC nếu
+   không có jitter, tự làm tăng chính xác loại tranh chấp đang cố tránh. Lý do chấp nhận ngân sách
+   retry lớn hơn nhiều + có thể tốn thêm vài giây: đây là bước SỬA LỖI sau khi tiền đã thực sự bị
+   trừ cục bộ, không phải operation thường (nơi "thua hết lượt, trả 409, user tự thử lại" vô hại vì
+   chưa commit gì) — chờ lâu hơn một chút để đảm bảo đúng quan trọng hơn phản hồi nhanh ở đây.
+2. **Nếu vẫn thua hết 30 lượt (lý thuyết luôn có thể xảy ra ở tải đủ cao)** — KHÔNG để
+   `ObjectOptimisticLockingFailureException` thoát ra ngoài giống bug cũ. `compensateWithRetry` bắt
+   riêng lần thua cuối, gọi `recordStuckCompensation` (`log.error` — không phải `warn`, kèm đầy đủ
+   `fundId`/`transactionId`/`amount`/`requesterUserId`/action, grep được qua marker
+   `FUND_MONEY_STUCK`) rồi throw `ResponseStatusException(500, ...)` với message RIÊNG, khác hẳn
+   409/502 của `mapCreditFailure`: nêu rõ "số tiền đang tạm kẹt... KHÔNG thử lại giao dịch này
+   ngay... mã tham chiếu: <failureId>" — không thể nhầm với 1 conflict bình thường.
+3. **Reconciliation nền** — bảng mới `fund_compensation_failures`
+   (`FundCompensationFailure` entity, cột `fund_id`/`transaction_id`/`requester_user_id`/`amount`/
+   `action` tái dùng `FundTransactionType` (WITHDRAWAL/DISSOLVE, không bịa enum mới)/`created_at`/
+   `resolved_at`) ghi lại đúng 1 hàng mỗi lần `recordStuckCompensation` chạy.
+   `FundCompensationReconciler` (`@Scheduled(fixedDelay = 15_000)`, cần `@EnableScheduling` trên
+   `FundServiceApplication` — pattern @Scheduled MỚI trong service này, các service khác trong lab
+   dùng lazy-expiry, không polling job, xem `lucky-money-service`'s "Điểm rẽ #2") quét mọi hàng
+   `resolved_at IS NULL`, với MỖI hàng chỉ thử lại ĐÚNG 1 LẦN (không tự lặp lại nhiều lần trong 1
+   lượt chạy — cố ý đơn giản: tranh chấp gây exhausted ban đầu luôn là 1 đợt burst ngắn đã kết thúc
+   từ lâu tới lúc job chạy lại 15s sau, nên 1 lần thử là đủ; thua thì để lại cho lượt chạy kế tiếp,
+   không tự phình to retry loop của chính nó dưới tải) — gọi lại ĐÚNG
+   `compensateWithdraw`/`compensateDissolve` (cùng method `FundMutationExecutor` đã dùng ở path
+   tức thời), thành công thì `markResolved` + `log.warn` (không còn ERROR nữa vì đã tự lành), thua
+   tiếp thì `log.error` lại (tình huống này vẫn cần biết, không chỉ debug) và để nguyên cho lượt
+   sau.
+
+**Đã tự verify thật qua Ingress** (`http://api.ewallet-lab.local`, user/2 fund hoàn toàn MỚI):
+- 70 concurrent withdraw (10.000đ/lần) trên 1 fund (balance 1.500.000đ) → 65×200 + 5×409 (4 normal
+  optimistic-lock + 1 credit-fail trên ví creator, compensate THẮNG trong ngân sách 30 lượt, trả
+  đúng message riêng "Rút quỹ thất bại do wallet-service từ chối giao dịch (409), quỹ đã được hoàn
+  lại số dư..."). `fund_transactions` WITHDRAWAL = 65 hàng/650.000đ = đúng balance delta (balance
+  còn 850.000đ), `wallet-service`'s `TRANSFER_IN` cho creator (lọc theo `reference=fundId`) = đúng
+  65 dòng/650.000đ — khớp tuyệt đối. 0 hàng `fund_compensation_failures` (không lượt nào bị
+  exhausted thật ở quy mô này, nhờ Hikari `maximum-pool-size: 5` của `fund-service` tự giới hạn số
+  transaction THỰC SỰ tranh chấp đồng thời trên 1 row, dù tầng HTTP nhận 70-200 request cùng lúc).
+- 200 concurrent withdraw (5.000đ/lần) trên 1 fund khác (balance 5.000.000đ) → 183×200 + 17×409 (16
+  normal + 1 credit-fail, compensate thắng trong budget). `fund_transactions` = 183 hàng/915.000đ =
+  đúng balance delta (4.085.000đ), `TRANSFER_IN` = đúng 183/915.000đ. 0 hàng
+  `fund_compensation_failures`.
+- **Path "thua hết 30 lượt" khó ép xảy ra tự nhiên** ở quy mô minikube 1-node (Hikari pool 5 giới
+  hạn tranh chấp thật trên 1 row xuống còn tối đa 5-way, không phải 70/200-way như số request HTTP
+  nhận vào) — verify riêng bằng cách mô phỏng ĐÚNG trạng thái DB mà `compensateWithRetry` sẽ để lại
+  nếu thua hết lượt (balance đã trừ/status đã DISSOLVED cục bộ, 1 hàng `FundTransaction` phantom, 1
+  hàng `fund_compensation_failures` chưa `resolved_at`), cho CẢ 2 action WITHDRAWAL và DISSOLVE —
+  cả 2 lần, `FundCompensationReconciler` tự phát hiện trong vòng chạy kế tiếp (≤15s), gọi đúng
+  `compensateWithdraw`/`compensateDissolve`, hoàn lại balance đúng số tiền (DISSOLVE còn tự mở lại
+  `status=ACTIVE`), xoá đúng hàng phantom, đánh `resolved_at`, log
+  `FUND_MONEY_STUCK resolved by background reconciler...` — xác nhận cả 2 nhánh action hoạt động
+  đúng, không chỉ WITHDRAWAL.
+- Build sạch `./gradlew build`; image `ewallet-lab/fund-service:local` rebuild, deploy lại namespace
+  `ewallet-lab`; bảng `fund_compensation_failures` tự được Hibernate `ddl-auto: update` tạo đúng
+  trên DB đang chạy (table MỚI, khác trường hợp "thêm enum vào bảng cũ đã có CHECK constraint" —
+  xem CLAUDE.md, verify bằng `\d fund_compensation_failures` trực tiếp trên Postgres); bytecode
+  đang chạy trên pod xác nhận khớp fix (`kubectl cp` jar + `javap` thấy đúng
+  `compensateWithRetry`/`recordStuckCompensation`/`jitteredCompensationBackoff`/
+  `FundCompensationReconciler`/`FundCompensationFailure`).
+
 ## Quản lý chi tiêu (issue #16) — read-only, không bảng mới, không service mới
 
 **Nguồn — MoMo thật** (momo.vn/quan-ly-chi-tieu, agent-designer fetch trực tiếp 2026-10-03): tính

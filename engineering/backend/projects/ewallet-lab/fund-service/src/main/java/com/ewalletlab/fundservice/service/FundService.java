@@ -1,8 +1,11 @@
 package com.ewalletlab.fundservice.service;
 
 import com.ewalletlab.fundservice.domain.Fund;
+import com.ewalletlab.fundservice.domain.FundCompensationFailure;
 import com.ewalletlab.fundservice.domain.FundMember;
 import com.ewalletlab.fundservice.domain.FundTransaction;
+import com.ewalletlab.fundservice.domain.FundTransactionType;
+import com.ewalletlab.fundservice.repository.FundCompensationFailureRepository;
 import com.ewalletlab.fundservice.repository.FundMemberRepository;
 import com.ewalletlab.fundservice.repository.FundRepository;
 import com.ewalletlab.fundservice.repository.FundTransactionRepository;
@@ -18,6 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
 
 /**
@@ -35,19 +39,43 @@ public class FundService {
     private static final int MAX_ATTEMPTS = 4;
     private static final long RETRY_BACKOFF_MILLIS = 25;
 
+    /**
+     * Issue #14 — bug found by agent-tester at ≥60 concurrent withdraws/1 fund: {@code
+     * compensateWithdraw}/{@code compensateDissolve} run AFTER money has already been decremented
+     * locally (the wallet-service credit that was supposed to follow it failed), so unlike every
+     * other mutation on {@link Fund} — where losing the optimistic-lock race just means "nothing
+     * was committed yet, a 409 asking the client to retry is harmless" — losing THIS race means
+     * real money is stuck mid-flight (debited from the fund, never credited to the wallet, and
+     * nothing left to auto-revert it). It must not share {@link #MAX_ATTEMPTS}/{@link
+     * #RETRY_BACKOFF_MILLIS} with normal operations: a much larger budget, with jittered backoff
+     * (plain {@code backoff * attempt} without jitter means every losing thread tends to wake up
+     * and collide again at the same instants, which is exactly the failure mode agent-tester hit
+     * at high concurrency) buys a compensation attempt many more chances to land in a gap between
+     * the dozens of OTHER concurrent withdraws still hammering the same {@code Fund} row before
+     * giving up and falling back to {@link #recordStuckCompensation}.
+     */
+    private static final int MAX_COMPENSATION_ATTEMPTS = 30;
+    private static final long COMPENSATION_BACKOFF_BASE_MILLIS = 20;
+    private static final long COMPENSATION_BACKOFF_CAP_MILLIS = 150;
+    private static final long COMPENSATION_BACKOFF_JITTER_MILLIS = 40;
+
     private final FundRepository fundRepository;
     private final FundMemberRepository fundMemberRepository;
     private final FundTransactionRepository fundTransactionRepository;
+    private final FundCompensationFailureRepository compensationFailureRepository;
     private final UserServiceClient userServiceClient;
     private final WalletServiceClient walletServiceClient;
     private final FundMutationExecutor mutationExecutor;
 
     public FundService(FundRepository fundRepository, FundMemberRepository fundMemberRepository,
-                        FundTransactionRepository fundTransactionRepository, UserServiceClient userServiceClient,
+                        FundTransactionRepository fundTransactionRepository,
+                        FundCompensationFailureRepository compensationFailureRepository,
+                        UserServiceClient userServiceClient,
                         WalletServiceClient walletServiceClient, FundMutationExecutor mutationExecutor) {
         this.fundRepository = fundRepository;
         this.fundMemberRepository = fundMemberRepository;
         this.fundTransactionRepository = fundTransactionRepository;
+        this.compensationFailureRepository = compensationFailureRepository;
         this.userServiceClient = userServiceClient;
         this.walletServiceClient = walletServiceClient;
         this.mutationExecutor = mutationExecutor;
@@ -167,7 +195,7 @@ public class FundService {
             log.warn("withdraw from fund={} decremented locally but wallet-service credit failed — " +
                 "compensating by adding {} back to the fund and removing the phantom ledger row {}",
                 fundId, amount, result.transactionId());
-            withRetry("compensate-withdraw", fundId,
+            compensateWithRetry(FundTransactionType.WITHDRAWAL, fundId, amount, result.transactionId(), requesterUserId,
                 () -> mutationExecutor.compensateWithdraw(fundId, amount, result.transactionId()));
             throw mapCreditFailure(e, "Rút quỹ");
         }
@@ -189,8 +217,8 @@ public class FundService {
                 log.warn("dissolve of fund={} zeroed locally but wallet-service credit of remainder={} failed — " +
                     "reopening the fund and removing the phantom ledger row {}",
                     fundId, result.remainder(), result.transactionId());
-                withRetry("compensate-dissolve", fundId,
-                    () -> mutationExecutor.compensateDissolve(fundId, result.remainder(), result.transactionId()));
+                compensateWithRetry(FundTransactionType.DISSOLVE, fundId, result.remainder(), result.transactionId(),
+                    requesterUserId, () -> mutationExecutor.compensateDissolve(fundId, result.remainder(), result.transactionId()));
                 throw mapCreditFailure(e, "Giải thể quỹ");
             }
         }
@@ -228,11 +256,71 @@ public class FundService {
         }
     }
 
+    /**
+     * Retries a withdraw/dissolve compensation with the much larger budget described on {@link
+     * #MAX_COMPENSATION_ATTEMPTS} — and if it STILL loses every attempt, does NOT let the raw
+     * {@code ObjectOptimisticLockingFailureException} escape to {@code FundController}'s generic
+     * handler (which would return the exact same 409/"đang được xử lý ở giao dịch khác" message as
+     * a completely harmless everyday conflict — indistinguishable from this, a case where real
+     * money is actually stuck, per agent-tester's finding on issue #14). Instead: logs at ERROR
+     * (not {@code warn} — this needs to be alertable, not just debuggable), persists a {@link
+     * FundCompensationFailure} row so {@code FundCompensationReconciler}'s background job can keep
+     * retrying exactly this compensation until it eventually succeeds, and throws a distinct 500
+     * with a message that tells the caller this is NOT a normal "just retry the same request"
+     * conflict.
+     */
+    private Fund compensateWithRetry(FundTransactionType action, UUID fundId, BigDecimal amount,
+                                      UUID transactionId, UUID requesterUserId, Supplier<Fund> attempt) {
+        for (int i = 1; i <= MAX_COMPENSATION_ATTEMPTS; i++) {
+            try {
+                return attempt.get();
+            } catch (ObjectOptimisticLockingFailureException e) {
+                if (i == MAX_COMPENSATION_ATTEMPTS) {
+                    UUID failureId = recordStuckCompensation(action, fundId, amount, transactionId, requesterUserId);
+                    throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Giao dịch thất bại và việc hoàn tiền tự động CŨNG thất bại do hệ thống đang quá tải — " +
+                        "số tiền đang tạm kẹt (đã trừ khỏi quỹ, chưa hoàn lại), hệ thống đã ghi nhận để tự xử lý " +
+                        "lại trong ít giây tới. KHÔNG thử lại giao dịch này ngay — vui lòng kiểm tra lại số dư quỹ " +
+                        "sau, nếu vẫn sai lệch liên hệ hỗ trợ với mã tham chiếu: " + failureId);
+                }
+                log.debug("compensate-{} on fund={} lost the optimistic-lock race, retrying ({}/{})",
+                    action, fundId, i, MAX_COMPENSATION_ATTEMPTS);
+                sleep(jitteredCompensationBackoff(i));
+            }
+        }
+        throw new IllegalStateException("unreachable");
+    }
+
+    private static long jitteredCompensationBackoff(int attempt) {
+        long base = Math.min(COMPENSATION_BACKOFF_BASE_MILLIS * attempt, COMPENSATION_BACKOFF_CAP_MILLIS);
+        return base + ThreadLocalRandom.current().nextLong(COMPENSATION_BACKOFF_JITTER_MILLIS);
+    }
+
+    /** Last resort for issue #14's "tiền kẹt mid-flight" bug class — see {@link
+     * FundCompensationFailure}'s javadoc for the full picture and {@code FundCompensationReconciler}
+     * for what eventually clears this row. Logged at ERROR (this is real, confirmed-stuck money,
+     * not a routine conflict) with every field needed to find/fix it by hand if the background job
+     * is somehow not running. */
+    private UUID recordStuckCompensation(FundTransactionType action, UUID fundId, BigDecimal amount,
+                                          UUID transactionId, UUID requesterUserId) {
+        FundCompensationFailure failure =
+            compensationFailureRepository.save(new FundCompensationFailure(fundId, transactionId, requesterUserId, amount, action));
+        log.error("FUND_MONEY_STUCK — compensate-{} on fund={} transactionId={} amount={} requester={} " +
+            "exhausted {} retries against sustained optimistic-lock contention — fund balance is NOT yet " +
+            "reverted and the phantom FundTransaction row is NOT yet deleted; recorded as " +
+            "FundCompensationFailure id={} for the background reconciler to keep retrying — if this keeps " +
+            "failing, needs manual DB intervention (see DESIGN.md's Quỹ nhóm section)",
+            action, fundId, transactionId, amount, requesterUserId, MAX_COMPENSATION_ATTEMPTS, failure.getId());
+        return failure.getId();
+    }
+
     /** Same combined retry shape as wallet-service's {@code SavingsPocketService.withRetry} (issue
      * #13's fix): one loop handles BOTH a lost optimistic-lock race (balance mutations — retried
      * against the freshly-committed row) AND a lost UNIQUE-constraint race on
      * {@code addMemberOnce} (retried so the next attempt observes the winner's now-committed
-     * membership row and returns it instead of surfacing a raw 500). */
+     * membership row and returns it instead of surfacing a raw 500). NOT used for withdraw/
+     * dissolve's compensation step — see {@link #compensateWithRetry} for why that needs a very
+     * different (much larger, jittered) retry budget. */
     private <T> T withRetry(String op, UUID fundId, Supplier<T> attempt) {
         for (int i = 1; i <= MAX_ATTEMPTS; i++) {
             try {
