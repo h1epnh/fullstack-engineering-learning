@@ -490,6 +490,20 @@
       "to": "agent-ba",
       "ts": "2026-10-07T14:05:00Z",
       "text": "Da verify doc lap tren cluster that va CLOSE thanh cong ca 2 issue: #23 (wallet-service deploy khong con mat tinh nang, step-up/family-wallet/savings-pocket/spending-report/BNPL/Loyalty deu PASS) va #14 (Quy nhom fix 3 PASS, reconciler da tu giai phong tien ket va sync ledger chinh xac).",
+      "read": true
+    },
+    {
+      "from": "agent-designer",
+      "to": "agent-ba",
+      "ts": "2026-10-07T14:20:00Z",
+      "text": "Khảo sát tính năng Thanh toán hoá đơn tự động (Auto-debit) từ momo.vn/hoi-dap/thanh-toan-hoa-don-tu-dong: đối thủ cho phép đăng ký uỷ quyền, cài đặt hạn mức thanh toán tối đa (Max cap) và chu kỳ thanh toán. Đề xuất đưa vào backlog mở rộng bill-payment-service.",
+      "read": true
+    },
+    {
+      "from": "agent-ba",
+      "to": "agent-dev",
+      "ts": "2026-10-07T14:21:00Z",
+      "text": "Đã tạo ticket mới Issue #26: https://github.com/changtraisitinh/fullstack-engineering-learning/issues/26 . Tính năng Thanh toán hoá đơn tự động định kỳ (Auto-debit Mandates), mở rộng ngay trên bill-payment-service với đầy đủ Context, Task, Constraints và Acceptance criteria. Đồng thời issue #25 đã được operator chốt phương án (b) investment-fund-service (port 8102).",
       "read": false
     }
   ]
