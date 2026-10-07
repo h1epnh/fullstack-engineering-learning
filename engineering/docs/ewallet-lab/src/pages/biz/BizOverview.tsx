@@ -47,6 +47,10 @@ export default function BizOverview() {
           ngoài luồng chuyển/thanh toán thông thường.
         </li>
         <li>
+          <PageLink to="biz-fund-spending">Quỹ nhóm, Quản lý chi tiêu</PageLink> — 2 tính năng mới nhất được wire
+          thật, một tính năng nhiều người cùng giữ 1 quỹ, một tính năng tự tổng hợp chi tiêu.
+        </li>
+        <li>
           <PageLink to="biz-coming-soon">Chưa làm thật (Sắp có)</PageLink> — các mục còn lại trên UI, vì sao chưa có
           backend thật đứng sau.
         </li>
@@ -54,7 +58,7 @@ export default function BizOverview() {
 
       <h2>Trạng thái</h2>
       <p>
-        11 tính năng đã liệt kê ở các trang trên đều <strong>Đã có</strong> thật (nối backend thật, không phải mock
+        13 tính năng đã liệt kê ở các trang trên đều <strong>Đã có</strong> thật (nối backend thật, không phải mock
         UI) tại thời điểm viết trang này — đối chiếu trực tiếp với code (<code>Home.tsx</code>,{' '}
         <code>TransferHome.tsx</code>) mỗi khi có nghi ngờ, vì danh sách này có thể thay đổi theo thời gian.
       </p>

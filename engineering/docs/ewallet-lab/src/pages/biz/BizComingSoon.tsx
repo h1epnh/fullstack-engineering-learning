@@ -15,8 +15,8 @@ export default function BizComingSoon() {
         <p>
           Danh sách này đối chiếu trực tiếp <code>Home.tsx</code>/<code>TransferHome.tsx</code>/<code>ComingSoon.tsx</code>{' '}
           tại thời điểm viết trang — có thể đã đổi theo thời gian khi các tính năng này lần lượt được làm thật
-          (giống cách Chia tiền, Lì xì, Link nhận tiền, Nhắc trả tiền từng nằm trong danh sách này trước khi được
-          wire thật).
+          (giống cách Chia tiền, Lì xì, Link nhận tiền, Nhắc trả tiền, Quỹ nhóm, Quản lý chi tiêu từng nằm trong danh
+          sách này trước khi được wire thật — 2 mục cuối xem trang Quỹ nhóm & Quản lý chi tiêu).
         </p>
       </Note>
 
@@ -37,12 +37,10 @@ export default function BizComingSoon() {
             'Cần quyền truy cập camera trình duyệt và hỗ trợ một chuẩn QR thanh toán thật để giải mã — hiện chỉ quét được đúng định dạng QR riêng của Ewallet Lab.',
           ],
           ['Ví tiện ích', 'Chưa có mô tả nghiệp vụ cụ thể trong code hiện tại.'],
-          ['Quản lý chi tiêu', 'Chưa có mô tả nghiệp vụ cụ thể trong code hiện tại.'],
           [
             'Ví Trả Sau / sản phẩm tài chính đối tác (vay nhanh, bảo hiểm)',
             'Đây là sản phẩm tín dụng/tài chính thật cần hợp tác với bên thứ ba — ngoài phạm vi một lab học tập.',
           ],
-          ['Quỹ', 'Ví chung nhiều thành viên đóng góp — cần domain model và quyền truy cập riêng, chưa có trong lab.'],
           ['Gửi thiệp', 'Tính năng xã hội (thiệp kèm tiền mừng) — ngoài phạm vi lab tập trung vào giao dịch tài chính cốt lõi.'],
         ]}
       />

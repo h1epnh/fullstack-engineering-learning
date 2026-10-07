@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import Architecture from './Architecture';
 import BizComingSoon from './biz/BizComingSoon';
 import BizFamilySavings from './biz/BizFamilySavings';
+import BizFundSpending from './biz/BizFundSpending';
 import BizLimits from './biz/BizLimits';
 import BizOverview from './biz/BizOverview';
 import BizSocialPayments from './biz/BizSocialPayments';
@@ -44,5 +45,6 @@ export const PAGES: Record<string, ComponentType> = {
   'biz-transfer-payments': BizTransferPayments,
   'biz-social-payments': BizSocialPayments,
   'biz-family-savings': BizFamilySavings,
+  'biz-fund-spending': BizFundSpending,
   'biz-coming-soon': BizComingSoon,
 };

@@ -105,6 +105,10 @@ const BIZ_NAV_GROUPS: NavGroup[] = [
     items: [{ id: 'biz-family-savings', label: 'Ví Gia đình, Túi Thần Tài' }],
   },
   {
+    label: 'Quỹ nhóm & Quản lý chi tiêu',
+    items: [{ id: 'biz-fund-spending', label: 'Quỹ nhóm, Quản lý chi tiêu' }],
+  },
+  {
     label: "What's next",
     items: [{ id: 'biz-coming-soon', label: 'Chưa làm thật (Sắp có)', soon: true }],
   },
