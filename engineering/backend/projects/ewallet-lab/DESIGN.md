@@ -36,6 +36,59 @@ Giống bài học đã áp dụng ở `payment-hub` (Q&A 3.77 sách Microservic
 DB giữa các service. `user-service`, `wallet-service`, `topup-service`, `bill-payment-service` mỗi
 cái 1 Postgres database riêng.
 
+**Nhưng "DB riêng" chỉ ở mức *database*, không phải mức *Postgres instance*** — lab này chỉ chạy
+**1 Postgres server** (1 Deployment/pod) cho toàn bộ ~10 service Java, mỗi service có 1 database
+riêng trên CÙNG server đó (tiết kiệm tài nguyên cho lab, khác hạ tầng thật nơi mỗi service có thể
+có RDS instance riêng). Hệ quả: `max_connections` là giới hạn **toàn server**, bị CHIA SẺ bởi toàn
+bộ HikariCP pool của mọi service cộng lại — xem mục "Postgres `max_connections` / HikariCP pool
+budget" ngay dưới đây.
+
+## Postgres `max_connections` / HikariCP pool budget (issue #24)
+
+**Sự cố thật đã xảy ra nhiều lần**: Postgres mặc định `max_connections=100`. Với ~10 service
+Java/Spring Boot dùng chung 1 Postgres instance (xem mục trên), mỗi service dùng HikariCP pool mặc
+định của Spring Boot (`maximum-pool-size=10`) → tổng có thể lên tới 100+ connection chỉ từ pool
+"nghỉ" (idle, không tính traffic), không cần có connection leak nào. Chỉ cần rolling-restart 1
+service (pod cũ + pod mới cùng tồn tại một lúc, pool cũ CHƯA giải phóng mà pool mới ĐÃ mở) hoặc
+thêm 1 service mới là đủ chạm trần → `FATAL: sorry, too many clients already`, chặn luôn cả kết nối
+admin `psql` trực tiếp vào Postgres (không tự hết dù pod lỗi đã bị revert, vì pool "nghỉ" của các
+pod đang chạy KHÔNG tự đóng connection).
+
+**Fix** (cả 2 vế, không chỉ 1 như issue đề xuất "HOẶC"):
+
+1. Giảm `spring.datasource.hikari.maximum-pool-size` xuống `5` (từ default 10) ở `application.yml`
+   của **toàn bộ** service Java có DB: `user-service`, `wallet-service`, `topup-service`,
+   `bill-payment-service`, `payment-request-service`, `lucky-money-service`, `loyalty-service`,
+   `bnpl-service`, `family-wallet-service`, `fund-service` (10 service — `transfer-service` không
+   có DB nên không áp dụng, xem gap đã biết ở mục "Lỗi thật đã gặp" trong CLAUDE.md).
+2. Tăng `max_connections` Postgres lên `200` — set qua `args: ["-c",
+   "max_connections={{ .Values.postgres.maxConnections }}"]` trên container `postgres` trong
+   `deploy/helm/ewallet-lab/templates/postgres.yaml` (đọc từ `values.yaml`'s `postgres.maxConnections`),
+   và `command: ["postgres", "-c", "max_connections=200"]` tương ứng trong `docker-compose.yml` cho
+   local dev ngoài cluster. **Không** dùng `ALTER SYSTEM` chạy tay qua `psql` trên pod đang sống —
+   cách đó mất hiệu lực ngay khi pod bị recreate (volume giữ data nhưng không giữ override chạy
+   tay nếu không ghi vào `postgresql.conf`/args khởi động), và không review được qua Git.
+
+**Budget margin**: 10 service × `maximum-pool-size=5` = 50 connection ở trạng thái ổn định. Nhân
+đôi cho trường hợp xấu nhất khi rolling-restart (pod cũ + pod mới cùng giữ pool đầy một lúc) = 100.
+`max_connections=200` giữ mức dùng thực tế dưới 50% ngay cả ở kịch bản xấu nhất đó — thừa biên độ
+cho vài session admin `psql`/pgAdmin cộng thêm. Baseline đo thật lúc tất cả 21 pod chạy ổn định:
+`select count(*) from pg_stat_activity;` = **56** (28% của 200).
+
+**Verify thật đã làm** (không chỉ đọc code): cluster được khởi động lại tuần tự sau vài ngày nghỉ
+(đúng kịch bản đã gây lỗi ban đầu — mỗi service scale 0→1 lần lượt) → toàn bộ 21 pod lên `1/1
+Running` không có `CrashLoopBackOff` nào. Sau đó chủ động `kubectl -n ewallet-lab delete pod -l
+app=fund-service` và `... -l app=bnpl-service` (chính service đã gây crash trong issue gốc) từng
+cái một — cả 2 lần `rollout status` đều `successfully rolled out`, `pg_stat_activity` giữ nguyên
+**56** trước/trong/sau restart (không tăng đột biến, không rơi vào "too many clients"). Đã xác nhận
+trực tiếp bằng cách tách 1 jar từ image `ewallet-lab/*-service:local` đang chạy thật trên cluster
+(`docker cp` ra khỏi container, `unzip`/`javap`) rằng `maximum-pool-size: 5` và các field liên quan
+tới bug #14 (xem mục "Quỹ nhóm") đã nằm TRONG image đang deploy, không chỉ trên source code chưa
+build.
+
+**Cân nhắc dài hạn chưa làm** (nêu trong issue, không trong phạm vi fix lần này): PgBouncer đứng
+trước Postgres nếu số service tiếp tục tăng — 10 service × 5 vẫn còn margin lớn nên chưa cần ngay.
+
 ## Luồng Top-up (mô phỏng đúng MoMo Collection Link + IPN)
 
 ```
@@ -1161,6 +1214,43 @@ hiểu dù Helm/configmap đã "đúng" trên giấy.
   duyệt trung gian nào (xem phần "MVP đơn giản hoá hơn nữa" ở trên).
 - **`addMember` chỉ creator được gọi** — không có khái niệm "member tự rời quỹ" hay "creator xoá
   thành viên" trong MVP này.
+
+**Bug fix — ledger "ma" khi compensate withdraw/dissolve (phát hiện bởi agent-tester, race ≥20
+concurrent withdraw)**: `withdrawOnce`/`dissolveOnce` ghi dòng `FundTransaction`
+WITHDRAWAL/DISSOLVE TRONG CÙNG transaction cục bộ đã trừ `Fund.balance` — ĐÚNG như thiết kế (so
+phần "Thứ tự external-call vs local-commit" ở trên: local-trước, external-credit-sau). Nhưng khi
+bước credit bên ngoài (`wallet-service`'s `/credit` cho creator) thất bại VÀ phải compensate,
+`compensateWithdraw`/`compensateDissolve` ban đầu CHỈ revert `Fund.balance`
+(`revertWithdraw`/`revertDissolve`) — KHÔNG xoá dòng `FundTransaction` đã ghi cho lần rút/giải thể
+đó, để lại 1 hàng lịch sử cho một lần rút CHƯA BAO GIỜ thực sự hoàn tất (tiền không rời quỹ thật,
+vì chính compensate đã cộng lại). Query trực tiếp Postgres của agent-tester xác nhận: fund có 16
+hàng WITHDRAWAL (tổng 80.000đ) nhưng chỉ 15 lần thực sự thành công (75.000đ rời quỹ) — lệch đúng 1
+hàng phantom.
+
+Fix: `withdrawOnce`/`dissolveOnce` giờ trả về thêm `transactionId` của dòng `FundTransaction` vừa
+ghi (`FundMutationExecutor.WithdrawResult`/`DissolveResult`). `FundService.withdraw`/`dissolve`
+thread `transactionId` đó vào `compensateWithdraw`/`compensateDissolve`, nơi vừa revert balance
+VỪA xoá đúng dòng đó (`fundTransactionRepository.findById(id).ifPresent(::delete)` — find-then-
+delete, không dùng `deleteById` trực tiếp, để lần retry optimistic-lock của chính compensate gọi
+lại vẫn an toàn nếu dòng đã bị xoá ở 1 lần thử trước đó mà transaction rollback giữa đường). Áp
+dụng Y HỆT cho `dissolve`'s `compensateDissolve` — tự kiểm tra lại thấy đúng là CÙNG bug pattern
+(agent-tester chưa test riêng path này), không phải giả định suông.
+
+**Bug fix thứ 2 cùng lượt — raw HTTP 500 khi credit-sau-khi-local-commit thất bại**:
+`walletServiceClient.credit(...)` dùng `RestClient`'s `.retrieve()` không có error handler riêng,
+nên 1 lần `wallet-service` trả 409 (ví creator cũng bị tranh chấp optimistic-lock dưới tải — đúng
+lỗi agent-tester tái hiện được, KHÔNG phải lỗi logic) ném ra `HttpClientErrorException.Conflict`.
+`FundService.withdraw`/`dissolve` trước đây bắt `RuntimeException e` chỉ để compensate rồi
+`throw e` NGUYÊN BẢN — thoát khỏi mọi `@ExceptionHandler` của `FundController` (vốn chỉ bắt
+`ResponseStatusException`/`ObjectOptimisticLockingFailureException`), rơi về raw 500 của Spring,
+khác hẳn convention 403/404/409/428 có message tiếng Việt rõ ràng của chính service này. Fix:
+thêm `FundService.mapCreditFailure(RuntimeException, String action)` — map `HttpClientErrorException`
+409 → `ResponseStatusException(409)`, các lỗi khác (5xx/timeout) → `ResponseStatusException(502)`,
+cả 2 kèm message tiếng Việt xác nhận quỹ ĐÃ được hoàn lại số dư (vì compensate luôn chạy trước khi
+map lỗi) và gợi ý thử lại.
+
+**Tự verify lại — kết quả thật, xem comment agent-dev trên issue #14 cho số liệu/lệnh tái hiện đầy
+đủ.**
 
 ## Quản lý chi tiêu (issue #16) — read-only, không bảng mới, không service mới
 

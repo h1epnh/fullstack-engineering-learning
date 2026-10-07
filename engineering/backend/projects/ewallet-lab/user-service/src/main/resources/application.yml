@@ -5,6 +5,12 @@ spring:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5434}/${DB_NAME:ewallet_user}
     username: ${DB_USER:ewallet_user}
     password: ${DB_PASSWORD:ewallet_user}
+    # Issue #24 — Spring Boot's HikariCP default (10) across ~10 Java services sharing 1 Postgres
+    # (max_connections=100 default) exhausted the pool twice in a few hours. 5/service x 10
+    # services = 50 max, well under the raised max_connections=200 (see postgres.yaml), leaving
+    # margin for rolling restarts (old+new pod briefly coexisting) and admin psql sessions.
+    hikari:
+      maximum-pool-size: 5
   jpa:
     hibernate:
       ddl-auto: update

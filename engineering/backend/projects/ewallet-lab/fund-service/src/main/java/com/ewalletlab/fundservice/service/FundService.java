@@ -158,17 +158,20 @@ public class FundService {
         if (!fund.getCreatorUserId().equals(requesterUserId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chỉ người tạo quỹ mới được rút tiền khỏi quỹ");
         }
-        Fund updated = withRetry("withdraw", fundId, () -> mutationExecutor.withdrawOnce(fundId, requesterUserId, amount));
+        FundMutationExecutor.WithdrawResult result =
+            withRetry("withdraw", fundId, () -> mutationExecutor.withdrawOnce(fundId, requesterUserId, amount));
         try {
             walletServiceClient.credit(requesterUserId, amount, "TRANSFER_IN", fundId.toString(),
                 "Rút từ quỹ nhóm " + fund.getName());
         } catch (RuntimeException e) {
             log.warn("withdraw from fund={} decremented locally but wallet-service credit failed — " +
-                "compensating by adding {} back to the fund", fundId, amount);
-            withRetry("compensate-withdraw", fundId, () -> mutationExecutor.compensateWithdraw(fundId, amount));
-            throw e;
+                "compensating by adding {} back to the fund and removing the phantom ledger row {}",
+                fundId, amount, result.transactionId());
+            withRetry("compensate-withdraw", fundId,
+                () -> mutationExecutor.compensateWithdraw(fundId, amount, result.transactionId()));
+            throw mapCreditFailure(e, "Rút quỹ");
         }
-        return updated;
+        return result.fund();
     }
 
     public Fund dissolve(UUID fundId, UUID requesterUserId) {
@@ -184,13 +187,32 @@ public class FundService {
                     "Giải thể quỹ nhóm " + fund.getName());
             } catch (RuntimeException e) {
                 log.warn("dissolve of fund={} zeroed locally but wallet-service credit of remainder={} failed — " +
-                    "reopening the fund", fundId, result.remainder());
+                    "reopening the fund and removing the phantom ledger row {}",
+                    fundId, result.remainder(), result.transactionId());
                 withRetry("compensate-dissolve", fundId,
-                    () -> mutationExecutor.compensateDissolve(fundId, result.remainder()));
-                throw e;
+                    () -> mutationExecutor.compensateDissolve(fundId, result.remainder(), result.transactionId()));
+                throw mapCreditFailure(e, "Giải thể quỹ");
             }
         }
         return result.fund();
+    }
+
+    /** Maps a failure from the credit-AFTER-local-commit step (withdraw/dissolve's follow-up
+     * wallet-service call) to a proper status + Vietnamese message, instead of letting it escape
+     * as a raw exception that {@code FundController} can't recognize (surfaces as a bare 500 —
+     * bug found by agent-tester on issue #14, same race: wallet-service's OWN optimistic lock on
+     * the creator's wallet rejects a credit with 409 under concurrent withdraws). The local
+     * compensation has already run by the time this is called — the fund's balance/ledger are
+     * already back to a consistent state, so the client just needs to know the attempt itself
+     * didn't go through and it's safe to retry. */
+    private ResponseStatusException mapCreditFailure(RuntimeException e, String action) {
+        if (e instanceof HttpClientErrorException httpEx) {
+            HttpStatus status = httpEx.getStatusCode().value() == 409 ? HttpStatus.CONFLICT : HttpStatus.BAD_GATEWAY;
+            return new ResponseStatusException(status, action + " thất bại do wallet-service từ chối giao dịch ("
+                + httpEx.getStatusCode().value() + "), quỹ đã được hoàn lại số dư, vui lòng thử lại");
+        }
+        return new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+            action + " thất bại do lỗi khi gọi wallet-service, quỹ đã được hoàn lại số dư, vui lòng thử lại");
     }
 
     private Fund requireFund(UUID fundId) {

@@ -4,6 +4,10 @@ services:
   # One Postgres instance, separate databases per service (schema-per-service — see DESIGN.md).
   postgres:
     image: postgres:16
+    # Issue #24 — raised from the default 100; see helm values.yaml's postgres.maxConnections
+    # comment for the pool-budget math (10 services x hikari.maximum-pool-size=5, doubled for
+    # rolling-restart overlap).
+    command: ["postgres", "-c", "max_connections=200"]
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres

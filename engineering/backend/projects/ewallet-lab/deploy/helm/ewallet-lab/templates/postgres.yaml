@@ -38,6 +38,13 @@ spec:
       containers:
         - name: postgres
           image: {{ .Values.postgres.image }}
+          # Issue #24 — default max_connections=100 was exhausted twice by ~10 Java services'
+          # HikariCP pools (default 10/service = 100+ possible). The postgres image's
+          # docker-entrypoint.sh prepends "postgres" to any args that start with "-", so this
+          # passes "-c max_connections=200" to the server at every (re)start — not a one-off
+          # `ALTER SYSTEM` on the running pod, which would be lost on restart/recreate. See
+          # DESIGN.md "Postgres max_connections / HikariCP pool budget" for the full margin math.
+          args: ["-c", "max_connections={{ .Values.postgres.maxConnections }}"]
           ports:
             - containerPort: 5432
           env:

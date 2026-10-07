@@ -51,7 +51,15 @@ class FundMutationExecutor {
         this.fundTransactionRepository = fundTransactionRepository;
     }
 
-    record DissolveResult(Fund fund, BigDecimal remainder) {
+    /** {@code transactionId} is the {@code FundTransaction} row this attempt just wrote — the
+     * caller threads it back into {@link #compensateWithdraw} if the follow-up wallet-service
+     * credit fails, so the compensation can remove exactly that row (see issue #14's ledger-vs-
+     * balance mismatch bug: compensating the balance alone left a "phantom" WITHDRAWAL row that
+     * never corresponded to any money that actually left the fund). */
+    record WithdrawResult(Fund fund, UUID transactionId) {
+    }
+
+    record DissolveResult(Fund fund, BigDecimal remainder, UUID transactionId) {
     }
 
     @Transactional
@@ -95,7 +103,7 @@ class FundMutationExecutor {
     }
 
     @Transactional
-    Fund withdrawOnce(UUID fundId, UUID requesterUserId, BigDecimal amount) {
+    WithdrawResult withdrawOnce(UUID fundId, UUID requesterUserId, BigDecimal amount) {
         Fund fund = fundRepository.findById(fundId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy quỹ nhóm này"));
         if (!fund.getCreatorUserId().equals(requesterUserId)) {
@@ -107,8 +115,9 @@ class FundMutationExecutor {
             throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
         }
         fundRepository.save(fund);
-        fundTransactionRepository.save(new FundTransaction(fundId, requesterUserId, FundTransactionType.WITHDRAWAL, amount));
-        return fund;
+        FundTransaction tx = fundTransactionRepository.save(
+            new FundTransaction(fundId, requesterUserId, FundTransactionType.WITHDRAWAL, amount));
+        return new WithdrawResult(fund, tx.getId());
     }
 
     @Transactional
@@ -125,8 +134,9 @@ class FundMutationExecutor {
             throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
         }
         fundRepository.save(fund);
-        fundTransactionRepository.save(new FundTransaction(fundId, requesterUserId, FundTransactionType.DISSOLVE, remainder));
-        return new DissolveResult(fund, remainder);
+        FundTransaction tx = fundTransactionRepository.save(
+            new FundTransaction(fundId, requesterUserId, FundTransactionType.DISSOLVE, remainder));
+        return new DissolveResult(fund, remainder, tx.getId());
     }
 
     /** Compensates a withdrawal whose follow-up wallet-service credit call failed — see
@@ -134,23 +144,40 @@ class FundMutationExecutor {
      * {@link #withdrawOnce} ever calls this for a given attempt, but it's still wrapped in
      * {@code FundService}'s optimistic-lock retry loop since the row's {@code @Version} has moved
      * on since {@code withdrawOnce} committed and an unrelated concurrent contribution could have
-     * touched it in between. */
+     * touched it in between.
+     *
+     * <p>Bug found by agent-tester on issue #14 (race ≥20 concurrent withdraws): reverting only
+     * {@code Fund.balance} left the {@code FundTransaction} WITHDRAWAL row {@code withdrawOnce}
+     * had already written — a "phantom" ledger entry for money that, thanks to this very
+     * compensation, never actually left the fund. {@code transactionId} is that row's id;
+     * deleting it here (same local transaction as the balance revert) keeps
+     * {@code fund_transactions} an exact record of money that actually moved, with no entry for a
+     * withdrawal that was fully undone. Uses find-then-delete (not {@code deleteById}, which
+     * throws {@code EmptyResultDataAccessException} on a missing row) so a retry of this whole
+     * method — e.g. after losing an optimistic-lock race on {@code fundRepository.save(fund)} — is
+     * a safe no-op on the already-deleted row instead of surfacing a spurious failure. */
     @Transactional
-    Fund compensateWithdraw(UUID fundId, BigDecimal amount) {
+    Fund compensateWithdraw(UUID fundId, BigDecimal amount, UUID transactionId) {
         Fund fund = fundRepository.findById(fundId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy quỹ nhóm này"));
         fund.revertWithdraw(amount);
-        return fundRepository.save(fund);
+        fundRepository.save(fund);
+        fundTransactionRepository.findById(transactionId).ifPresent(fundTransactionRepository::delete);
+        return fund;
     }
 
     /** Compensates a dissolve whose follow-up wallet-service credit call failed — reopens the fund
      * (back to ACTIVE) with the undelivered remainder restored, same reasoning as
-     * {@link #compensateWithdraw}. */
+     * {@link #compensateWithdraw} (including deleting the phantom DISSOLVE ledger row — same bug
+     * class, confirmed present here too when checked directly instead of assuming the fix for
+     * withdraw covers it). */
     @Transactional
-    Fund compensateDissolve(UUID fundId, BigDecimal remainder) {
+    Fund compensateDissolve(UUID fundId, BigDecimal remainder, UUID transactionId) {
         Fund fund = fundRepository.findById(fundId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy quỹ nhóm này"));
         fund.revertDissolve(remainder);
-        return fundRepository.save(fund);
+        fundRepository.save(fund);
+        fundTransactionRepository.findById(transactionId).ifPresent(fundTransactionRepository::delete);
+        return fund;
     }
 }

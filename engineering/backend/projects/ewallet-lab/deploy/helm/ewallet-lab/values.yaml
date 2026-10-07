@@ -31,6 +31,11 @@ postgres:
   storageSize: 1Gi
   storageClassName: ""   # "" = cluster default. Real EKS: a gp3 StorageClass, or better,
                           # skip this Deployment entirely and point DB_HOST at RDS instead.
+  # Issue #24 — raised from Postgres's default 100. Budget: 10 Java services x
+  # hikari.maximum-pool-size=5 = 50 max, doubled worst-case to 100 during a rolling restart
+  # (old+new pod briefly both holding a full pool), plus headroom for admin psql/pgAdmin
+  # sessions. 200 keeps real usage comfortably under 50% even at that worst case.
+  maxConnections: 200
   user: postgres
   password: postgres     # lab-only plaintext Secret value — see values-eks.yaml note.
 
