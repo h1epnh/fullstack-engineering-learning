@@ -124,6 +124,41 @@ class BnplConcurrencyTest {
     }
 
     @Test
+    void repaySurfacesStepUpRequiredAs428WhenNotConfirmed() {
+        UUID user = UUID.randomUUID();
+        service.open(user, true);
+        service.draw(user, new BigDecimal("10000000"), "Mua sắm lớn"); // 10tr
+        when(wallet.debitRepayment(eq(user), any(), any())).thenThrow(HttpClientErrorException.create(
+            HttpStatus.valueOf(428), "Precondition Required", HttpHeaders.EMPTY,
+            "Giao dịch cần xác thực bổ sung theo QĐ 2345".getBytes(StandardCharsets.UTF_8),
+            StandardCharsets.UTF_8));
+
+        assertThatThrownBy(() -> service.repay(user, new BigDecimal("10000000"), false))
+            .isInstanceOf(ResponseStatusException.class)
+            .satisfies(e -> {
+                ResponseStatusException rse = (ResponseStatusException) e;
+                assertThat(rse.getStatusCode().value()).isEqualTo(428);
+                assertThat(rse.getReason()).contains("Giao dịch cần xác thực bổ sung");
+            });
+
+        var snap = service.get(user).orElseThrow();
+        assertThat(snap.repayments()).singleElement().extracting(r -> r.getStatus()).isEqualTo(RepaymentStatus.FAILED);
+    }
+
+    @Test
+    void repayPassesStepUpConfirmedToWalletService() {
+        UUID user = UUID.randomUUID();
+        service.open(user, true);
+        service.draw(user, new BigDecimal("10000000"), "Mua sắm lớn");
+        when(wallet.debitRepayment(eq(user), any(), any(), eq(true))).thenReturn(
+            new WalletServiceClient.WalletResult(user, BigDecimal.ZERO));
+
+        var snap = service.repay(user, new BigDecimal("10000000"), true);
+        verify(wallet, times(1)).debitRepayment(eq(user), any(), any(), eq(true));
+        assertThat(snap.repayments()).singleElement().extracting(r -> r.getStatus()).isEqualTo(RepaymentStatus.COMPLETED);
+    }
+
+    @Test
     void openRequiresDisclaimerAndIsOnce() {
         UUID user = UUID.randomUUID();
         assertThatThrownBy(() -> service.open(user, false)).isInstanceOf(ResponseStatusException.class);

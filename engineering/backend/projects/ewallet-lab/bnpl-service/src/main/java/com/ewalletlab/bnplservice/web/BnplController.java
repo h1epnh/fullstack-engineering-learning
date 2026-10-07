@@ -44,7 +44,7 @@ public class BnplController {
 
     @PostMapping("/{userId}/repayments")
     public BnplWalletDto repay(@PathVariable UUID userId, @Valid @RequestBody RepayRequestDto request) {
-        return BnplWalletDto.from(service.repay(userId, request.amount()));
+        return BnplWalletDto.from(service.repay(userId, request.amount(), request.isStepUpConfirmed()));
     }
 
     /** Lock wait timeout / deadlock on the credit-line row — retryable, not a raw 500. */

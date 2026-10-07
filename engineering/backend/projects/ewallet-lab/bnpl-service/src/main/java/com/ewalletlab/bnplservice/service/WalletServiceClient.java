@@ -24,13 +24,17 @@ public class WalletServiceClient {
     public record WalletResult(UUID userId, BigDecimal balance) {
     }
 
-    private record AdjustBalanceRequest(BigDecimal amount, String type, String reference, String note) {
+    private record AdjustBalanceRequest(BigDecimal amount, String type, String reference, String note, Boolean stepUpConfirmed) {
     }
 
     public WalletResult debitRepayment(UUID userId, BigDecimal amount, UUID repaymentId) {
+        return debitRepayment(userId, amount, repaymentId, false);
+    }
+
+    public WalletResult debitRepayment(UUID userId, BigDecimal amount, UUID repaymentId, boolean stepUpConfirmed) {
         return restClient.post()
             .uri("/wallets/{userId}/debit", userId)
-            .body(new AdjustBalanceRequest(amount, "BNPL_REPAYMENT", repaymentId.toString(), "Trả nợ Ví Trả Sau (mô phỏng)"))
+            .body(new AdjustBalanceRequest(amount, "BNPL_REPAYMENT", repaymentId.toString(), "Trả nợ Ví Trả Sau (mô phỏng)", stepUpConfirmed))
             .retrieve()
             .body(WalletResult.class);
     }

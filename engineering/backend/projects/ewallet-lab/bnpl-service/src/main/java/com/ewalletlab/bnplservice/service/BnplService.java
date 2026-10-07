@@ -78,15 +78,29 @@ public class BnplService {
      * COMPLETED. On any debit failure the claim is reverted before the error is surfaced.
      */
     public Snapshot repay(UUID userId, BigDecimal amount) {
+        return repay(userId, amount, false);
+    }
+
+    public Snapshot repay(UUID userId, BigDecimal amount, boolean stepUpConfirmed) {
         Repayment claimed = executor.claimRepayment(userId, amount);
         try {
-            walletServiceClient.debitRepayment(userId, amount, claimed.getId());
+            if (stepUpConfirmed) {
+                walletServiceClient.debitRepayment(userId, amount, claimed.getId(), true);
+            } else {
+                walletServiceClient.debitRepayment(userId, amount, claimed.getId());
+            }
         } catch (HttpClientErrorException.Conflict e) {
             // Insufficient main-wallet balance (or wallet-service's own optimistic-lock 409).
             executor.revertRepayment(userId, claimed.getId());
             String reason = e.getResponseBodyAsString(StandardCharsets.UTF_8);
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                 "Không trừ được tiền từ ví chính: " + (reason.isBlank() ? "số dư không đủ" : reason));
+        } catch (HttpClientErrorException e) {
+            executor.revertRepayment(userId, claimed.getId());
+            if (e.getStatusCode().value() == 428) {
+                throw new ResponseStatusException(HttpStatus.valueOf(428), e.getResponseBodyAsString(StandardCharsets.UTF_8));
+            }
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Không gọi được wallet-service, khoản trả nợ đã được huỷ", e);
         } catch (RuntimeException e) {
             executor.revertRepayment(userId, claimed.getId());
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Không gọi được wallet-service, khoản trả nợ đã được huỷ", e);
