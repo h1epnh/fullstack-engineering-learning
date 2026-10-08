@@ -22,6 +22,7 @@ export default defineConfig({
         './InvestmentFund': './src/screens/InvestmentFund.tsx',
         './SavingsGoals': './src/screens/SavingsGoals.tsx',
         './VoucherPass': './src/screens/VoucherPass.tsx',
+        './TelcoTopup': './src/screens/TelcoTopup.tsx',
       },
       shared: {
         react: { singleton: true, requiredVersion: false },

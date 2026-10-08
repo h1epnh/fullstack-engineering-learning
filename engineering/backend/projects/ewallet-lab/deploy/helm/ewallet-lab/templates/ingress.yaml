@@ -92,6 +92,10 @@ spec:
             pathType: Prefix
             backend:
               service: { name: topup-service, port: { number: 8092 } }
+          - path: /telco
+            pathType: Prefix
+            backend:
+              service: { name: topup-service, port: { number: 8092 } }
           - path: /transfers
             pathType: Prefix
             backend:

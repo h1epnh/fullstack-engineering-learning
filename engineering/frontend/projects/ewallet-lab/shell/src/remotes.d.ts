@@ -102,3 +102,8 @@ declare module 'mfe_bill_payment/App' {
   }>;
   export default App;
 }
+
+declare module 'mfe_wallet/TelcoTopup' {
+  const TelcoTopup: ComponentType<{ session: Session; onBack: () => void }>;
+  export default TelcoTopup;
+}

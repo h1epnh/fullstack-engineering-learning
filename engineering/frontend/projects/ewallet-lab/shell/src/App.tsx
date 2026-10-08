@@ -19,6 +19,7 @@ const WalletSpendingReport = lazy(() => import('mfe_wallet/SpendingReport'));
 const WalletInvestmentFund = lazy(() => import('mfe_wallet/InvestmentFund'));
 const WalletSavingsGoals = lazy(() => import('mfe_wallet/SavingsGoals'));
 const WalletVoucherPass = lazy(() => import('mfe_wallet/VoucherPass'));
+const WalletTelcoTopup = lazy(() => import('mfe_wallet/TelcoTopup'));
 const TopupApp = lazy(() => import('mfe_topup/App'));
 const TransferApp = lazy(() => import('mfe_transfer/App'));
 const BillPaymentApp = lazy(() => import('mfe_bill_payment/App'));
@@ -75,6 +76,7 @@ type Flow =
   | { name: 'investment-fund' }
   | { name: 'savings-goals' }
   | { name: 'voucher-pass' }
+  | { name: 'phone-topup' }
   | { name: 'coming-soon'; feature: string };
 
 /**
@@ -254,6 +256,14 @@ export default function App() {
     );
   }
 
+  if (flow.name === 'phone-topup') {
+    return (
+      <Suspense fallback={<ProgressBar label="Đang tải Nạp ĐT & Thẻ cào…" />}>
+        <WalletTelcoTopup session={session} onBack={() => setFlow({ name: 'none' })} />
+      </Suspense>
+    );
+  }
+
   return (
     <div>
       {tab === 'home' && (
@@ -275,6 +285,7 @@ export default function App() {
             onInvestmentFund={() => setFlow({ name: 'investment-fund' })}
             onSavingsGoals={() => setFlow({ name: 'savings-goals' })}
             onVoucherPass={() => setFlow({ name: 'voucher-pass' })}
+            onPhoneTopup={() => setFlow({ name: 'phone-topup' })}
           />
         </Suspense>
       )}

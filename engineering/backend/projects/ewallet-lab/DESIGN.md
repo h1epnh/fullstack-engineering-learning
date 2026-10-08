@@ -1580,4 +1580,44 @@ breakdown/total. `period=year` (giá trị không hợp lệ) → 400. CORS qua 
 | POST | `/loyalty/vouchers/{id}/revert` | Bồi hoàn voucher về `AVAILABLE` nếu bước trừ tiền ví thất bại |
 | GET | `/loyalty/vouchers/disclaimer` | Disclaimer mô phỏng học tập bắt buộc |
 
+## Nạp Tiền Điện Thoại & Mua Mã Thẻ Cào (issue #29) — `topup-service`
+
+> **Disclaimer Bắt buộc**: "Tính năng Nạp tiền điện thoại trực tiếp và Mua mã thẻ cào viễn thông mô phỏng trong môi trường ewallet-lab — không có kết nối thật với các cổng nạp Viettel, Vinaphone, MobiFone".
+
+### Quyết định kiến trúc (Operator phê duyệt)
+- **Phương án 1 (a) — Mở rộng `topup-service` (Port 8092, DB `ewallet_topup`) thành dịch vụ nạp đa năng**:
+  - Tận dụng hạ tầng pod và DB có sẵn, không tăng số lượng pod trong cluster Kubernetes, tiết kiệm connection pool Hikari (tối đa 5 connections theo issue #24).
+  - Tách bạch rõ ràng 2 chiều dòng tiền:
+    - *Nạp tiền VÀO ví*: `TopupRequest` (mock ngân hàng gửi tiền vào ví).
+    - *Tiêu tiền RA khỏi ví để mua dịch vụ viễn thông*: `TelcoOrder` (rút tiền từ ví chính để nạp điện thoại hoặc mua thẻ cào).
+  - Cập nhật Ingress routing: bổ sung prefix `/telco` chuyển tiếp tới `topup-service:8092`.
+
+### Nguyên lý Vận hành & Saga Bồi Hoàn (Compensating Refund)
+1. **Ledger Sanctity & Hạn mức pháp lý**:
+   - Mua dịch vụ viễn thông là dòng tiền rời khỏi ví chính. Sử dụng loại giao dịch chuẩn `TransactionType.BILL_PAYMENT` trên `wallet-service`.
+   - Áp dụng đầy đủ hạn mức chi tiêu tháng 100.000.000đ (Điều 26 Thông tư 40/2024/TT-NHNN) và kiểm tra xác thực sinh trắc học / step-up auth (Quyết định 2345/QĐ-NHNN) khi tổng tiền hoặc số dư luỹ kế đạt ngưỡng.
+2. **Saga 2 pha & Tự động hoàn tiền bảo vệ người dùng**:
+   - **Pha 1**: Trừ tiền ví chính `walletServiceClient.debit` theo số tiền thực trả sau chiết khấu `finalPrice = denomination * (1 - discountRate)`.
+   - **Pha 2**: Gọi mock Telco Gateway xử lý nạp trực tiếp (`DIRECT_TOPUP`) hoặc sinh mã thẻ (`CARD_PIN`).
+   - **Cơ chế bồi hoàn**: Nếu mock gateway trả về lỗi (mô phỏng bằng số điện thoại `0900000000` hoặc đuôi `000000`), hệ thống lập tức kích hoạt bù trừ tài chính:
+     - Gọi `walletServiceClient.credit` với loại giao dịch `REFUND`.
+     - Cập nhật trạng thái `TelcoOrder` thành `FAILED_REFUNDED` kèm thông điệp giải thích minh bạch trong `failureReason`.
+     - Tuyệt đối bảo toàn số dư (zero money loss) cho khách hàng.
+3. **Danh mục Nhà mạng & Chiết khấu**:
+   - Hỗ trợ 3 nhà mạng lớn: `VIETTEL` (chiết khấu 2.0%), `VINAPHONE` (chiết khấu 2.5%), `MOBIFONE` (chiết khấu 2.5%).
+   - 6 mệnh giá quy chuẩn: 10.000đ, 20.000đ, 50.000đ, 100.000đ, 200.000đ, 500.000đ.
+4. **Bảo mật Mã thẻ cào**:
+   - Sinh ngẫu nhiên bảo mật Serial (12 chữ số) và PIN (14 chữ số).
+   - Kho thẻ đã mua lưu trữ vĩnh viễn trong `telco_orders`, người dùng có thể tra cứu và sao chép bất cứ lúc nào.
+5. **Kiểm thử Đồng thời (Concurrency Race Safety)**:
+   - Thử nghiệm 10 thread đồng thời mua thẻ cào với số dư ví giới hạn: Các giao dịch debit tuần tự hoá chính xác qua `@Version` của `wallet-service`. Đúng 5 giao dịch thành công (trừ 98.000đ), 5 giao dịch nhận 409 Conflict (thiếu số dư), số dư còn lại đúng 2.000đ. Không xuất hiện double-debit hay tiêu âm tài khoản.
+
+### API Endpoints (`/telco`)
+| Method | Path | Mô tả |
+|---|---|---|
+| GET | `/telco/packages` | Lấy danh mục 18 gói dịch vụ (3 nhà mạng x 6 mệnh giá) kèm tỷ lệ chiết khấu và giá thực trả |
+| POST | `/telco/orders` | Tạo giao dịch nạp tiền ĐT hoặc mua thẻ cào (`{userId, telcoProvider, orderType, denomination, phoneNumber?, stepUpConfirmed?}`) |
+| GET | `/telco/orders?userId={userId}` | Lấy lịch sử nạp tiền và kho thẻ cào đã mua của người dùng |
+| GET | `/telco/orders/{id}` | Xem chi tiết biên lai đơn hàng viễn thông |
+
 

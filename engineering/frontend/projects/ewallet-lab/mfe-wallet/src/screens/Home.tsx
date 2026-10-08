@@ -36,7 +36,7 @@ const MAIN_GRID: { key: string; icon: string; label: string; more?: boolean; rea
   { key: 'transfer', icon: 'north_east', label: 'Chuyển tiền', real: true },
   { key: 'bank-transfer', icon: 'account_balance', label: 'Chuyển tiền\nNgân hàng' },
   { key: 'bill-payment', icon: 'receipt_long', label: 'Thanh toán\nhoá đơn', real: true },
-  { key: 'phone-topup', icon: 'call', label: 'Nạp tiền\nđiện thoại' },
+  { key: 'phone-topup', icon: 'call', label: 'Nạp tiền\nđiện thoại', real: true },
   { key: 'phone-data', icon: 'signal_cellular_alt', label: 'Data 4G/5G' },
   { key: 'family-wallet', icon: 'family_restroom', label: 'Ví Gia\nđình', real: true },
   { key: 'spending', icon: 'bar_chart', label: 'Quản lý\nchi tiêu', real: true },
@@ -203,6 +203,8 @@ export default function Home({
   onSavingsGoals?: () => void;
   /** Issue #28 — Gói Voucher Hội viên */
   onVoucherPass?: () => void;
+  /** Issue #29 — Nạp tiền ĐT & Mua mã thẻ cào */
+  onPhoneTopup?: () => void;
 }) {
   const [balance, setBalance] = useState<number | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -237,6 +239,10 @@ export default function Home({
     if (item.more) onMoreServices();
     else if (item.key === 'transfer') onTransfer();
     else if (item.key === 'bill-payment') onBillPayment();
+    else if (item.key === 'phone-topup') {
+      if (onPhoneTopup) onPhoneTopup();
+      else onComingSoon(item.key);
+    }
     else if (item.key === 'family-wallet') onFamilyWallet();
     else if (item.key === 'spending') onSpendingReport();
     else if (item.real) onTransfer();
