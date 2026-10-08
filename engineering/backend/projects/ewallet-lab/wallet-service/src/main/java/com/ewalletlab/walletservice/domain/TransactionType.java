@@ -25,5 +25,35 @@ public enum TransactionType {
      * (loyalty-service). Incoming money: not spending, not in MONTHLY_LIMIT_TYPES, and not a type
      * that earns points (only BILL_PAYMENT does), so it can't loop. Needs the same CHECK-constraint
      * ALTER on existing Postgres DBs as BNPL_REPAYMENT — see backend DESIGN.md. */
-    LOYALTY_REDEMPTION
+    LOYALTY_REDEMPTION,
+    /**
+     * Issue #25 — Sàn Đầu Tư (investment-fund-service).
+     * Debit to buy investment fund certificates. Counted in monthly limit #7 (Điều 26 TT 40/2024)
+     * and step-up auth #15 (QĐ 2345/QĐ-NHNN).
+     */
+    INVESTMENT_BUY,
+    /**
+     * Issue #25 — Sàn Đầu Tư (investment-fund-service).
+     * Credit from selling investment fund certificates. Incoming funds: not counted in monthly limit
+     * and does not require step-up auth.
+     */
+    INVESTMENT_SELL,
+    /**
+     * Issue #27 — Mục tiêu tiết kiệm (Goal-based Savings).
+     * Debit to deposit money into a personal savings goal. Counted in monthly limit #7 (Điều 26 TT 40/2024)
+     * and step-up auth #15 (QĐ 2345/QĐ-NHNN).
+     */
+    SAVINGS_GOAL_DEPOSIT,
+    /**
+     * Issue #27 — Mục tiêu tiết kiệm (Goal-based Savings).
+     * Credit to withdraw money from a savings goal back to the main wallet. Incoming funds: not counted
+     * in monthly limit and does not require step-up auth.
+     */
+    SAVINGS_GOAL_WITHDRAW,
+    /**
+     * Issue #28 — Cơ chế Voucher Pass (Gói Voucher Hội viên tiết kiệm).
+     * Debit to purchase a voucher pass package. Counted in monthly limit #7 (Điều 26 TT 40/2024)
+     * and step-up auth #15 (QĐ 2345/QĐ-NHNN).
+     */
+    VOUCHER_PASS_PURCHASE
 }

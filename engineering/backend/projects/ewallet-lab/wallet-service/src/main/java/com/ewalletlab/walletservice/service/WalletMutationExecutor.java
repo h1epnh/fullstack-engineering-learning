@@ -40,7 +40,8 @@ class WalletMutationExecutor {
      * same Điều 26 lists "trả nợ vay đến hạn/quá hạn tại TCTD" as not counting towards the cap.
      */
     private static final Set<TransactionType> MONTHLY_LIMIT_TYPES =
-        EnumSet.of(TransactionType.TRANSFER_OUT, TransactionType.BILL_PAYMENT, TransactionType.WITHDRAW);
+        EnumSet.of(TransactionType.TRANSFER_OUT, TransactionType.BILL_PAYMENT, TransactionType.WITHDRAW,
+            TransactionType.INVESTMENT_BUY, TransactionType.SAVINGS_GOAL_DEPOSIT, TransactionType.VOUCHER_PASS_PURCHASE);
 
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;

@@ -34,3 +34,5 @@ management:
 ewallet-lab:
   wallet-service:
     base-url: ${WALLET_SERVICE_URL:http://localhost:8091}
+  loyalty-service:
+    base-url: ${LOYALTY_SERVICE_URL:http://localhost:8099}

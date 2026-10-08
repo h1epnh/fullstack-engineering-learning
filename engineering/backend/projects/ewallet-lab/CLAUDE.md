@@ -15,6 +15,9 @@ minh, không phải tài liệu trang trí. File này chỉ ghi **quy ước v�
 | transfer-service | 8094 | — (stateless) | chuyển tiền P2P, saga có compensation, KHÔNG persist state |
 | loyalty-service | 8099 | Postgres | **mô phỏng** Điểm thưởng (issue #19) — claim-trước-move-tiền-sau, xem DESIGN.md |
 | bnpl-service | 8098 | Postgres | **mô phỏng** Ví Trả Sau (issue #18) — claim-trước-move-tiền-sau, xem DESIGN.md |
+| family-wallet-service | 8100 | Postgres | **mô phỏng** Ví Gia Đình (issue #12) |
+| fund-service | 8101 | Postgres | **mô phỏng** Quỹ nhóm (issue #14) — quỹ N người, creator rút |
+| investment-fund-service | 8102 | Postgres | **mô phỏng** Sàn Đầu Tư (issue #25) — chứng chỉ quỹ mở, NAV biến động, rủi ro lỗ |
 
 Spring Boot 3.4.1 / Java 21 / Gradle 8.11.1. Dùng `RestClient` cho gọi service-to-service,
 `ResponseStatusException` để map lỗi HTTP, `@DecimalMin` cho validate số tiền.

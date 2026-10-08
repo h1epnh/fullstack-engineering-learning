@@ -22,7 +22,12 @@ export function describeApiError(
     | 'bnpl-repay'
     | 'loyalty-redeem'
     | 'savings-pocket'
-    | 'family-wallet',
+    | 'family-wallet'
+    | 'auto-debit'
+    | 'investment-buy'
+    | 'investment-sell'
+    | 'savings-goal'
+    | 'voucher-pass',
 ): string {
   if (status === undefined) {
     return 'Không kết nối được tới máy chủ. Kiểm tra lại các service đã chạy chưa rồi thử lại.';
@@ -46,6 +51,12 @@ export function describeApiError(
     if (context === 'family-wallet') {
       return 'Thành viên này đã thuộc về một Ví Gia Đình khác (mỗi thành viên chỉ thuộc 1 gia đình).';
     }
+    if (context === 'savings-goal') {
+      return 'Số dư không đủ (ví chính hoặc mục tiêu), hoặc mục tiêu tiết kiệm đã kết thúc/huỷ.';
+    }
+    if (context === 'voucher-pass') {
+      return 'Số dư ví chính không đủ để mua gói, hoặc voucher đã được sử dụng/hết hạn.';
+    }
   }
   if (status === 409) {
     if (context === 'bnpl-open') return 'Ví Trả Sau (mô phỏng) đã được mở cho tài khoản này rồi.';
@@ -56,6 +67,21 @@ export function describeApiError(
   }
   if (status === 409 && context === 'loyalty-redeem') {
     return 'Không đủ điểm để đổi số điểm này.';
+  }
+  if (status === 409 && context === 'investment-buy') {
+    return 'Số dư ví chính không đủ để thực hiện lệnh mua chứng chỉ quỹ, hoặc vượt hạn mức chi tiêu tháng.';
+  }
+  if (status === 409 && context === 'investment-sell') {
+    return 'Số lượng chứng chỉ quỹ nắm giữ không đủ để bán.';
+  }
+  if (status === 409 && context === 'auto-debit') {
+    return 'Uỷ quyền thanh toán tự động cho hoá đơn này đã tồn tại.';
+  }
+  if (status === 400 && context === 'investment-buy') {
+    return 'Cần đọc và xác nhận 4 điều khoản cảnh báo rủi ro thị trường trước khi đặt lệnh mua, hoặc số tiền mua chưa đạt tối thiểu 10.000đ.';
+  }
+  if (status === 400 && context === 'investment-sell') {
+    return 'Số lượng chứng chỉ quỹ bán không hợp lệ.';
   }
   if (status === 400 && context === 'loyalty-redeem') {
     return 'Số điểm đổi chưa đạt mức tối thiểu.';
@@ -101,6 +127,15 @@ export function describeApiError(
     if (context === 'family-wallet') {
       return 'Không tìm thấy tài khoản Ewallet Lab với số điện thoại này.';
     }
+    if (context === 'savings-goal') {
+      return 'Không tìm thấy mục tiêu tiết kiệm này.';
+    }
+  }
+  if (status === 428 && context === 'savings-goal') {
+    return 'Giao dịch trên 10.000.000đ cần xác thực sinh trắc học / OTP nâng cao (QĐ 2345/TT 40).';
+  }
+  if (status === 400 && context === 'voucher-pass') {
+    return 'Hoá đơn chưa đạt giá trị tối thiểu hoặc voucher không áp dụng cho danh mục này.';
   }
   if (status === 400) {
     return 'Thông tin nhập chưa hợp lệ. Kiểm tra lại các trường bên trên.';

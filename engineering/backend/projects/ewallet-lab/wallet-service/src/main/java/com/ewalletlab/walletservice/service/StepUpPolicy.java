@@ -31,16 +31,19 @@ public class StepUpPolicy {
      */
     static final Set<TransactionType> STEP_UP_TYPES = EnumSet.of(
         TransactionType.TRANSFER_OUT, TransactionType.BILL_PAYMENT, TransactionType.WITHDRAW, TransactionType.TOPUP,
-        TransactionType.BNPL_REPAYMENT);
+        TransactionType.BNPL_REPAYMENT, TransactionType.INVESTMENT_BUY, TransactionType.SAVINGS_GOAL_DEPOSIT,
+        TransactionType.VOUCHER_PASS_PURCHASE);
 
     /** Debit-path subset of {@link #STEP_UP_TYPES} — TOPUP is a credit, checked separately by
      * topup-service before initiation (see {@link WalletService#stepUpCheck}), not inside debitOnce.
-     * Issue #18 — BNPL_REPAYMENT included here: no exemption from QĐ 2345/QĐ-NHNN was found for debt
-     * repayment (unlike issue #7's monthly limit, which Điều 26 explicitly exempts this for) — see
-     * backend DESIGN.md's "Ví Trả Sau" section. */
+     * Issue #18 — BNPL_REPAYMENT included here. Issue #25 — INVESTMENT_BUY included here: no exemption
+     * from QĐ 2345/QĐ-NHNN was found for buying investment fund certificates.
+     * Issue #27 — SAVINGS_GOAL_DEPOSIT included here.
+     * Issue #28 — VOUCHER_PASS_PURCHASE included here. */
     static final Set<TransactionType> STEP_UP_DEBIT_TYPES =
         EnumSet.of(TransactionType.TRANSFER_OUT, TransactionType.BILL_PAYMENT, TransactionType.WITHDRAW,
-            TransactionType.BNPL_REPAYMENT);
+            TransactionType.BNPL_REPAYMENT, TransactionType.INVESTMENT_BUY, TransactionType.SAVINGS_GOAL_DEPOSIT,
+            TransactionType.VOUCHER_PASS_PURCHASE);
 
     private final BigDecimal singleTransactionThreshold;
     private final BigDecimal dailyCumulativeThreshold;

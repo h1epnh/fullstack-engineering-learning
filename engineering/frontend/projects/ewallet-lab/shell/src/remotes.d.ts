@@ -21,6 +21,7 @@ declare module 'mfe_wallet/Home' {
     onSavingsPocket: () => void;
     onFamilyWallet: () => void;
     onSpendingReport: () => void;
+    onInvestmentFund?: () => void;
   }>;
   export default Home;
 }
@@ -53,6 +54,11 @@ declare module 'mfe_wallet/FamilyWallet' {
 declare module 'mfe_wallet/SpendingReport' {
   const SpendingReport: ComponentType<{ session: Session; onBack: () => void }>;
   export default SpendingReport;
+}
+
+declare module 'mfe_wallet/InvestmentFund' {
+  const InvestmentFund: ComponentType<{ session: Session; onBack: () => void }>;
+  export default InvestmentFund;
 }
 
 declare module 'mfe_wallet/History' {

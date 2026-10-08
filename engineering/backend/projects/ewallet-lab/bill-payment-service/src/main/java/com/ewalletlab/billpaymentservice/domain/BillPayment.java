@@ -10,7 +10,13 @@ import java.util.UUID;
  * bill-payment-service's own domain record (biller/customer code/category); the wallet-service
  * Transaction row (type=BILL_PAYMENT) remains the single source of truth for the balance effect. */
 @Entity
-@Table(name = "bill_payments")
+@Table(
+    name = "bill_payments",
+    uniqueConstraints = @UniqueConstraint(
+        name = "uk_bill_payments_category_customer_period",
+        columnNames = {"category", "customer_code", "period"}
+    )
+)
 public class BillPayment {
 
     @Id
@@ -30,6 +36,18 @@ public class BillPayment {
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal amount;
 
+    @Column(name = "period")
+    private String period;
+
+    @Column(name = "discount_amount", precision = 19, scale = 2)
+    private BigDecimal discountAmount = BigDecimal.ZERO;
+
+    @Column(name = "voucher_id")
+    private UUID voucherId;
+
+    @Column(name = "final_amount", precision = 19, scale = 2)
+    private BigDecimal finalAmount;
+
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
 
@@ -38,10 +56,23 @@ public class BillPayment {
     }
 
     public BillPayment(UUID userId, BillCategory category, String customerCode, BigDecimal amount) {
+        this(userId, category, customerCode, amount, null, BigDecimal.ZERO, null, amount);
+    }
+
+    public BillPayment(UUID userId, BillCategory category, String customerCode, BigDecimal amount, String period) {
+        this(userId, category, customerCode, amount, period, BigDecimal.ZERO, null, amount);
+    }
+
+    public BillPayment(UUID userId, BillCategory category, String customerCode, BigDecimal amount, String period,
+                       BigDecimal discountAmount, UUID voucherId, BigDecimal finalAmount) {
         this.userId = userId;
         this.category = category;
         this.customerCode = customerCode;
         this.amount = amount;
+        this.period = period;
+        this.discountAmount = discountAmount != null ? discountAmount : BigDecimal.ZERO;
+        this.voucherId = voucherId;
+        this.finalAmount = finalAmount != null ? finalAmount : amount;
     }
 
     public UUID getId() {
@@ -66,5 +97,21 @@ public class BillPayment {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public String getPeriod() {
+        return period;
+    }
+
+    public BigDecimal getDiscountAmount() {
+        return discountAmount;
+    }
+
+    public UUID getVoucherId() {
+        return voucherId;
+    }
+
+    public BigDecimal getFinalAmount() {
+        return finalAmount;
     }
 }

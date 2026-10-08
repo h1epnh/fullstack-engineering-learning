@@ -49,4 +49,16 @@ public class WalletServiceClient {
             .retrieve()
             .body(WalletResult.class);
     }
+
+    /**
+     * Issue #28 — Cơ chế Voucher Pass (Gói Voucher Hội viên tiết kiệm).
+     * Trừ tiền ví chính khi mua gói Voucher Pass với loại giao dịch VOUCHER_PASS_PURCHASE.
+     */
+    public WalletResult debitVoucherPass(UUID userId, BigDecimal amount, UUID purchaseId, String passName) {
+        return restClient.post()
+            .uri("/wallets/{userId}/debit", userId)
+            .body(new AdjustBalanceRequest(amount, "VOUCHER_PASS_PURCHASE", purchaseId.toString(), "Mua gói Voucher Pass: " + passName))
+            .retrieve()
+            .body(WalletResult.class);
+    }
 }

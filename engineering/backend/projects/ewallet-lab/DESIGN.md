@@ -24,11 +24,11 @@ logic sản phẩm ví phổ quát, không giả vờ có nguồn.
 | `lucky-money-service` | Java/Spring Boot | Sở hữu `LuckyMoney` (lì xì 1-1 nội bộ, escrow thật — issue #10), DB riêng `ewallet_lucky_money`; **gọi thẳng `wallet-service`'s `/credit`/`/debit`** (khác `payment-request-service` — không đi qua `transfer-service` vì đây là escrow 2 bước theo thời gian, không phải "transfer ngay") | Hạn mức 1.000đ–20.000.000đ/lần và cơ chế 48h/tự động hoàn tiền đã xác minh trực tiếp từ momo.vn (xem mục dưới) |
 | `loyalty-service` | Java/Spring Boot | **Mô phỏng** "Điểm thưởng" (issue #19): tích điểm từ thanh toán hoá đơn, hạng thành viên 12 tháng trượt, đổi điểm lấy hoàn tiền — DB riêng `ewallet_loyalty`; đọc `wallet-service`'s `/transactions`, trả thưởng qua `/credit` (type `LOYALTY_REDEMPTION`) | Tỷ lệ lấy cảm hứng từ chương trình thật (xem mục dưới); chương trình/tên hạng tự thiết kế — **không có đối tác/thương hiệu thật** |
 | `bnpl-service` | Java/Spring Boot | **Mô phỏng** "Ví Trả Sau" (issue #18): hạn mức tín dụng giả lập, sao kê theo tháng, phí trễ hạn — DB riêng `ewallet_bnpl`; trả nợ gọi `wallet-service`'s `/debit` (type `BNPL_REPAYMENT`) | Hạn mức/lãi/phí lấy từ momo.vn/vi-tra-sau (xác minh trực tiếp) — **sản phẩm là mô phỏng học tập, không có TCTD thật nào đứng sau** (xem mục dưới) |
+| `family-wallet-service` | Java/Spring Boot | **Mô phỏng** "Ví Gia Đình" (issue #12): hạn mức thành viên gia đình — DB riêng `ewallet_family_wallet` | Ý tưởng từ VNPay, thiết kế độc lập |
+| `fund-service` | Java/Spring Boot | **Mô phỏng** "Quỹ nhóm" (issue #14): quỹ N người đóng góp, creator rút — DB riêng `ewallet_fund` | Tham khảo momo.vn/quy-nhom (xác minh trực tiếp) |
+| `investment-fund-service` | Java/Spring Boot | **Mô phỏng** "Sàn Đầu Tư" (issue #25): mua/bán chứng chỉ quỹ mở, NAV dao động, rủi ro lỗ — DB riêng `ewallet_investment`; gọi `wallet-service`'s `/debit` (INVESTMENT_BUY) và `/credit` (INVESTMENT_SELL) | Mô hình tham khảo momo.vn/san-dau-tu (xác minh trực tiếp) — **không có quỹ hay CTQLQ thật nào đứng sau** (xem mục dưới) |
 
-**Trạng thái**: `wallet-service`, `user-service`, `topup-service`, `mock-bank-gateway`,
-`transfer-service`, `bill-payment-service`, `payment-request-service`, `lucky-money-service`,
-`bnpl-service`, `loyalty-service` đã scaffold — đủ chạy luồng "đăng ký → liên kết NH → nạp tiền → số dư được cộng", P2P transfer nội bộ,
-thanh toán hoá đơn mock, link nhận tiền + nhắc trả tiền, và lì xì 1-1.
+**Trạng thái**: các service trên đã scaffold, build sạch và tích hợp vào hệ thống.
 
 ## Vì sao mỗi service có DB riêng
 
@@ -182,6 +182,44 @@ thiếu sót — ghi rõ ở đây để người đọc sau không nhầm là q
 (cố tình không có DB, xem mục P2P Transfer ở trên), service này không có điểm rẽ kiến trúc nào cần
 bàn: nó lưu domain record của riêng nó (category/customerCode/amount), còn wallet-service's
 `Transaction` (type=`BILL_PAYMENT`) vẫn là nguồn sự thật duy nhất về ảnh hưởng tới số dư.
+
+### Thanh toán hoá đơn tự động (Auto-debit Mandates, issue #26)
+
+Mở rộng `bill-payment-service` hỗ trợ người dùng đăng ký uỷ nhiệm trích nợ tự động (auto-debit mandate) cho các hoá đơn định kỳ (điện, nước, internet...).
+
+#### 1. Cơ chế Mandate & Trạng thái (`AutoBillRegistration`)
+- Người dùng tạo mandate thông qua `POST /bills/auto-pay/register` bao gồm `userId`, `category`, `customerCode`, và tuỳ chọn `maxAmount` (hạn mức chi trả tối đa cho phép trừ tự động).
+- `AutoBillStatus` hỗ trợ 3 trạng thái:
+  - `ACTIVE`: Đang hoạt động, được quét tự động bởi scheduler định kỳ.
+  - `PAUSED`: Tạm ngưng trích nợ tự động do người dùng chủ động tạm dừng.
+  - `CANCELLED`: Huỷ uỷ quyền trích nợ hoàn toàn.
+- Cập nhật trạng thái linh hoạt qua `PUT /bills/auto-pay/{id}/status`.
+
+#### 2. Idempotency theo Kỳ (`period`)
+- Mỗi giao dịch thanh toán thành công được gắn với kỳ hoá đơn (`period`, định dạng `MM/yyyy` theo múi giờ `Asia/Ho_Chi_Minh`, ví dụ: `10/2026`).
+- Trước khi thực hiện trừ tiền và thanh toán, hệ thống kiểm tra kép:
+  1. `billPaymentRepository.existsByCategoryAndCustomerCodeAndPeriod(category, customerCode, period)`
+  2. Fallback an toàn cho bản ghi cũ chưa lưu period: `existsByCategoryAndCustomerCodeAndCreatedAtGreaterThanEqual(category, customerCode, startOfMonth)`
+- Nếu kỳ hiện tại đã được thanh toán (bởi người dùng thanh toán tay hoặc chu kỳ chạy trước), mandate sẽ được đánh dấu `SKIPPED_ALREADY_PAID`, ngăn chặn việc trừ tiền 2 lần trong cùng một kỳ hoá đơn.
+
+#### 3. Tuân thủ 5 Nguyên lý Kiến trúc & Ranh giới Pháp lý
+1. **Single Source of Truth**: Tiền mặt ví chỉ được trừ qua `wallet-service` (`POST /wallets/{userId}/debit` với `TransactionType.BILL_PAYMENT`).
+2. **Fail-Closed với Step-Up QĐ 2345/QĐ-NHNN (issue #15)**:
+   - Các tác vụ chạy nền (Scheduler/Daemon) không có giao diện tương tác người dùng để thu thập sinh trắc học Face/NFC.
+   - Do đó, nếu số tiền hoá đơn vượt ngưỡng quy định **> 10.000.000đ**, hệ thống **FAIL-CLOSED**: từ chối trích nợ tự động với lý do `SKIPPED_STEP_UP_REQUIRED`. Yêu cầu người dùng tự thanh toán thủ công trên giao diện để hoàn tất xác thực sinh trắc học bắt buộc.
+3. **Bảo vệ Hạn mức Max Cap (`maxAmount`)**:
+   - Nếu `bill.amount > registration.maxAmount`, hệ thống từ chối trích nợ với lý do `SKIPPED_EXCEEDED_MAX_AMOUNT` để bảo vệ tài khoản người dùng khỏi các hoá đơn tăng đột biến bất thường.
+4. **Xử lý số dư không đủ (Insufficient Funds)**:
+   - Khi `wallet-service` trả về lỗi xung đột/không đủ số dư (409 Conflict), hệ thống ghi nhận kết quả `FAILED_INSUFFICIENT_FUNDS`, không để ném HTTP 500 thô hay làm gián đoạn chu kỳ quét các mandate khác.
+5. **Ngân sách tài nguyên & Auditability**:
+   - `spring.datasource.hikari.maximum-pool-size: 5`.
+   - Lưu trữ nhật ký thanh toán `BillPayment` với đầy đủ `category`, `customerCode`, `period`, `amount`, `createdAt`.
+
+#### 4. Endpoints & Test Harness
+- `POST /bills/auto-pay/register`: Đăng ký mandate mới.
+- `GET /bills/auto-pay?userId={userId}`: Lấy danh sách mandate của user.
+- `PUT /bills/auto-pay/{id}/status`: Cập nhật trạng thái (`ACTIVE`, `PAUSED`, `CANCELLED`).
+- `POST /bills/auto-pay/trigger-run?forceAll=false`: Test harness endpoint cho phép kích hoạt chu kỳ quét trích nợ ngay lập tức mà không cần chờ cron `AutoBillScheduler` (mặc định chạy 07:00 ngày 1 và ngày 15 hàng tháng).
 
 ## Concurrent debit/credit trên cùng ví — optimistic lock, không phải bug về tính toàn vẹn (issue #5)
 
@@ -1387,3 +1425,159 @@ không có auth middleware riêng) — không tự thêm lớp auth mới ngoài
 breakdown/total. `period=year` (giá trị không hợp lệ) → 400. CORS qua origin
 `http://shell.ewallet-lab.local` → `Access-Control-Allow-Origin` đúng, không cần đổi
 `ALLOWED_ORIGIN_PATTERN` (endpoint nằm trong `wallet-service` đã có CORS config sẵn).
+
+## Sàn Đầu Tư — Mô phỏng đầu tư chứng chỉ quỹ mở (issue #25) — `investment-fund-service`
+
+> **Disclaimer BẮT BUỘC (4 ý tối thiểu)**:
+> 1. Đây là sản phẩm **mô phỏng học tập**.
+> 2. **KHÔNG PHẢI** lời khuyên đầu tư thật.
+> 3. **KHÔNG CÓ** quỹ hoặc công ty quản lý quỹ thật nào đứng sau (Dragon Capital, IPAAM, SSIAM, VCBF chỉ là nguồn tham khảo mô hình hợp tác thật của MoMo, KHÔNG phải đối tác của lab).
+> 4. Giá trị "NAV" mô phỏng **CÓ THỂ GIẢM** — khác Túi Thần Tài (lãi luôn dương), người dùng có thể chịu "lỗ" số dư mô phỏng, phải công bố rõ ràng và minh bạch.
+
+### Quyết định kiến trúc & Enterprise Architecture Alignment
+
+- **Kiến trúc đã chọn**: **(b) Service độc lập `investment-fund-service`, DB riêng `ewallet_investment`, port 8102** (operator & lead architect phê duyệt).
+  - So với **(a)** bảng mới trong `wallet-service` (như Túi Thần Tài #13): Ở #13, Túi Thần Tài là sub-ledger gắn chặt với từng wallet cá nhân, lãi suất cố định, không có rủi ro thị trường. Ở Sàn Đầu Tư, **NAV là trạng thái toàn cục** biến động theo thị trường chung, tách biệt hoàn toàn với sổ cái tài khoản người dùng cá nhân. Tách service độc lập tuân thủ nguyên lý Single Source of Truth / Ledger Sanctity: `wallet-service` chỉ giữ vai trò Core General Ledger nguồn sự thật về tiền mặt ví; domain "đầu tư chứng chỉ quỹ" với rủi ro thị trường được cô lập hoàn toàn tại `investment-fund-service`.
+  - So với **bnpl-service (#18) & fund-service (#14)**: Cùng pattern service độc lập sở hữu DB riêng (`ewallet_investment`), giao tiếp với `wallet-service` qua REST API tiêu chuẩn `/debit` và `/credit`.
+
+### Nguồn số liệu tham khảo
+
+- **Nguồn đã xác minh trực tiếp** (`momo.vn/san-dau-tu`, agent-designer fetch trực tiếp 2026-10-07):
+  - MoMo hợp tác với các công ty quản lý quỹ: Dragon Capital (DCVFM), IPAAM, SSIAM, VCBF.
+  - Luồng nghiệp vụ cơ bản: Vào Sàn Đầu Tư → chọn quỹ mở → đặt lệnh mua hoặc bán chứng chỉ quỹ.
+  - MoMo công bố "miễn phí dịch vụ trên app", nguồn thu đến từ hợp tác chiến lược / phí hoa hồng phân phối AUM với CTQLQ (suy luận hợp lý từ mô hình đại lý phân phối quỹ mở tại Việt Nam, % hoa hồng cụ thể không công bố công khai).
+- **Ranh giới sản phẩm lab**:
+  - Không sử dụng tên/logo/tên viết tắt thương hiệu thật của Dragon Capital/IPAAM/SSIAM/VCBF trên UI hay mã nguồn (tuân thủ ranh giới CLAUDE.md).
+  - Tên quỹ được mock độc lập: `VF-GROWTH` (Quỹ Cổ Phiếu Tăng Trưởng), `VF-BALANCED` (Quỹ Cân Bằng Năng Động), `VF-BOND` (Quỹ Trái Phiếu An Toàn).
+
+### Tuân thủ 5 Nguyên lý Kiến trúc Doanh nghiệp
+
+1. **Sổ cái duy nhất (Single Source of Truth / Ledger Sanctity)**:
+   - `wallet-service` là nơi duy nhất giữ số dư tiền mặt.
+   - Khi mua chứng chỉ quỹ: `investment-fund-service` gọi `wallet-service`'s `POST /wallets/{userId}/debit` với `TransactionType.INVESTMENT_BUY`.
+   - Khi bán chứng chỉ quỹ: `investment-fund-service` gọi `wallet-service`'s `POST /wallets/{userId}/credit` với `TransactionType.INVESTMENT_SELL`.
+
+2. **Fail-Closed vs Fail-Open theo bản chất nghiệp vụ**:
+   - **Giao dịch MUA (`INVESTMENT_BUY`)**: Là dòng tiền chi ra khỏi ví, **BẮT BUỘC FAIL-CLOSED** tuân thủ pháp luật:
+     - Hạn mức tháng theo Điều 26 Thông tư 40/2024/TT-NHNN (sửa đổi bởi TT 41/2025/TT-NHNN — issue #7): tính chung trong `MONTHLY_LIMIT_TYPES` (trần 100.000.000đ/tháng). Vượt trần sẽ bị từ chối 409 ngay lập tức.
+     - Xác thực bổ sung theo Quyết định 2345/QĐ-NHNN (issue #15): tính chung trong `STEP_UP_TYPES` & `STEP_UP_DEBIT_TYPES` (>10.000.000đ/lần hoặc cộng dồn >20.000.000đ/ngày). Thiếu cờ `stepUpConfirmed` sẽ bị chặn với HTTP 428 Precondition Required.
+   - **Giao dịch BÁN (`INVESTMENT_SELL`)**: Là dòng tiền hồi về ví (tiền vào): không tính vào hạn mức chi tiêu tháng và không yêu cầu step-up.
+
+3. **Kiểm soát đồng thời (Zero-Loss / Zero-Creation Concurrency)**:
+   - **Bán chứng chỉ quỹ**: Áp dụng triệt để pattern **"Claim trước (local lock/@Version) -> Di chuyển tiền (remote credit) -> Commit/Revert (compensation)"**:
+     - Bước 1 (Local claim): Trong transaction cục bộ, `deductUnitsOnce` kiểm tra số lượng units và trừ units khỏi `InvestmentHolding` (được bảo vệ bằng `@Version`). Tạo bản ghi `InvestmentOrder` loại `SELL`.
+     - Bước 2 (Move tiền): Gọi `walletServiceClient.creditSell` sang `wallet-service`.
+     - Bước 3 (Bồi hoàn nếu lỗi): Nếu lệnh credit thất bại (lỗi mạng hoặc timeout), kích hoạt `compensateSellWithRetry` khôi phục lại units cho user với ngân sách 30 lượt thử và jittered backoff (20ms * i + jitter, max 150ms).
+     - **Kết quả**: 2 request bán đồng thời của cùng 1 user không thể tạo ra double-credit (người thứ 2 sẽ bị 409 do thiếu units hoặc thua optimistic lock).
+   - **Mua chứng chỉ quỹ**:
+     - Bước 1: Debit `wallet-service` trước.
+     - Bước 2: Cập nhật `InvestmentHolding` với optimistic-lock retry (`MAX_ATTEMPTS=10`). Bắt cả `ObjectOptimisticLockingFailureException` lẫn `DataIntegrityViolationException` (phòng trường hợp 2 lệnh mua đầu tiên cùng tạo mới dòng holding).
+
+4. **Trách nhiệm Giải trình & Kiểm toán (Auditability & Traceability)**:
+   - Mọi giao dịch qua `wallet-service` đều đính kèm `reference` (ID quỹ), `type` rõ ràng (`INVESTMENT_BUY` / `INVESTMENT_SELL`), và `note` chi tiết (ví dụ: `"Mua chứng chỉ quỹ VF-GROWTH"` / `"Bán chứng chỉ quỹ VF-GROWTH"`).
+
+5. **Ngân sách Tài nguyên & Cô lập (Resource Isolation)**:
+   - `spring.datasource.hikari.maximum-pool-size: 5` tại `application.yml` đảm bảo ngân sách kết nối Postgres toàn cluster (max 200).
+
+### Cơ chế mô phỏng biến động NAV
+
+- Biến động theo thời gian: `NavSimulationService` cho phép NAV dao động cả **lên** và **xuống** ngẫu nhiên trong biên độ `ewallet-lab.investment.nav-volatility-pct: 0.05` (±5%).
+- Lịch sử NAV được lưu vào bảng `nav_history` mỗi khi có cập nhật.
+- Test harness phục vụ kiểm thử tự động / độc lập:
+  - `POST /investments/funds/tick-nav`: Kích hoạt 1 chu kỳ cập nhật thị trường cho tất cả quỹ.
+  - `POST /investments/funds/{id}/set-nav`: Cho phép gán giá trị NAV cụ thể (ví dụ hạ NAV thấp hơn giá mua) để kiểm thử xác nhận kịch bản người dùng bán bị "lỗ" và số tiền credit về ví ít hơn số tiền ban đầu.
+
+## Mục tiêu tiết kiệm — Goal-based Savings (issue #27) — `wallet-service`
+
+> **Disclaimer bắt buộc**: "Mục tiêu tiết kiệm mô phỏng cho mục đích học tập — không có ngân hàng thương mại hay tổ chức tín dụng thật đứng sau". Tránh nhầm lẫn với các chương trình thiện nguyện, đây là sản phẩm tích luỹ tài chính cá nhân mô phỏng (tương tự Timo Goal Save, Cake Heo Đất).
+
+### Quyết định kiến trúc (Operator phê duyệt)
+- **Phương án (a) — Mở rộng trực tiếp trong `wallet-service` (Port 8091, DB `ewallet_wallet`)**:
+  - Tương tự mô hình Túi Thần Tài (#13), đây là dạng sub-account 1-to-N gắn chặt với tài khoản ví của người dùng.
+  - Thêm bảng `savings_goals` và `savings_goal_transactions` vào DB `ewallet_wallet`.
+  - Giữ toàn bộ giao dịch dòng tiền (nạp/rút) trong cùng một cơ sở dữ liệu và sổ cái `transactions`, loại bỏ rủi ro timeout mạng hai chiều giữa các service phân tán.
+
+### 5 Nguyên lý Kiến trúc & Ranh giới Pháp lý
+1. **Single Source of Truth & Sổ cái**:
+   - `wallet-service` tiếp tục là nơi duy nhất quản lý số dư tiền mặt của ví chính.
+   - Thêm 2 `TransactionType` mới:
+     - `SAVINGS_GOAL_DEPOSIT`: Tiền từ ví chính nạp vào mục tiêu.
+     - `SAVINGS_GOAL_WITHDRAW`: Tiền rút từ mục tiêu hoàn về ví chính.
+   - Bảng `savings_goals` giữ vai trò sub-ledger ghi nhận `currentAmount`, `targetAmount`, `targetDate`, `status` (`ACTIVE`, `COMPLETED`, `CANCELLED`).
+2. **Fail-Closed & Ranh giới Pháp lý**:
+   - **Nạp tiền (`SAVINGS_GOAL_DEPOSIT`)**:
+     - Là dòng tiền ra khỏi ví chính (`STEP_UP_DEBIT_TYPES`): Bắt buộc kiểm tra Step-up theo Quyết định 2345/QĐ-NHNN (nạp > 10.000.000đ/lần hoặc cộng dồn > 20.000.000đ/ngày). Nếu thiếu cờ `stepUpConfirmed` sẽ bị chặn với HTTP 428 Precondition Required.
+     - Đồng thời tính vào hạn mức tháng `MONTHLY_LIMIT_TYPES` theo Điều 26 Thông tư 40/2024/TT-NHNN (trần 100.000.000đ/tháng).
+   - **Rút tiền (`SAVINGS_GOAL_WITHDRAW`)**:
+     - Là dòng tiền hồi về ví chính (inbound): KHÔNG tính vào hạn mức chi tiêu tháng và KHÔNG yêu cầu xác thực Step-up.
+3. **Kiểm soát đồng thời (Zero-Loss / Zero-Creation Concurrency)**:
+   - Áp dụng nguyên tắc **"Claim trước (local lock/@Version) -> Move tiền sau"**:
+     - Khi rút tiền: `withdrawClaimOnce` kiểm tra số dư mục tiêu `goal.currentAmount >= amount` và trừ tiền trên `SavingsGoal` (bảo vệ bởi `@Version`) TRƯỚC KHI gọi credit ví chính.
+     - Nếu có 10–15 request rút đồng thời khi số dư chỉ đủ cho 1 lần rút: chỉ đúng 1 request thắng claim thành công (HTTP 200), các request còn lại thua optimistic lock hoặc nhận thông báo số dư không đủ (HTTP 409 Conflict). Hoàn toàn không xảy ra double-credit vào ví chính.
+     - Nếu lệnh credit ví chính gặp ngoại lệ: kích hoạt `revertWithdrawClaim` bồi hoàn lại số dư cho mục tiêu.
+4. **Auditability & Traceability**:
+   - Mọi biến động nạp/rút đều ghi vết trong bảng `savings_goal_transactions` (`DEPOSIT` / `WITHDRAW`) lẫn sổ cái `transactions` của ví với reference là `goalId`.
+5. **Tiến độ tự động**:
+   - Tiến độ `% = (currentAmount / targetAmount) * 100` (làm tròn HALF_UP 2 chữ số thập phân, trần 100%).
+   - Khi `currentAmount >= targetAmount`, trạng thái tự động cập nhật `COMPLETED`.
+
+### API Endpoints (`/savings-goals`)
+| Method | Path | Mô tả |
+|---|---|---|
+| GET | `/savings-goals/disclaimer` | Trả về thông điệp cảnh báo mô phỏng bắt buộc |
+| POST | `/savings-goals` | Tạo mục tiêu mới (`{userId, name, targetAmount, targetDate, initialDepositAmount?, stepUpConfirmed?}`) |
+| GET | `/savings-goals?userId={userId}` | Lấy danh sách mục tiêu của user kèm tiến độ `%` |
+| GET | `/savings-goals/{id}` | Chi tiết mục tiêu và lịch sử giao dịch nạp/rút |
+| POST | `/savings-goals/{id}/deposit` | Nạp thêm tiền từ ví chính vào mục tiêu (`{amount, stepUpConfirmed?}`) |
+| POST | `/savings-goals/{id}/withdraw` | Rút tiền từ mục tiêu về ví chính (`{amount}`) |
+
+## Gói Voucher Hội Viên — Voucher Pass (issue #28) — `loyalty-service` & `bill-payment-service`
+
+> **Disclaimer bắt buộc**: "Gói Voucher Hội Viên và Voucher giảm giá mô phỏng cho mục đích học tập — không có đối tác thương mại, sàn TMĐT hay ngân hàng thật đứng sau".
+
+### Quyết định kiến trúc (Operator phê duyệt)
+- **Phương án 2 (b) — Mở rộng trực tiếp trên `loyalty-service` (Port 8098/8099, DB `ewallet_loyalty`)**:
+  - `loyalty-service` đã quản lý điểm thưởng và đổi thưởng, là bounded context tự nhiên cho toàn bộ ưu đãi và voucher giảm giá.
+  - Tái sử dụng Ingress routing `/loyalty` sẵn có trên cụm Kubernetes mà không cần thêm routing hay deployment độc lập.
+  - DB `ewallet_loyalty` bổ sung bảng `voucher_pass_purchases` và bảng `vouchers`.
+
+### 5 Nguyên lý Thiết kế & Chống Double-Spend
+1. **Dòng tiền mua Gói Pass**:
+   - Mua gói Pass là giao dịch trừ tiền ví chính với loại giao dịch `TransactionType.VOUCHER_PASS_PURCHASE`.
+   - `wallet-service` tính `VOUCHER_PASS_PURCHASE` vào `STEP_UP_DEBIT_TYPES` (kiểm tra hạn mức QĐ 2345/QĐ-NHNN) và `MONTHLY_LIMIT_TYPES` (hạn mức chi tiêu tháng Điều 26 TT 40/2024/TT-NHNN).
+   - `loyalty-service` gọi `POST /wallet/debit` qua `WalletServiceClient`. Nếu trừ tiền thành công mới cấp các voucher tương ứng trong gói.
+2. **Catalog 3 Gói Pass chuẩn**:
+   - `PASS_BILL_SAVER` (Gói Tiết Kiệm Hoá Đơn): Giá 15.000đ, cấp 2 voucher giảm 10.000đ và 15.000đ (tổng tiết kiệm đến 25.000đ, hạn dùng 30 ngày).
+   - `PASS_STUDENT` (Gói Sinh Viên / Điện Thoại): Giá 10.000đ, cấp 2 voucher giảm 10% (tối đa 15.000đ) cho Điện / Nước / Viễn thông, hạn 30 ngày.
+   - `PASS_MEGA_COMBO` (Gói Siêu Tiết Kiệm): Giá 25.000đ, cấp 3 voucher tổng trị giá ưu đãi đến 45.000đ, hạn 45 ngày.
+3. **Atomic Claim & Chống Double-Spend Voucher (Zero-Creation / Zero-Loss)**:
+   - Entity `Voucher` được bảo vệ bởi trường `@Version private Long version;` (optimistic locking).
+   - Trạng thái voucher tuân thủ vòng đời nghiêm ngặt: `AVAILABLE` -> `USED`.
+   - Khi thanh toán hoá đơn, `bill-payment-service` gọi `POST /loyalty/vouchers/{id}/claim` với `{userId, orderAmount, category}`.
+   - Phương thức `@Transactional claimVoucher` trong `VoucherMutationExecutor` kiểm tra:
+     - Voucher thuộc đúng `userId`.
+     - `voucher.status == VoucherStatus.AVAILABLE`.
+     - Chưa quá hạn `expiresAt`.
+     - Phù hợp danh mục và thoả mãn `orderAmount >= minOrderAmount`.
+   - Cập nhật chuyển trạng thái sang `VoucherStatus.USED` và ghi nhận `usedAt`. Nếu có 2 request đồng thời cùng claim 1 voucher, chỉ đúng 1 request thành công, request còn lại văng `OptimisticLockException` hoặc 409 Conflict.
+4. **Compensation Revert (Cơ chế bồi hoàn hai chiều)**:
+   - Trong luồng thanh toán tại `bill-payment-service`:
+     1. Gọi claim voucher trên `loyalty-service` thành công -> nhận số tiền giảm giá `discountAmount`.
+     2. Tính toán số tiền thực trả `finalAmount = max(0, orderAmount - discountAmount)`.
+     3. Trừ tiền ví chính `wallet-service.debit(finalAmount)`.
+     4. Nếu bước (3) thất bại (thiếu số dư ví chính, timeout mạng, Step-up rejection), `bill-payment-service` trong catch block lập tức gọi `POST /loyalty/vouchers/{id}/revert` để rollback voucher về lại trạng thái `AVAILABLE`.
+5. **Auditing & Receipt**:
+   - Biên lai `BillPayment` và `BillPaymentReceiptDto` lưu trữ chi tiết: `amount` (gốc), `discountAmount` (giảm giá), `voucherId`, và `finalAmount` (thực trừ).
+
+### API Endpoints Voucher Pass (`/loyalty`)
+| Method | Path | Mô tả |
+|---|---|---|
+| GET | `/loyalty/voucher-passes` | Lấy danh mục các gói Voucher Pass có thể mua |
+| POST | `/loyalty/voucher-passes/purchase` | Mua gói Pass từ ví chính (`{userId, packageId}`) |
+| GET | `/loyalty/vouchers/my?userId={userId}` | Lấy toàn bộ voucher đã sở hữu (AVAILABLE, USED, EXPIRED) |
+| GET | `/loyalty/vouchers/usable?userId={userId}&category={c}&orderAmount={a}` | Lọc danh sách voucher hợp lệ cho hoá đơn cụ thể |
+| POST | `/loyalty/vouchers/{id}/claim` | Atomic claim voucher cho hoá đơn (`{userId, orderAmount, category}`) |
+| POST | `/loyalty/vouchers/{id}/revert` | Bồi hoàn voucher về `AVAILABLE` nếu bước trừ tiền ví thất bại |
+| GET | `/loyalty/vouchers/disclaimer` | Disclaimer mô phỏng học tập bắt buộc |
+
+

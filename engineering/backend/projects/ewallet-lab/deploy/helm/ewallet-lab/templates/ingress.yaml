@@ -124,3 +124,12 @@ spec:
             pathType: Prefix
             backend:
               service: { name: fund-service, port: { number: 8101 } }
+          - path: /investments
+            pathType: Prefix
+            backend:
+              service: { name: investment-fund-service, port: { number: 8102 } }
+          - path: /savings-goals
+            pathType: Prefix
+            backend:
+              service: { name: wallet-service, port: { number: 8091 } }
+

@@ -11,6 +11,8 @@ import Notifications from './screens/Notifications';
 import ReceiveQr from './screens/ReceiveQr';
 import SavingsPocket from './screens/SavingsPocket';
 import SpendingReport from './screens/SpendingReport';
+import SavingsGoals from './screens/SavingsGoals';
+import VoucherPass from './screens/VoucherPass';
 
 const mockSession: Session = {
   id: crypto.randomUUID(),
@@ -30,6 +32,8 @@ function Harness() {
     | 'savings-pocket'
     | 'family-wallet'
     | 'spending-report'
+    | 'savings-goals'
+    | 'voucher-pass'
   >('home');
   return (
     <div>
@@ -44,6 +48,8 @@ function Harness() {
         <button onClick={() => setTab('savings-pocket')}>SavingsPocket</button>
         <button onClick={() => setTab('family-wallet')}>FamilyWallet</button>
         <button onClick={() => setTab('spending-report')}>SpendingReport</button>
+        <button onClick={() => setTab('savings-goals')}>SavingsGoals</button>
+        <button onClick={() => setTab('voucher-pass')}>VoucherPass</button>
         <span style={{ fontSize: 12 }}>standalone dev harness — no shell, mock session</span>
       </div>
       {tab === 'home' && (
@@ -61,6 +67,8 @@ function Harness() {
           onSavingsPocket={() => setTab('savings-pocket')}
           onFamilyWallet={() => setTab('family-wallet')}
           onSpendingReport={() => setTab('spending-report')}
+          onSavingsGoals={() => setTab('savings-goals')}
+          onVoucherPass={() => setTab('voucher-pass')}
         />
       )}
       {tab === 'history' && <History session={mockSession} />}
@@ -72,6 +80,8 @@ function Harness() {
       {tab === 'savings-pocket' && <SavingsPocket session={mockSession} onBack={() => setTab('home')} />}
       {tab === 'family-wallet' && <FamilyWallet session={mockSession} onBack={() => setTab('home')} />}
       {tab === 'spending-report' && <SpendingReport session={mockSession} onBack={() => setTab('home')} />}
+      {tab === 'savings-goals' && <SavingsGoals session={mockSession} onBack={() => setTab('home')} />}
+      {tab === 'voucher-pass' && <VoucherPass session={mockSession} onBack={() => setTab('home')} />}
     </div>
   );
 }

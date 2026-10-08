@@ -112,6 +112,11 @@ fundService:
   port: 8101
   replicas: 1
 
+investmentFundService:
+  port: 8102
+  replicas: 1
+
 frontend:
   port: 80
   replicas: 1
+

@@ -8,6 +8,14 @@ const STYLES: Record<string, { bg: string; fg: string; label: string }> = {
   CANCELLED: { bg: 'var(--el-surface-2)', fg: 'var(--el-faint)', label: 'Đã huỷ' },
   EXPIRED: { bg: 'var(--el-danger-soft)', fg: 'var(--el-danger)', label: 'Đã hết hạn' },
   EXPIRED_REFUNDED: { bg: 'var(--el-danger-soft)', fg: 'var(--el-danger)', label: 'Hết hạn, đã hoàn tiền' },
+  // auto-debit (issue #26) + investment-fund (issue #25) + savings-goals (issue #27) + voucher-pass (issue #28)
+  ACTIVE: { bg: 'var(--el-accent-soft)', fg: 'var(--el-accent-ink)', label: 'Đang hoạt động' },
+  PAUSED: { bg: 'var(--el-amber-soft)', fg: 'var(--el-amber)', label: 'Tạm dừng' },
+  MATCHED: { bg: 'var(--el-accent-soft)', fg: 'var(--el-accent-ink)', label: 'Đã khớp' },
+  IN_PROGRESS: { bg: 'var(--el-amber-soft)', fg: 'var(--el-amber)', label: 'Đang tiết kiệm' },
+  COMPLETED: { bg: 'var(--el-accent-soft)', fg: 'var(--el-accent-ink)', label: 'Hoàn thành' },
+  AVAILABLE: { bg: 'var(--el-accent-soft)', fg: 'var(--el-accent-ink)', label: 'Khả dụng' },
+  USED: { bg: 'var(--el-surface-2)', fg: 'var(--el-faint)', label: 'Đã dùng' },
 };
 
 export function StatusPill({ status }: { status: string }) {

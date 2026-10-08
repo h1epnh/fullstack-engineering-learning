@@ -57,3 +57,7 @@ engineering/devops/monitoring/unleash/
 
 # n8n runtime data/credentials (contains encryption key + credentials DB, must never be committed)
 engineering/devops/orchestration/workflow/n8n/
+
+# Module Federation cache
+.mf/
+

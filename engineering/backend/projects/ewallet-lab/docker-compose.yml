@@ -265,5 +265,23 @@ services:
       USER_SERVICE_URL: http://user-service:8090
       WALLET_SERVICE_URL: http://wallet-service:8091
 
+  investment-fund-service:
+    build: ./investment-fund-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      wallet-service:
+        condition: service_started
+    ports:
+      - "8102:8102"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ewallet_investment
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      WALLET_SERVICE_URL: http://wallet-service:8091
+
 volumes:
   ewallet-lab-postgres:
+

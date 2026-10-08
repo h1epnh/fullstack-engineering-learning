@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: investment-fund-service
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.investmentFundService.replicas }}
+  selector:
+    matchLabels: { app: investment-fund-service }
+  template:
+    metadata:
+      labels: { app: investment-fund-service }
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: investment-fund-service
+          image: {{ include "ewallet-lab.image" (dict "root" $ "name" "investment-fund-service") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.investmentFundService.port }}
+          env:
+            - name: DB_HOST
+              value: postgres
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: ewallet_investment
+            - name: DB_USER
+              valueFrom: { secretKeyRef: { name: postgres-credentials, key: POSTGRES_USER } }
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: postgres-credentials, key: POSTGRES_PASSWORD } }
+            - name: WALLET_SERVICE_URL
+              value: "http://wallet-service:{{ .Values.walletService.port }}"
+            - name: ALLOWED_ORIGIN_PATTERN
+              value: {{ .Values.corsAllowedOriginPattern | quote }}
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: {{ .Values.investmentFundService.port }} }
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: {{ .Values.investmentFundService.port }} }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: investment-fund-service
+  namespace: {{ .Values.namespace }}
+spec:
+  selector: { app: investment-fund-service }
+  ports:
+    - port: {{ .Values.investmentFundService.port }}
+      targetPort: {{ .Values.investmentFundService.port }}
+

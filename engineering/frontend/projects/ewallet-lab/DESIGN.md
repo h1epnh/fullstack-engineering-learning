@@ -586,3 +586,117 @@ nói phần UI. Không phải điểm rẽ kiến trúc — không build-arg m�
   đủ 4 loại giao dịch → `spending-report?period=week`/`month` đều trả đúng tổng + breakdown, TOPUP
   không bị tính — xem backend DESIGN.md's phần verify cho số liệu cụ thể. CORS qua origin
   `http://shell.ewallet-lab.local` xác nhận `Access-Control-Allow-Origin` đúng.
+
+## 18. Sàn Đầu Tư (issue #25) — Chứng chỉ quỹ mở mô phỏng (`InvestmentFund.tsx` trong `mfe-wallet`)
+
+Nguồn khảo sát MoMo thật: `momo.vn/san-dau-tu` (hợp tác đối tác quản lý quỹ Dragon Capital, SSIAM, VCBF, IPAAM). Đây là sản phẩm thuộc nhóm tích luỹ/đầu tư sinh lời có tiềm năng biên lợi nhuận cao (phí phân phối/AUM) theo định hướng backlog của dự án. Khác với Túi Thần Tài (issue #13, lãi suất cố định mô phỏng ~4.7%/năm, số dư luôn tăng), **Sàn Đầu Tư là sản phẩm có rủi ro thị trường: Giá trị tài sản ròng (NAV/CCQ) biến động từng phiên và CÓ THỂ GIẢM**.
+
+### 4 Ý Disclaimer rủi ro thị trường bắt buộc
+Tuân thủ tuyệt đối yêu cầu của Issue #25 và chỉ đạo kiến trúc, frontend triển khai đầy đủ 4 ý disclaimer rủi ro thị trường:
+1. **Mô phỏng học tập trong Ewallet Lab**: Sản phẩm sandbox nhằm nghiên cứu và thực hành kiến trúc hệ thống tài chính, không phải tổ chức phát hành hay đại lý phân phối chứng chỉ quỹ được cấp phép.
+2. **KHÔNG PHẢI lời khuyên đầu tư thật**: Mọi số liệu, tỷ suất sinh lời và khuyến nghị chỉ có giá trị mô phỏng kỹ thuật.
+3. **KHÔNG CÓ quỹ/công ty quản lý quỹ thật nào đứng sau**: Các thương hiệu quỹ lớn chỉ là nguồn tham khảo mô hình hợp tác, không có quan hệ đối tác thực tế.
+4. **Giá trị "NAV" mô phỏng CÓ THỂ GIẢM**: Khác biệt cốt lõi với Túi Thần Tài — nhà đầu tư có thể chịu lỗ số dư mô phỏng nếu thị trường suy giảm, không cam kết bảo toàn vốn hay lợi nhuận tối thiểu.
+
+### Cơ chế hiển thị Disclaimer
+- **Modal chặn luồng (`MarketRiskDisclaimerModal`)**: Tự động hiển thị khi người dùng lần đầu truy cập Sàn Đầu Tư hoặc khi người dùng chuẩn bị thực hiện giao dịch mua chứng chỉ quỹ. Modal hiển thị đầy đủ 4 ý disclaimer và yêu cầu tick checkbox xác nhận trước khi nút "Xác nhận & Tiếp tục" được kích hoạt.
+- **Banner thường trực (`PermanentDisclaimerBanner`)**: Ghim ở đầu mọi màn hình của Sàn Đầu Tư với style cảnh báo (`--el-amber-soft`, icon `warning`), kèm nút "Chi tiết ›" để mở lại modal disclaimer bất cứ lúc nào.
+
+### Cấu trúc màn hình và luồng tương tác
+- **Entry point**: Màn hình chính `Home.tsx` tích hợp thẻ truy cập nhanh "Sàn Đầu Tư · Chứng chỉ quỹ mở" ngay dưới strip số dư các ví, đồng thời có teaser trong mục "Khám phá thêm" (`FEED_TEASERS`).
+- **Màn hình `InvestmentFund.tsx`** (expose qua Module Federation `./InvestmentFund`, tích hợp trong `shell/src/App.tsx` với flow `'investment-fund'`):
+  - **Tab 1 — Khám phá Quỹ (Marketplace)**: Danh sách 3 chứng chỉ quỹ mở mô phỏng phân theo khẩu vị rủi ro:
+    - `VF-GROWTH` (Quỹ Cổ Phiếu Tăng Trưởng) — Rủi ro cao, NAV ban đầu 15.000đ.
+    - `VF-BALANCED` (Quỹ Cân Bằng Năng Động) — Rủi ro vừa (50% cổ phiếu, 50% trái phiếu), NAV ban đầu 12.000đ.
+    - `VF-BOND` (Quỹ Trái Phiếu An Toàn) — Rủi ro thấp, NAV ban đầu 10.500đ.
+    - Thẻ quỹ hiển thị NAV hiện tại, tỷ lệ % tăng/giảm (+/-) với màu sắc trực quan (accent/green khi dương, red/danger khi âm), phân loại rủi ro.
+    - Bấm vào quỹ mở Card chi tiết quỹ: Biểu đồ/bảng lịch sử 5 phiên gần nhất, chiến lược đầu tư và nút "Đặt lệnh Mua CCQ".
+  - **Tab 2 — Tài sản của tôi (Portfolio)**:
+    - Card tổng quan tài sản: Tổng giá trị đầu tư, Tổng vốn đã mua, Lợi nhuận tạm tính (VND và %).
+    - Danh sách CCQ nắm giữ: Tên quỹ, số lượng CCQ, NAV hiện tại, giá trị danh mục, lãi/lỗ (+/-) kèm nút "Bán CCQ" và "Mua thêm".
+    - Lịch sử đặt lệnh: Danh sách các lệnh MUA/BÁN đã khớp, hiển thị thời gian, số lượng CCQ, tổng tiền và badge trạng thái `MATCHED`.
+- **Luồng Đặt lệnh Mua (Buy Flow)**:
+  - Nhập số tiền đầu tư (tối thiểu 10.000đ), có các nút chọn nhanh (50k, 100k, 500k, 1M, 10M).
+  - Tự động quy đổi số CCQ dự kiến: `Số tiền / NAV`.
+  - Hiển thị số dư ví chính khả dụng.
+  - Tuân thủ QĐ 2345/QĐ-NHNN: Tích hợp `StepUpModal` khi số tiền mua > 10.000.000đ hoặc vượt hạn mức tích luỹ ngày.
+  - Khi xác nhận, gọi `POST /investments/orders/buy` với `disclaimerAccepted: true`. Tiền trích nợ ví chính với loại giao dịch `INVESTMENT_BUY` (tính vào hạn mức tháng Điều 26 TT 40).
+- **Luồng Đặt lệnh Bán (Sell Flow)**:
+  - Nhập số lượng CCQ muốn bán hoặc chọn checkbox "Bán tất cả".
+  - Tự động tính số tiền dự kiến nhận về ví: `Số CCQ × NAV`.
+  - Bán không cần Step-up vì là dòng tiền vào (credit ví chính với loại giao dịch `INVESTMENT_SELL`), không tính vào hạn mức chi tiêu tháng.
+- **Nút "Mô phỏng phiên NAV"**: Gọi `POST /investments/funds/tick-nav` để tạo biến động giá ngẫu nhiên (tăng hoặc giảm trong biên độ ±5%), giúp kiểm thử real-time việc tính toán P&L lãi/lỗ và phản ứng giao diện.
+
+## 19. Thanh toán hoá đơn tự động (issue #26) — Auto-debit Mandates trong `mfe-bill-payment`
+
+Nguồn khảo sát MoMo thật: `momo.vn/hoi-dap/thanh-toan-hoa-don-tu-dong` (tính năng đăng ký uỷ quyền trích nợ tự động, cài đặt hạn mức thanh toán tối đa Max cap và chu kỳ quét cước).
+
+### Thiết kế UI/UX và luồng tương tác
+- **Toggle đăng ký Auto-debit (`BillConfirm.tsx`)**:
+  - Đặt ngay bên dưới thông tin chi tiết hoá đơn tại bước xác nhận thanh toán.
+  - Switch/checkbox: "Tự động thanh toán kỳ sau (Auto-debit)" kèm badge "Tiện ích".
+  - Khi bật toggle, mở rộng khung cấu hình với design token rõ ràng (`--el-surface-2`, `--el-line`, `--el-shadow`):
+    - **Hạn mức thanh toán tối đa mỗi kỳ (Max cap)**: Trường nhập số tiền với gợi ý mặc định tự động làm tròn lên 1.5x số tiền hoá đơn hiện tại (ví dụ hoá đơn 350.000đ -> mặc định max cap 550.000đ).
+    - **Cơ chế an toàn (Safety Protection)**: Ghi chú giải thích rõ ràng "Nếu hoá đơn kỳ tới vượt quá hạn mức này, hệ thống sẽ KHÔNG tự động trừ tiền mà gửi thông báo để bạn duyệt thủ công" — tránh trường hợp hoá đơn phát sinh bất thường (rò rỉ nước, thiết bị điện chập chờn) làm cạn tiền ví người dùng.
+    - **Nguồn tiền trích nợ**: Mặc định là Ví chính.
+    - **Thời điểm quét**: Định kỳ hàng tháng khi nhà cung cấp phát hành hoá đơn mới.
+- **Thẻ xác nhận kết quả (`BillReceipt.tsx`)**:
+  - Sau khi thanh toán thành công, nếu người dùng đã bật Auto-debit, màn hình biên lai hiển thị Card nổi bật với `StatusPill` trạng thái `ACTIVE` ("Đang bật").
+  - Ghi nhận rõ mã khách hàng, loại dịch vụ và hạn mức tối đa/kỳ đã đăng ký.
+- **Quản lý uỷ quyền tự động (`BillLookupForm.tsx`)**:
+  - Bổ sung thanh tab chuyển đổi: "Tra cứu hoá đơn" và "Uỷ quyền tự động (Auto-debit)".
+  - Tab "Uỷ quyền tự động" liệt kê tất cả các mandate đã đăng ký của người dùng, hiển thị loại dịch vụ, mã khách hàng, hạn mức tối đa/kỳ và nút "Huỷ uỷ quyền" cho phép người dùng chủ động tắt tính năng bất kỳ lúc nào.
+- **Mô-đun quản lý uỷ quyền (`mandates.ts`)**: Lưu trữ và đồng bộ trạng thái mandate cục bộ theo từng `userId`, sẵn sàng kết nối liền mạch với `bill-payment-service` backend khi các endpoint mandate REST API hoàn thiện.
+
+## 20. Heo Tiết Kiệm / Mục tiêu tiết kiệm (issue #27) — Goal-based Savings trong `mfe-wallet`
+
+Nguồn khảo sát MoMo thật: `momo.vn/heo-dat-momo` (Heo Đất MoMo / Tiết kiệm mục tiêu — tính năng chia nhỏ dòng tiền cá nhân theo từng mục tiêu tích luỹ cụ thể như Quỹ dự phòng, Mua xe, Du lịch...).
+Kiến trúc: Theo phương án (a) đã chốt bởi Operator, `SavingsGoal` mở rộng trực tiếp trên `wallet-service` (cùng DB `ewallet_wallet` và bảng `transactions`). Frontend tái sử dụng biến `VITE_WALLET_SERVICE_URL`, không cần khai báo service URL mới.
+
+### Thiết kế UI/UX và luồng tương tác
+- **Entry point**:
+  - `Home.tsx` tích hợp mục "Heo Tiết Kiệm" trong danh sách "Khám phá thêm" (`FEED_TEASERS`), icon `savings`, điều hướng trực tiếp sang màn hình `SavingsGoals.tsx`.
+- **Màn hình `SavingsGoals.tsx`** (expose qua Module Federation `./SavingsGoals`, wire trong `shell/src/App.tsx` với flow `'savings-goals'`):
+  - **Banner lưu ý học tập**: Ghim ở đầu màn hình với badge cảnh báo thông tin mô phỏng ("Heo Tiết Kiệm là tính năng mô phỏng cho mục đích học tập. Tiền được quản trị nội bộ theo phương án mở rộng ví chính, không sinh lãi suất ngân hàng").
+  - **Thẻ tổng quan tích luỹ**: Hiển thị tổng số tiền đang tiết kiệm trên tất cả mục tiêu (`totalSaved`), số dư ví chính khả dụng và nút "+ Tạo mục tiêu".
+  - **Danh sách mục tiêu**:
+    - Mỗi mục tiêu hiển thị tên mục tiêu, hạn chót (`targetDate`), `StatusPill` trạng thái (`IN_PROGRESS` / `COMPLETED`).
+    - Thanh tiến độ ProgressBar hiển thị tỷ lệ % hoàn thành (`currentAmount / targetAmount`), tự động đổi màu đậm khi đã đạt 100%.
+    - Các nút hành động: "Nạp thêm" (từ ví chính vào mục tiêu), "Rút về ví" (từ mục tiêu về ví chính), "Lịch sử" (xem nhật ký giao dịch của mục tiêu).
+  - **Modal Tạo mục tiêu mới**: Nhập tên mục tiêu, số tiền kỳ vọng (tối thiểu 10.000đ), ngày dự kiến hoàn thành.
+  - **Modal Nạp tiền vào mục tiêu**: Nhập số tiền nạp từ ví chính. Tuân thủ QĐ 2345/QĐ-NHNN: Tích hợp `StepUpModal` khi giao dịch nạp vượt 10.000.000đ.
+  - **Modal Rút tiền về ví chính**: Kiểm tra số dư mục tiêu khả dụng, loại trừ rủi ro rút quá số dư thực tế.
+  - **Modal Lịch sử giao dịch**: Hiển thị danh sách các lần Nạp/Rút tương ứng của mục tiêu với timestamp và phân biệt màu số tiền (+/-).
+
+## 21. Gói Voucher Hội Viên / Voucher Pass (issue #28) — `VoucherPass.tsx` trong `mfe-wallet` & tích hợp Voucher trong `mfe-bill-payment`
+
+Nguồn tham khảo UX: MoMo Hội Viên Tiết Kiệm / Voucher Pass (mô hình người dùng trả phí mua gói hội viên định kỳ để nhận chùm voucher giảm giá cho các dịch vụ tiện ích như thanh toán hoá đơn, nạp điện thoại).
+
+### Disclaimer bắt buộc
+Ghim thường trực ở đầu màn hình `VoucherPass.tsx` với cảnh báo học tập mô phỏng:
+*"Gói Voucher Hội Viên và Voucher giảm giá mô phỏng cho mục đích học tập — không có đối tác thương mại, sàn TMĐT hay ngân hàng thật đứng sau."*
+
+### Cấu trúc màn hình và luồng tương tác
+- **Entry point**:
+  - `Home.tsx` tích hợp mục "Gói Voucher Hội Viên" trong danh sách "Khám phá thêm" (`FEED_TEASERS`), icon `sell`, điều hướng trực tiếp sang màn hình `VoucherPass.tsx`.
+- **Màn hình `VoucherPass.tsx`** (expose qua Module Federation `./VoucherPass`, wire trong `shell/src/App.tsx` với flow `'voucher-pass'`):
+  - **Banner lưu ý học tập**: Ghim ở đầu màn hình với badge cảnh báo thông tin mô phỏng.
+  - **Tab 1 — Gói Hội Viên (Marketplace)**:
+    - Danh sách các gói pass trong catalog (`PASS_BILL_SAVER`, `PASS_STUDENT`, `PASS_MEGA_COMBO`).
+    - Mỗi gói hiển thị tên gói, giá mua (10.000đ - 25.000đ), tổng trị giá voucher nhận được (lên đến 45.000đ), số lượng voucher và thời hạn sử dụng.
+    - Nút "Mua gói" trích tiền ví chính với giao dịch `VOUCHER_PASS_PURCHASE`. Sau khi mua thành công, tự động cập nhật danh sách voucher của tôi.
+  - **Tab 2 — Voucher của tôi (My Vouchers)**:
+    - Danh sách các voucher người dùng đang sở hữu, phân loại theo `StatusPill` (`AVAILABLE`, `USED`, `EXPIRED`).
+    - Thẻ voucher hiển thị tiêu đề, mức giảm giá (số tiền cố định hoặc phần trăm kèm trần giảm giá), đơn hàng tối thiểu và hạn sử dụng.
+- **Tích hợp Voucher trong `mfe-bill-payment`**:
+  - **Màn hình xác nhận (`BillConfirm.tsx`)**:
+    - Khi người dùng tra cứu ra hoá đơn, tự động gọi `voucherPassService.getUsableVouchers(userId, category, amount)` để lọc các voucher phù hợp danh mục và thoả mãn điều kiện đơn hàng tối thiểu.
+    - Khối "Ưu đãi Voucher Pass": Tự động gợi ý voucher ưu đãi nhất hoặc cho phép người dùng chọn áp dụng từ danh sách.
+    - Tự động tính toán số tiền giảm giá và số tiền thực trả:
+      - Hiển thị giá gốc, số tiền voucher giảm giá (`-formatVnd(discountAmount)`), và tổng thanh toán thực tế.
+      - Nút xác nhận thanh toán phản ánh số tiền sau giảm giá.
+    - Truyền `voucherId` sang `billPaymentService.pay` để backend thực hiện atomic claim và trừ tiền ví chính.
+  - **Biên lai thanh toán (`BillReceipt.tsx`)**:
+    - Khi hoá đơn có áp dụng voucher (`discountAmount > 0`), biên lai hiển thị rõ ràng: Hoá đơn gốc (gạch ngang), Số tiền voucher giảm giá, và Số tiền thực tế trích trừ ví chính.
+
+

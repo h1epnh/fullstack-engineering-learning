@@ -2,6 +2,7 @@
 # directory — npm workspaces needs the whole tree to resolve @ewallet-lab/* deps.
 # docker build -f mfe-bill-payment/Dockerfile \
 #   --build-arg VITE_BILL_PAYMENT_SERVICE_URL=http://api.ewallet-lab.local \
+#   --build-arg VITE_LOYALTY_SERVICE_URL=http://api.ewallet-lab.local \
 #   -t ewallet-lab/mfe-bill-payment:local .
 FROM node:22-alpine AS build
 WORKDIR /repo
@@ -10,6 +11,11 @@ RUN npm ci
 
 ARG VITE_BILL_PAYMENT_SERVICE_URL
 ENV VITE_BILL_PAYMENT_SERVICE_URL=${VITE_BILL_PAYMENT_SERVICE_URL}
+# Issue #28: BillConfirm.tsx's voucher picker calls loyalty-service's
+# /loyalty/vouchers/usable directly from the browser (voucherPassService) — same build-arg
+# class of bug called out in frontend CLAUDE.md, add it here too.
+ARG VITE_LOYALTY_SERVICE_URL
+ENV VITE_LOYALTY_SERVICE_URL=${VITE_LOYALTY_SERVICE_URL}
 RUN npm run build -w mfe-bill-payment
 
 FROM nginx:1.27-alpine

@@ -16,6 +16,9 @@ const WalletLoyalty = lazy(() => import('mfe_wallet/LoyaltyRewards'));
 const WalletSavingsPocket = lazy(() => import('mfe_wallet/SavingsPocket'));
 const WalletFamilyWallet = lazy(() => import('mfe_wallet/FamilyWallet'));
 const WalletSpendingReport = lazy(() => import('mfe_wallet/SpendingReport'));
+const WalletInvestmentFund = lazy(() => import('mfe_wallet/InvestmentFund'));
+const WalletSavingsGoals = lazy(() => import('mfe_wallet/SavingsGoals'));
+const WalletVoucherPass = lazy(() => import('mfe_wallet/VoucherPass'));
 const TopupApp = lazy(() => import('mfe_topup/App'));
 const TransferApp = lazy(() => import('mfe_transfer/App'));
 const BillPaymentApp = lazy(() => import('mfe_bill_payment/App'));
@@ -69,6 +72,9 @@ type Flow =
   | { name: 'savings-pocket' }
   | { name: 'family-wallet' }
   | { name: 'spending-report' }
+  | { name: 'investment-fund' }
+  | { name: 'savings-goals' }
+  | { name: 'voucher-pass' }
   | { name: 'coming-soon'; feature: string };
 
 /**
@@ -224,6 +230,30 @@ export default function App() {
     );
   }
 
+  if (flow.name === 'investment-fund') {
+    return (
+      <Suspense fallback={<ProgressBar label="Đang tải mfe-wallet…" />}>
+        <WalletInvestmentFund session={session} onBack={() => setFlow({ name: 'none' })} />
+      </Suspense>
+    );
+  }
+
+  if (flow.name === 'savings-goals') {
+    return (
+      <Suspense fallback={<ProgressBar label="Đang tải mfe-wallet…" />}>
+        <WalletSavingsGoals session={session} onBack={() => setFlow({ name: 'none' })} />
+      </Suspense>
+    );
+  }
+
+  if (flow.name === 'voucher-pass') {
+    return (
+      <Suspense fallback={<ProgressBar label="Đang tải mfe-wallet…" />}>
+        <WalletVoucherPass session={session} onBack={() => setFlow({ name: 'none' })} />
+      </Suspense>
+    );
+  }
+
   return (
     <div>
       {tab === 'home' && (
@@ -242,6 +272,9 @@ export default function App() {
             onSavingsPocket={() => setFlow({ name: 'savings-pocket' })}
             onFamilyWallet={() => setFlow({ name: 'family-wallet' })}
             onSpendingReport={() => setFlow({ name: 'spending-report' })}
+            onInvestmentFund={() => setFlow({ name: 'investment-fund' })}
+            onSavingsGoals={() => setFlow({ name: 'savings-goals' })}
+            onVoucherPass={() => setFlow({ name: 'voucher-pass' })}
           />
         </Suspense>
       )}

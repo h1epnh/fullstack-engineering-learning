@@ -3,10 +3,15 @@ package com.ewalletlab.billpaymentservice.web;
 import com.ewalletlab.billpaymentservice.domain.BillCategory;
 import com.ewalletlab.billpaymentservice.domain.BillPayment;
 import com.ewalletlab.billpaymentservice.service.BillPaymentService;
+import com.ewalletlab.billpaymentservice.web.dto.AutoBillRegistrationDto;
+import com.ewalletlab.billpaymentservice.web.dto.AutoPayRunSummaryDto;
 import com.ewalletlab.billpaymentservice.web.dto.BillLookupResponse;
 import com.ewalletlab.billpaymentservice.web.dto.BillPayRequestDto;
 import com.ewalletlab.billpaymentservice.web.dto.BillPaymentReceiptDto;
+import com.ewalletlab.billpaymentservice.web.dto.RegisterAutoBillRequestDto;
+import com.ewalletlab.billpaymentservice.web.dto.UpdateAutoBillStatusRequestDto;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -39,6 +44,30 @@ public class BillPaymentController {
     @GetMapping("/history/{userId}")
     public List<BillPayment> history(@PathVariable UUID userId) {
         return billPaymentService.history(userId);
+    }
+
+    // --- Issue #26: Auto-debit Mandates ---
+
+    @PostMapping("/auto-pay/register")
+    @ResponseStatus(HttpStatus.CREATED)
+    public AutoBillRegistrationDto registerAutoBill(@Valid @RequestBody RegisterAutoBillRequestDto request) {
+        return billPaymentService.registerAutoBill(request);
+    }
+
+    @GetMapping("/auto-pay")
+    public List<AutoBillRegistrationDto> getAutoBills(@RequestParam UUID userId) {
+        return billPaymentService.getAutoBills(userId);
+    }
+
+    @PutMapping("/auto-pay/{id}/status")
+    public AutoBillRegistrationDto updateAutoBillStatus(@PathVariable UUID id,
+                                                        @Valid @RequestBody UpdateAutoBillStatusRequestDto request) {
+        return billPaymentService.updateAutoBillStatus(id, request.status());
+    }
+
+    @PostMapping("/auto-pay/trigger-run")
+    public AutoPayRunSummaryDto triggerAutoPayRun(@RequestParam(required = false, defaultValue = "true") boolean forceAll) {
+        return billPaymentService.processAutoBills(forceAll);
     }
 
     /** Issue #15 — see transfer-service's TransferController for the identical fix/reasoning

@@ -47,9 +47,14 @@ const FEED_TEASERS: { key: string; icon: string; title: string; subtitle: string
   { key: 'movie-tickets', icon: 'local_movies', title: 'Vé xem phim & sự kiện', subtitle: 'Xem danh sách rạp, lịch chiếu' },
   // Issue #19: "tích điểm" split out into its own, real entry; the rest stays a coming-soon teaser.
   { key: 'loyalty', icon: 'loyalty', title: 'Điểm thưởng', subtitle: 'Tích điểm khi thanh toán hoá đơn, đổi hoàn tiền' },
-  { key: 'suggested', icon: 'redeem', title: 'Ưu đãi & hoàn tiền', subtitle: 'Voucher đối tác' },
+  // Issue #28: Gói Voucher Hội viên (Voucher Pass)
+  { key: 'voucher-pass', icon: 'sell', title: 'Gói Voucher Hội Viên', subtitle: 'Tiết kiệm đến 40.000đ khi thanh toán hoá đơn (mô phỏng)' },
   // Untouched by issue #18 on purpose: this teaser also advertises "vay nhanh", which is out of scope.
   { key: 'finance-insurance', icon: 'credit_card', title: 'Ví Trả Sau, vay nhanh', subtitle: 'Sản phẩm tài chính đối tác' },
+  // Issue #25: Sàn Đầu Tư (chứng chỉ quỹ mở mô phỏng)
+  { key: 'investment-fund', icon: 'trending_up', title: 'Sàn Đầu Tư', subtitle: 'Chứng chỉ quỹ mở · Rủi ro thị trường NAV (mô phỏng)' },
+  // Issue #27: Heo Tiết Kiệm (Mục tiêu tiết kiệm)
+  { key: 'savings-goals', icon: 'savings', title: 'Heo Tiết Kiệm', subtitle: 'Tích luỹ mục tiêu cá nhân · Tách riêng ví chính (mô phỏng)' },
 ];
 
 const SPEND_TYPES = new Set(['WITHDRAW', 'TRANSFER_OUT', 'BILL_PAYMENT']);
@@ -172,6 +177,9 @@ export default function Home({
   onSavingsPocket,
   onFamilyWallet,
   onSpendingReport,
+  onInvestmentFund,
+  onSavingsGoals,
+  onVoucherPass,
 }: {
   session: Session;
   onTopup: () => void;
@@ -189,6 +197,12 @@ export default function Home({
   onSavingsPocket: () => void;
   onFamilyWallet: () => void;
   onSpendingReport: () => void;
+  /** Issue #25 — Sàn Đầu Tư */
+  onInvestmentFund?: () => void;
+  /** Issue #27 — Heo Tiết Kiệm */
+  onSavingsGoals?: () => void;
+  /** Issue #28 — Gói Voucher Hội viên */
+  onVoucherPass?: () => void;
 }) {
   const [balance, setBalance] = useState<number | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -283,6 +297,44 @@ export default function Home({
         </div>
       </Card>
 
+      {/* Issue #25: Sàn Đầu Tư entry strip */}
+      <div
+        onClick={onInvestmentFund ?? (() => onComingSoon('investment-fund'))}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: 'var(--el-surface)',
+          border: '1px solid var(--el-line)',
+          borderRadius: 12,
+          padding: '10px 14px',
+          marginTop: 8,
+          cursor: 'pointer',
+          boxShadow: 'var(--el-shadow)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              background: 'var(--el-accent-soft)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Icon name="trending_up" size={18} style={{ color: 'var(--el-accent-ink)' }} />
+          </span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>Sàn Đầu Tư</div>
+            <div style={{ fontSize: 11, color: 'var(--el-muted)' }}>Chứng chỉ quỹ mở · Rủi ro thị trường NAV</div>
+          </div>
+        </div>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--el-accent)' }}>Khám phá ›</span>
+      </div>
+
       <h2 style={{ fontFamily: 'var(--el-font-display)', fontSize: 14.5, fontWeight: 700, margin: '20px 0 8px' }}>
         Dịch vụ
       </h2>
@@ -364,7 +416,13 @@ export default function Home({
           icon={t.icon}
           title={t.title}
           subtitle={t.subtitle}
-          onClick={() => (t.key === 'loyalty' && onLoyalty ? onLoyalty() : onComingSoon(t.key))}
+          onClick={() => {
+            if (t.key === 'loyalty' && onLoyalty) onLoyalty();
+            else if (t.key === 'investment-fund' && onInvestmentFund) onInvestmentFund();
+            else if (t.key === 'savings-goals' && onSavingsGoals) onSavingsGoals();
+            else if (t.key === 'voucher-pass' && onVoucherPass) onVoucherPass();
+            else onComingSoon(t.key);
+          }}
         />
       ))}
     </Screen>

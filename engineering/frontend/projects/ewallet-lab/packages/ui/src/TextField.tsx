@@ -8,9 +8,10 @@ import type { InputHTMLAttributes } from 'react';
 export function TextField({
   label,
   error,
+  hint,
   id,
   ...rest
-}: InputHTMLAttributes<HTMLInputElement> & { label: string; error?: string }) {
+}: InputHTMLAttributes<HTMLInputElement> & { label: string; error?: string; hint?: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
       <label
@@ -36,6 +37,11 @@ export function TextField({
           outline: 'none',
         }}
       />
+      {hint && !error && (
+        <span style={{ fontSize: 11.5, color: 'var(--el-faint)', lineHeight: 1.4 }}>
+          {hint}
+        </span>
+      )}
       {error && (
         <span style={{ fontSize: 12.5, color: 'var(--el-danger)', fontWeight: 600 }}>
           {error}

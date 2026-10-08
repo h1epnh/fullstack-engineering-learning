@@ -11,3 +11,4 @@ CREATE DATABASE ewallet_bnpl;
 CREATE DATABASE ewallet_loyalty;
 CREATE DATABASE ewallet_family_wallet;
 CREATE DATABASE ewallet_fund;
+CREATE DATABASE ewallet_investment;

@@ -12,3 +12,6 @@ export * from './loyaltyService';
 export * from './savingsPocketService';
 export * from './familyWalletService';
 export * from './fundService';
+export * from './investmentFundService';
+export * from './savingsGoalService';
+export * from './voucherPassService';

@@ -19,6 +19,9 @@ export default defineConfig({
         './SavingsPocket': './src/screens/SavingsPocket.tsx',
         './FamilyWallet': './src/screens/FamilyWallet.tsx',
         './SpendingReport': './src/screens/SpendingReport.tsx',
+        './InvestmentFund': './src/screens/InvestmentFund.tsx',
+        './SavingsGoals': './src/screens/SavingsGoals.tsx',
+        './VoucherPass': './src/screens/VoucherPass.tsx',
       },
       shared: {
         react: { singleton: true, requiredVersion: false },

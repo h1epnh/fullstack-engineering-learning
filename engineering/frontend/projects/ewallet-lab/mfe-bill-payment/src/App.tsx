@@ -9,14 +9,15 @@ import {
 import type { Session } from '@ewallet-lab/session';
 import { StepUpModal, describeApiError } from '@ewallet-lab/ui';
 import { useState } from 'react';
-import { BillConfirm } from './screens/BillConfirm';
+import { registerMandate } from './mandates';
+import { BillConfirm, type AutoDebitOption } from './screens/BillConfirm';
 import { BillLookupForm } from './screens/BillLookupForm';
 import { BillReceipt } from './screens/BillReceipt';
 
 type Step =
   | { name: 'lookup' }
   | { name: 'confirm'; bill: BillLookupResponse }
-  | { name: 'done'; receipt: BillPaymentReceipt }
+  | { name: 'done'; receipt: BillPaymentReceipt; autoDebit?: AutoDebitOption }
   // Issue #15 — step-up authentication (mô phỏng QĐ 2345/QĐ-NHNN)
   | { name: 'step-up'; message: string; onConfirm: () => Promise<void>; onCancel: () => void };
 
@@ -47,23 +48,33 @@ export default function App({
   }
 
   if (step.name === 'lookup') {
-    return <BillLookupForm onLookup={handleLookup} />;
+    return <BillLookupForm userId={session.id} onLookup={handleLookup} />;
   }
 
   if (step.name === 'confirm') {
     const bill = step.bill;
 
-    async function submitPay(stepUpConfirmed: boolean): Promise<string | null> {
+    async function submitPay(stepUpConfirmed: boolean, autoDebitOption?: AutoDebitOption, voucherId?: string): Promise<string | null> {
       try {
-        const receipt = await billPaymentService.pay(session.id, bill.category, bill.customerCode, stepUpConfirmed);
-        setStep({ name: 'done', receipt });
+        const receipt = await billPaymentService.pay(session.id, bill.category, bill.customerCode, stepUpConfirmed, voucherId);
+        if (autoDebitOption?.enabled) {
+          // Đăng ký thật với backend (bill-payment-service's AutoBillRegistration) — không
+          // phải chỉ lưu localStorage — để scheduler/trigger-run thực sự xử lý kỳ sau.
+          // Không chặn luồng nhận biên lai nếu đăng ký mandate lỗi (thanh toán đã thành công).
+          try {
+            await registerMandate(session.id, bill.category, bill.customerCode, autoDebitOption.maxCap);
+          } catch {
+            // Thanh toán đã thành công; chỉ việc đăng ký auto-debit thất bại — không rollback.
+          }
+        }
+        setStep({ name: 'done', receipt, autoDebit: autoDebitOption });
         return null;
       } catch (e) {
         if (e instanceof ApiError && e.status === STEP_UP_REQUIRED_STATUS) {
           setStep({
             name: 'step-up',
             message: e.message,
-            onConfirm: () => submitPay(true).then(() => undefined),
+            onConfirm: () => submitPay(true, autoDebitOption, voucherId).then(() => undefined),
             onCancel: () => setStep({ name: 'confirm', bill }),
           });
           return null;
@@ -72,12 +83,19 @@ export default function App({
       }
     }
 
-    return <BillConfirm bill={step.bill} onBack={() => setStep({ name: 'lookup' })} onConfirm={() => submitPay(false)} />;
+    return (
+      <BillConfirm
+        bill={step.bill}
+        userId={session.id}
+        onBack={() => setStep({ name: 'lookup' })}
+        onConfirm={(autoDebitOption, voucherId) => submitPay(false, autoDebitOption, voucherId)}
+      />
+    );
   }
 
   if (step.name === 'step-up') {
     return <StepUpModal message={step.message} onConfirm={step.onConfirm} onCancel={step.onCancel} />;
   }
 
-  return <BillReceipt receipt={step.receipt} onDone={onDone} />;
+  return <BillReceipt receipt={step.receipt} autoDebit={step.autoDebit} onDone={onDone} />;
 }
