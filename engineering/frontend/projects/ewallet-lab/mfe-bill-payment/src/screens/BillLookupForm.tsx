@@ -3,6 +3,7 @@ import { Button, Card, EmptyState, Icon, Screen, StatusPill, TextField, formatVn
 import { useEffect, useState } from 'react';
 import { BILL_CATEGORIES } from '../categories';
 import { cancelMandate, loadMandates, type AutoBillRegistration } from '../mandates';
+import { DigitalServices } from './DigitalServices';
 
 export function BillLookupForm({
   userId,
@@ -11,7 +12,7 @@ export function BillLookupForm({
   userId?: string;
   onLookup: (category: BillCategory, customerCode: string) => Promise<string | null>;
 }) {
-  const [tab, setTab] = useState<'lookup' | 'mandates'>('lookup');
+  const [tab, setTab] = useState<'lookup' | 'digital' | 'mandates'>('lookup');
   const [category, setCategory] = useState<BillCategory>('ELECTRICITY');
   const [customerCode, setCustomerCode] = useState('');
   const [error, setError] = useState<string | undefined>();
@@ -80,7 +81,24 @@ export function BillLookupForm({
             boxShadow: tab === 'lookup' ? 'var(--el-shadow)' : 'none',
           }}
         >
-          Tra cứu hoá đơn
+          Hoá đơn tiện ích
+        </button>
+        <button
+          onClick={() => setTab('digital')}
+          style={{
+            flex: 1,
+            padding: '7px 0',
+            borderRadius: 8,
+            border: 0,
+            background: tab === 'digital' ? 'var(--el-surface)' : 'none',
+            color: tab === 'digital' ? 'var(--el-ink)' : 'var(--el-muted)',
+            fontWeight: tab === 'digital' ? 700 : 500,
+            fontSize: 13,
+            cursor: 'pointer',
+            boxShadow: tab === 'digital' ? 'var(--el-shadow)' : 'none',
+          }}
+        >
+          Dịch vụ số
         </button>
         <button
           onClick={() => {
@@ -100,7 +118,7 @@ export function BillLookupForm({
             boxShadow: tab === 'mandates' ? 'var(--el-shadow)' : 'none',
           }}
         >
-          Uỷ quyền tự động ({visibleMandates.length})
+          Uỷ quyền ({visibleMandates.length})
         </button>
       </div>
 
@@ -245,6 +263,8 @@ export function BillLookupForm({
           )}
         </div>
       )}
+
+      {tab === 'digital' && userId && <DigitalServices userId={userId} />}
     </Screen>
   );
 }

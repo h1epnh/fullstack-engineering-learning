@@ -25,6 +25,10 @@ public class WalletServiceClient {
                                          Boolean stepUpConfirmed) {
     }
 
+    public DebitResult debit(UUID userId, BigDecimal amount, String note, boolean stepUpConfirmed) {
+        return debit(userId, amount, null, note, stepUpConfirmed);
+    }
+
     public DebitResult debit(UUID userId, BigDecimal amount, String reference, String note, boolean stepUpConfirmed) {
         AdjustBalanceRequest request = new AdjustBalanceRequest(amount, "BILL_PAYMENT", reference, note, stepUpConfirmed);
         return restClient.post()

@@ -699,4 +699,105 @@ Ghim thường trực ở đầu màn hình `VoucherPass.tsx` với cảnh báo 
   - **Biên lai thanh toán (`BillReceipt.tsx`)**:
     - Khi hoá đơn có áp dụng voucher (`discountAmount > 0`), biên lai hiển thị rõ ràng: Hoá đơn gốc (gạch ngang), Số tiền voucher giảm giá, và Số tiền thực tế trích trừ ví chính.
 
+## 22. Bộ lọc lịch sử giao dịch thông minh & Xuất sao kê tài chính (issue #36) — `History.tsx` trong `mfe-wallet`, gọi `wallet-service`
+
+Không có service mới, không có remote mới — nâng cấp đúng 1 màn hình (`History.tsx`) đã tồn tại từ
+đầu dự án, trước đây chỉ gọi `walletService.getTransactions` (toàn bộ ledger, không lọc, không
+phân trang). Backend tương ứng: wallet-service's `GET /wallets/{userId}/transactions/search` +
+`GET /wallets/{userId}/statement` + `GET /wallets/{userId}/statement/export` (xem backend
+DESIGN.md's mục "Bộ lọc lịch sử giao dịch thông minh & Xuất sao kê tài chính").
+
+### Bộ lọc (Smart Filters)
+
+- 3 tab lọc nhanh theo dòng tiền: **Tất cả / Tiền vào (+) / Tiền ra (-)** — map 1-1 với backend's
+  `TransactionDirection` (query param `direction=IN|OUT`, bỏ trống = không lọc).
+- 2 ô chọn ngày (`<input type="date">`, qua `TextField`) cho `fromDate`/`toDate`. Lưu ý xử lý
+  biên: `toDate` của 1 ngày cụ thể là 00:00 ngày đó, nhưng backend's `toDate` là **exclusive upper
+  bound** (xem `WalletService#searchTransactions`) — frontend tự cộng thêm 24h vào `toDate` trước
+  khi gửi, để "Đến ngày 09/10" thực sự bao gồm TRỌN ngày 09/10, không bị cắt mất lúc 00:00:00.
+- Phân trang qua nút "Tải thêm giao dịch" (không dùng scroll-infinite — đơn giản hơn, đủ cho MVP),
+  `page`/`size` (mặc định 20/trang) bind trực tiếp vào `TransactionPage`'s `totalPages` để biết khi
+  nào ẩn nút (hết trang).
+- Đổi filter (tab/ngày) → reset về `page=0`, gọi lại từ đầu — không cộng dồn kết quả cũ của filter
+  khác vào danh sách.
+
+### Xuất sao kê tài chính
+
+Nút "Xuất sao kê tháng" mở modal (style tái dùng đúng pattern `StepUpModal` — bottom-sheet, không
+tạo component `Modal` chung mới cho riêng 1 chỗ dùng): chọn tháng qua `<input type="month">` → tự
+gọi `walletService.getStatement` → hiển thị tóm tắt **Số dư đầu kỳ → Tổng tiền vào → Tổng tiền ra →
+Số dư cuối kỳ** (đúng tên 4 mục acceptance criteria yêu cầu) → nút "Tải file CSV sao kê" mở URL
+`walletService.getStatementCsvUrl(...)` bằng `window.open` (không qua `http.get` vì đây là file,
+không phải JSON) — trình duyệt tự nhận `Content-Disposition: attachment` từ backend và hiện prompt
+tải xuống, không cần code tải file thủ công ở frontend.
+
+### Gap đã phát hiện khi làm ticket này — `TYPE_META`/`TransactionType` union thiếu vài giá trị
+
+`packages/ui/TransactionRow.tsx`'s `TYPE_META` (quyết định icon/label/dấu +/- cho mỗi loại giao
+dịch) và `packages/api-client/walletService.ts`'s `TransactionType` union **thiếu** `REFUND`,
+`SAVINGS_GOAL_DEPOSIT`, `SAVINGS_GOAL_WITHDRAW`, `VOUCHER_PASS_PURCHASE` — gap có từ TRƯỚC ticket
+này (các issue #27/#28 thêm enum vào backend nhưng không có ai cập nhật `TYPE_META`), chỉ lộ ra rõ
+khi `History.tsx` giờ hiển thị TOÀN BỘ ledger qua bộ lọc mới (trước đây ít khi hiển thị đủ nhiều
+loại giao dịch trong 1 lần xem để nhận ra gap). Đã bổ sung đủ cả 4, dấu +/- khớp đúng backend's
+`TransactionType.direction()` (single source of truth mới thêm ở issue #36, xem backend DESIGN.md)
+— không tự suy đoán, đọc trực tiếp javadoc của từng `TransactionType` constant trước khi gán dấu.
+
+### Đã verify
+
+- Build sạch `npm run build -w mfe-wallet` (exit 0) — 1 lỗi KHÔNG liên quan từ Module Federation's
+  DTS type-generation step (`Home.tsx`/`SavingsGoals.tsx`/`TelcoTopup.tsx`/`VoucherPass.tsx` — các
+  file đã có lỗi type TRƯỚC ticket này, không phải do thay đổi của #36 gây ra, xác nhận bằng cách
+  chạy lại đúng lệnh `tsc` mà Vite báo lỗi và đọc danh sách file — không có `History.tsx`/
+  `walletService.ts`/`TransactionRow.tsx` nào trong đó).
+- Image rebuild đúng tag `ewallet-lab/mfe-wallet:local`, deploy thật, `imageID` pod khớp digest
+  local. Grep bundle đang chạy thật trên pod xác nhận nội dung mới: `walletService-*.js` chứa
+  `transactions/search`; `History-*.js` chứa `Xuất sao kê`; `http-*.js` baked đúng
+  `http://api.ewallet-lab.local` cho `API_BASE.wallet` (không phải `localhost:8091` mặc định).
+- **Chưa verify bằng browser automation thật** (click UI, chọn ngày, tải file CSV qua trình duyệt)
+  — không có tool đó trong phiên này, cùng loại gap đã ghi nhận ở issue #3/#4/#8/#10. Đã verify đầy
+  đủ phần backend (toàn bộ 3 endpoint mới) qua Ingress thật với dữ liệu thật trong backend
+  DESIGN.md's mục tương ứng, và xác nhận TypeScript compile sạch cho code mới — phần còn thiếu DUY
+  NHẤT là tương tác UI thật qua trình duyệt.
+
+## 23. Thanh toán dịch vụ số & Giải trí (issue #30) — `DigitalServices.tsx` trong `mfe-bill-payment`, mở rộng `bill-payment-service`
+
+Nguồn khảo sát MoMo thật: Mục "Dịch vụ số / Giải trí" (Spotify Premium, Netflix, VieON VIP, Google Play & Apple Gift Cards). Mở rộng dịch vụ hoá đơn hiện hữu (`bill-payment-service`) thay vì tạo pod mới, tiết kiệm tài nguyên cluster.
+
+### Bắt buộc: Banner Disclaimer Lab Học Tập
+Tuân thủ nghiêm ngặt quy định:
+- Banner thường trực: *"Mô phỏng Lab học tập: Dịch vụ số & giải trí (Spotify, Netflix, VieON, App Store) được mô phỏng trong môi trường lab học tập — không có quan hệ thương mại thực tế với các nhà cung cấp."*
+
+### Kiến trúc Backend (`bill-payment-service`)
+- **Entities & Schema**:
+  - Entity `DigitalSubscriptionOrder`: Lưu `userId`, `packageCode`, `packageName`, `category`, `price`, `accountIdentifier`, `activationCode`, `status`, `billPaymentId`.
+  - Bổ sung `BillCategory` enum: `DIGITAL_SUBSCRIPTION`, `ENTERTAINMENT_STREAMING`, `APP_STORE_CODE`. Cập nhật CHECK constraint tương ứng trên Postgres DB `ewallet_bill_payment`.
+  - Tính toàn vẹn sổ cái (Ledger Sanctity): Mỗi đơn hàng mua dịch vụ số tạo 1 bản ghi `BillPayment` với số tiền thanh toán, và gọi `wallet-service.debit(userId, price, "BILL_PAYMENT")`.
+  - Trình sinh mã kích hoạt: Mã gồm 12 ký tự chữ hoa/số ngẫu nhiên chia 3 cụm `XXXX-YYYY-ZZZZ` (ví dụ: `SPTI-RKFS-LDMM`, `GPLY-DTWJ-KHF4`).
+- **Endpoints**:
+  - `GET /bills/digital-services`: Danh mục 5 gói dịch vụ (Spotify 59k, Netflix 260k, VieON 69k, Google Play 100k, Apple 100k).
+  - `POST /bills/digital-services/subscribe`: Đặt mua gói, trừ tiền ví chính, sinh mã kích hoạt. Xử lý lỗi `HttpClientErrorException` (428 Step-up required, 409 Insufficient balance).
+  - `GET /bills/digital-services/history?userId={userId}`: Lịch sử đơn hàng sắp xếp theo thời gian mới nhất.
+  - `GET /bills/digital-services/{id}`: Xem chi tiết mã kích hoạt theo đơn hàng.
+
+### Giao diện Người Dùng (`mfe-bill-payment`)
+- Bổ sung tab "Dịch vụ số" trong thanh điều hướng của `BillLookupForm.tsx` (bên cạnh "Hoá đơn tiện ích" và "Uỷ quyền tự động").
+- Component `DigitalServices.tsx`:
+  - Hiển thị danh mục gói dịch vụ số kèm giá niêm yết rõ ràng.
+  - Ô nhập email/số điện thoại tài khoản thụ hưởng.
+  - Nút thanh toán tích hợp xử lý xác thực nâng cao (`StepUpModal` theo QĐ 2345/QĐ-NHNN).
+  - Màn hình biên lai hiển thị mã kích hoạt nổi bật với nút "Sao chép mã" một chạm.
+  - Mục xem lại danh sách mã kích hoạt đã mua và lịch sử giao dịch.
+
+### Kết quả Kiểm Thử Độc Lập (E2E Verification via Ingress 18080)
+Kịch bản kiểm thử tự động tại `scratch/test_verify_issue30.py` vượt qua 100%:
+1. `GET /bills/digital-services`: Trả về đầy đủ danh mục 5 gói dịch vụ số.
+2. Khởi tạo tài khoản & nạp 500.000 VND thành công.
+3. Mua Spotify Premium: Trừ ví đúng 59.000 VND, sinh mã `SPTI-RKFS-LDMM`, trạng thái `COMPLETED`.
+4. Mua mã thẻ Google Play: Trừ ví đúng 100.000 VND, sinh mã `GPLY-DTWJ-KHF4`, trạng thái `COMPLETED`.
+5. `GET /bills/digital-services/history`: Trả về chính xác 2 đơn hàng theo thứ tự mới nhất.
+6. `GET /bills/digital-services/{id}`: Trả về thông tin chi tiết đơn hàng khớp 100%.
+7. Chặn tài khoản không đủ số dư: Bị từ chối chính xác với HTTP 409 Conflict ("Số dư không đủ để thanh toán gói dịch vụ số").
+8. **Concurrency Race Test**: 10 luồng mua đồng thời với số dư chỉ đủ đúng 3 gói (177.000 VND) -> Kết quả chính xác tuyệt đối: 3 thành công (201), 7 xung đột (409), số dư ví cuối cùng đúng 0 VND, tuyệt đối không bị race condition hay double-debit.
+
+
 

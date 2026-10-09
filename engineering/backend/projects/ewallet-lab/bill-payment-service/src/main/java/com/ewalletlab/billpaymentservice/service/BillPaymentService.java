@@ -341,6 +341,8 @@ public class BillPaymentService {
             case WATER -> "nước";
             case INTERNET -> "internet";
             case TV_CABLE -> "truyền hình cáp";
+            case DIGITAL_SUBSCRIPTION, ENTERTAINMENT_STREAMING -> "dịch vụ số / giải trí";
+            case APP_STORE_CODE -> "mã nạp ứng dụng";
         };
     }
 }

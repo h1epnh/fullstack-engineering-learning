@@ -1,8 +1,13 @@
 import { API_BASE, http } from './http';
 
-/** Deliberately generic household-bill categories, not a real biller brand — see
- * bill-payment-service's BillCategory.java. */
-export type BillCategory = 'ELECTRICITY' | 'WATER' | 'INTERNET' | 'TV_CABLE';
+export type BillCategory =
+  | 'ELECTRICITY'
+  | 'WATER'
+  | 'INTERNET'
+  | 'TV_CABLE'
+  | 'DIGITAL_SUBSCRIPTION'
+  | 'ENTERTAINMENT_STREAMING'
+  | 'APP_STORE_CODE';
 
 export type BillLookupResponse = {
   category: BillCategory;
@@ -86,3 +91,55 @@ export const billPaymentService = {
       voucherId,
     }),
 };
+
+// --- Issue #30: Digital Subscriptions & Entertainment Codes ---
+
+export type DigitalServicePackage = {
+  packageCode: string;
+  packageName: string;
+  serviceName: string;
+  category: BillCategory;
+  price: number;
+  duration: string;
+  description: string;
+};
+
+export type DigitalSubscriptionOrder = {
+  id: string;
+  userId: string;
+  packageCode: string;
+  packageName: string;
+  category: BillCategory;
+  price: number;
+  accountIdentifier: string;
+  activationCode: string;
+  status: string;
+  billPaymentId?: string;
+  createdAt: string;
+};
+
+export type SubscribeDigitalServiceRequest = {
+  userId: string;
+  packageCode: string;
+  accountIdentifier: string;
+  stepUpConfirmed?: boolean;
+};
+
+export const digitalService = {
+  getCatalog: () =>
+    http.get<DigitalServicePackage[]>(`${API_BASE.billPayment}/bills/digital-services`),
+
+  subscribe: (request: SubscribeDigitalServiceRequest) =>
+    http.post<DigitalSubscriptionOrder>(`${API_BASE.billPayment}/bills/digital-services/subscribe`, request),
+
+  getHistory: (userId: string) =>
+    http.get<DigitalSubscriptionOrder[]>(
+      `${API_BASE.billPayment}/bills/digital-services/history?userId=${encodeURIComponent(userId)}`,
+    ),
+
+  getOrder: (id: string) =>
+    http.get<DigitalSubscriptionOrder>(
+      `${API_BASE.billPayment}/bills/digital-services/${encodeURIComponent(id)}`,
+    ),
+};
+

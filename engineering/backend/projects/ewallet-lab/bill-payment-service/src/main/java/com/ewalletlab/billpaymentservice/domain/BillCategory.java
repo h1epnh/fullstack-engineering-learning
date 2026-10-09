@@ -9,5 +9,8 @@ public enum BillCategory {
     ELECTRICITY,
     WATER,
     INTERNET,
-    TV_CABLE
+    TV_CABLE,
+    DIGITAL_SUBSCRIPTION,
+    ENTERTAINMENT_STREAMING,
+    APP_STORE_CODE
 }
