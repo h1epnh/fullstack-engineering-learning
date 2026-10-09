@@ -1,19 +1,27 @@
 package com.ewalletlab.loyaltyservice.service;
 
 import com.ewalletlab.loyaltyservice.config.LoyaltyProperties;
+import com.ewalletlab.loyaltyservice.domain.DailyCheckin;
 import com.ewalletlab.loyaltyservice.domain.LoyaltyAccount;
+import com.ewalletlab.loyaltyservice.domain.LoyaltyMission;
+import com.ewalletlab.loyaltyservice.domain.MissionStatus;
 import com.ewalletlab.loyaltyservice.domain.PointEntry;
 import com.ewalletlab.loyaltyservice.domain.PointEntryStatus;
+import com.ewalletlab.loyaltyservice.domain.UserMissionProgress;
+import com.ewalletlab.loyaltyservice.repository.DailyCheckinRepository;
 import com.ewalletlab.loyaltyservice.repository.LoyaltyAccountRepository;
 import com.ewalletlab.loyaltyservice.repository.PointEntryRepository;
+import com.ewalletlab.loyaltyservice.repository.UserMissionProgressRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -33,11 +41,17 @@ class LoyaltyMutationExecutor {
 
     private final LoyaltyAccountRepository accounts;
     private final PointEntryRepository entries;
+    private final DailyCheckinRepository checkins;
+    private final UserMissionProgressRepository missionProgress;
     private final Clock clock;
 
-    LoyaltyMutationExecutor(LoyaltyAccountRepository accounts, PointEntryRepository entries, Clock clock) {
+    LoyaltyMutationExecutor(LoyaltyAccountRepository accounts, PointEntryRepository entries,
+                             DailyCheckinRepository checkins, UserMissionProgressRepository missionProgress,
+                             Clock clock) {
         this.accounts = accounts;
         this.entries = entries;
+        this.checkins = checkins;
+        this.missionProgress = missionProgress;
         this.clock = clock;
     }
 
@@ -98,6 +112,74 @@ class LoyaltyMutationExecutor {
         }
         account.refund(entry.getPoints());
         entry.markFailed();
+    }
+
+    /**
+     * Issue #38 — "Điểm danh mỗi ngày". Runs under the SAME account row lock as every other
+     * mutation here ({@code lockByUserId}), so concurrent check-ins for one user are fully
+     * serialized: the loser's transaction re-reads this method's own {@code
+     * findByUserIdAndCheckinDate} AFTER the winner has already committed its row, and sees it —
+     * the 409 below is reached by every request but the first, every time, not by luck. The
+     * {@code UNIQUE(user_id, checkin_date)} constraint is kept as a second, independent safety net
+     * (defense in depth per the ticket's explicit requirement), not the primary mechanism.
+     */
+    @Transactional
+    DailyCheckin checkInOnce(UUID userId, LocalDate today) {
+        LoyaltyAccount account = lockOrThrow(userId);
+        if (checkins.findByUserIdAndCheckinDate(userId, today).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Bạn đã điểm danh hôm nay rồi");
+        }
+        DailyCheckin previous = checkins.findTopByUserIdOrderByCheckinDateDesc(userId).orElse(null);
+        int streakDay = CheckinCalculator.nextStreakDay(
+            previous == null ? null : previous.getCheckinDate(),
+            previous == null ? 0 : previous.getStreakDay(),
+            today);
+        int points = CheckinCalculator.pointsForStreakDay(streakDay);
+        DailyCheckin checkin = checkins.save(new DailyCheckin(userId, today, points, streakDay, Instant.now(clock)));
+        account.earn(points);
+        entries.save(PointEntry.earn(account.getId(), points, BigDecimal.ZERO, null, "CHECK_IN_DAY_" + streakDay, Instant.now(clock)));
+        return checkin;
+    }
+
+    /**
+     * Issue #38 — reads/creates today's {@link UserMissionProgress} row for one mission, upserting
+     * it to {@code COMPLETED} if {@code qualifyingTransactionFoundToday} is true and it's still
+     * {@code IN_PROGRESS}. Called from a READ path ({@code LoyaltyService#missions}), not wrapped
+     * in the account lock (no points move here, just a lazy status upsert) — same "lazy-compute on
+     * read" shape lucky-money-service's expiry check uses, not a background job.
+     */
+    @Transactional
+    UserMissionProgress upsertMissionProgress(UUID userId, String missionCode, LocalDate today,
+                                               boolean qualifyingTransactionFoundToday) {
+        UserMissionProgress progress = missionProgress.findByUserIdAndMissionCodeAndTargetDate(userId, missionCode, today)
+            .orElseGet(() -> missionProgress.save(new UserMissionProgress(userId, missionCode, today)));
+        if (qualifyingTransactionFoundToday) {
+            progress.markCompleted(Instant.now(clock));
+        }
+        return progress;
+    }
+
+    /**
+     * Issue #38 — "Nhận điểm" nhiệm vụ. Runs under the account lock (same reasoning as {@link
+     * #checkInOnce}): re-reads {@code UserMissionProgress} fresh after acquiring the lock, so 2
+     * concurrent claims for the same mission/day can't both award points — the loser sees {@code
+     * CLAIMED} already and gets a clean 409.
+     */
+    @Transactional
+    PointEntry claimMissionOnce(UUID userId, LoyaltyMission mission, LocalDate today) {
+        LoyaltyAccount account = lockOrThrow(userId);
+        UserMissionProgress progress = missionProgress.findByUserIdAndMissionCodeAndTargetDate(userId, mission.code(), today)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Nhiệm vụ hôm nay chưa hoàn thành"));
+        if (progress.getStatus() == MissionStatus.CLAIMED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Nhiệm vụ này đã được nhận điểm hôm nay rồi");
+        }
+        if (progress.getStatus() != MissionStatus.COMPLETED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Nhiệm vụ hôm nay chưa hoàn thành");
+        }
+        progress.markClaimed(Instant.now(clock));
+        account.earn(mission.rewardPoints());
+        return entries.save(PointEntry.earn(account.getId(), mission.rewardPoints(), BigDecimal.ZERO, null,
+            "MISSION_" + mission.code(), Instant.now(clock)));
     }
 
     private LoyaltyAccount lockOrThrow(UUID userId) {

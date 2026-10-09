@@ -151,6 +151,26 @@ class LoyaltyConcurrencyTest {
         verify(wallet, times(1)).creditRedemption(eq(user), any(), any());
     }
 
+    /** Issue #38's mandatory race test: ≥10 concurrent check-ins for the same user on the same day
+     * → exactly 1 succeeds (points awarded once), the rest get a clean 409 — see {@code
+     * LoyaltyMutationExecutor#checkInOnce}'s javadoc for why the account's pessimistic lock
+     * (already used by every other mutation in this service) is what actually guarantees this,
+     * not luck. */
+    @Test
+    void concurrentCheckInsAwardPointsExactlyOnce() throws Exception {
+        UUID user = UUID.randomUUID();
+
+        Outcome o = race(() -> service.checkIn(user));
+
+        assertThat(o.ok.get()).isEqualTo(1);
+        assertThat(o.rejected.get()).isEqualTo(THREADS - 1);
+        assertThat(o.unexpected).isEmpty();
+        assertThat(service.get(user).account().getPointsBalance()).isEqualTo(CheckinCalculator.BASE_POINTS);
+        var status = service.checkInStatus(user);
+        assertThat(status.checkedInToday()).isTrue();
+        assertThat(status.currentStreakDay()).isEqualTo(1);
+    }
+
     private record Outcome(AtomicInteger ok, AtomicInteger rejected, List<Throwable> unexpected) {
     }
 

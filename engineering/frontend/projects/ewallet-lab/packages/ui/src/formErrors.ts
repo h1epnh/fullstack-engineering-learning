@@ -27,7 +27,9 @@ export function describeApiError(
     | 'investment-buy'
     | 'investment-sell'
     | 'savings-goal'
-    | 'voucher-pass',
+    | 'voucher-pass'
+    | 'daily-checkin'
+    | 'mission-claim',
 ): string {
   if (status === undefined) {
     return 'Không kết nối được tới máy chủ. Kiểm tra lại các service đã chạy chưa rồi thử lại.';
@@ -67,6 +69,12 @@ export function describeApiError(
   }
   if (status === 409 && context === 'loyalty-redeem') {
     return 'Không đủ điểm để đổi số điểm này.';
+  }
+  if (status === 409 && context === 'daily-checkin') {
+    return 'Bạn đã điểm danh hôm nay rồi.';
+  }
+  if (status === 409 && context === 'mission-claim') {
+    return 'Nhiệm vụ này chưa hoàn thành hôm nay, hoặc đã được nhận điểm rồi.';
   }
   if (status === 409 && context === 'investment-buy') {
     return 'Số dư ví chính không đủ để thực hiện lệnh mua chứng chỉ quỹ, hoặc vượt hạn mức chi tiêu tháng.';
