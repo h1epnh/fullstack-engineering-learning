@@ -4,9 +4,14 @@ import com.ewalletlab.fundservice.domain.Fund;
 import com.ewalletlab.fundservice.domain.FundMember;
 import com.ewalletlab.fundservice.domain.FundTransaction;
 import com.ewalletlab.fundservice.domain.FundTransactionType;
+import com.ewalletlab.fundservice.domain.OutboxEvent;
+import com.ewalletlab.fundservice.domain.OutboxEventType;
 import com.ewalletlab.fundservice.repository.FundMemberRepository;
 import com.ewalletlab.fundservice.repository.FundRepository;
 import com.ewalletlab.fundservice.repository.FundTransactionRepository;
+import com.ewalletlab.fundservice.repository.OutboxEventRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +29,16 @@ import java.util.UUID;
  * attempt to run in a brand-new transaction that re-reads the row(s) from scratch — only possible
  * through a proxy boundary, so the retry loop has to live in a different bean.
  *
+ * <p><b>Issue #22 — Outbox pattern.</b> {@code contributeOnce}/{@code withdrawOnce}/{@code
+ * dissolveOnce} now write an {@link OutboxEvent} (status {@code PENDING}) in the SAME transaction
+ * as the business state they mutate, instead of {@link FundService} calling {@code
+ * WalletServiceClient} directly afterwards — see backend DESIGN.md's "Outbox pattern" section for
+ * the full rationale and {@code FundOutboxRelay} for what actually calls wallet-service now. The
+ * {@code compensateXxx} methods below are UNCHANGED in what they do (revert the local claim, delete
+ * the phantom ledger row — same fix as issue #14's second bug) but are now called ONLY by {@code
+ * FundOutboxRelay} after it gives up on a permanently-failing outbox event, never synchronously
+ * from {@link FundService} anymore — one mechanism, not two in parallel.
+ *
  * <p><b>Member-invite race</b> (same bug CLASS as issue #12/#13's "creator at 20 concurrent
  * opens" — this lab's CLAUDE.md now calls this out explicitly: a brand-new UNIQUE constraint can be
  * violated on its very first concurrent INSERT, not just on update): {@code addMemberOnce} is
@@ -31,7 +46,7 @@ import java.util.UUID;
  * by Postgres's UNIQUE constraint on {@code (fund_id, member_user_id)}. Two concurrent "invite this
  * same not-yet-a-member phone number" calls (e.g. the creator double-tapping "Mời") can both pass
  * the {@code isEmpty()} check before either INSERT commits; the loser's insert throws {@code
- * DataIntegrityViolationException} at flush time. {@link FundService#addMember} retries this whole
+ * DataIntegrityViolationException} at flush time. {@code FundService#addMember} retries this whole
  * method on that exception — unlike family-wallet-service's equivalent fix, re-running
  * {@code addMemberOnce} here is always a clean no-op success (idempotent "already a member", not an
  * error) because invites in this MVP only ever come from the single creator, so there's no
@@ -43,23 +58,30 @@ class FundMutationExecutor {
     private final FundRepository fundRepository;
     private final FundMemberRepository fundMemberRepository;
     private final FundTransactionRepository fundTransactionRepository;
+    private final OutboxEventRepository outboxEventRepository;
+    private final ObjectMapper objectMapper;
 
     FundMutationExecutor(FundRepository fundRepository, FundMemberRepository fundMemberRepository,
-                          FundTransactionRepository fundTransactionRepository) {
+                          FundTransactionRepository fundTransactionRepository,
+                          OutboxEventRepository outboxEventRepository, ObjectMapper objectMapper) {
         this.fundRepository = fundRepository;
         this.fundMemberRepository = fundMemberRepository;
         this.fundTransactionRepository = fundTransactionRepository;
+        this.outboxEventRepository = outboxEventRepository;
+        this.objectMapper = objectMapper;
     }
 
-    /** {@code transactionId} is the {@code FundTransaction} row this attempt just wrote — the
-     * caller threads it back into {@link #compensateWithdraw} if the follow-up wallet-service
-     * credit fails, so the compensation can remove exactly that row (see issue #14's ledger-vs-
-     * balance mismatch bug: compensating the balance alone left a "phantom" WITHDRAWAL row that
-     * never corresponded to any money that actually left the fund). */
-    record WithdrawResult(Fund fund, UUID transactionId) {
+    /** {@code transactionId} is the {@code FundTransaction} row this attempt just wrote, {@code
+     * outboxEventId} is the {@link OutboxEvent} row that will carry the follow-up wallet-service
+     * call — both threaded back so {@code FundController}/tests/logging can reference them, though
+     * {@code FundService} itself no longer needs to act on either (the relay owns the rest). */
+    record ContributeResult(Fund fund, UUID transactionId, UUID outboxEventId) {
     }
 
-    record DissolveResult(Fund fund, BigDecimal remainder, UUID transactionId) {
+    record WithdrawResult(Fund fund, UUID transactionId, UUID outboxEventId) {
+    }
+
+    record DissolveResult(Fund fund, BigDecimal remainder, UUID transactionId, UUID outboxEventId) {
     }
 
     @Transactional
@@ -85,8 +107,13 @@ class FundMutationExecutor {
         return fundMemberRepository.save(new FundMember(fundId, memberUserId, memberPhone, memberName));
     }
 
+    /** Issue #22 — claims the contribution LOCALLY first (optimistically credits {@code
+     * Fund.balance}, same "claim trước" shape {@code withdraw}/{@code dissolve} already used, just
+     * inverted direction) and writes a {@code FUND_CONTRIBUTE_DEBIT} outbox event for {@code
+     * FundOutboxRelay} to actually debit the member's wallet — see {@code FundService#contribute}'s
+     * javadoc for why the step-up GATE still runs synchronously before this is ever called. */
     @Transactional
-    Fund contributeOnce(UUID fundId, UUID memberUserId, BigDecimal amount) {
+    ContributeResult contributeOnce(UUID fundId, UUID memberUserId, BigDecimal amount, boolean stepUpConfirmed) {
         Fund fund = fundRepository.findById(fundId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy quỹ nhóm này"));
         if (!fundMemberRepository.existsByFundIdAndMemberUserId(fundId, memberUserId)) {
@@ -98,10 +125,16 @@ class FundMutationExecutor {
             throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
         }
         fundRepository.save(fund);
-        fundTransactionRepository.save(new FundTransaction(fundId, memberUserId, FundTransactionType.CONTRIBUTION, amount));
-        return fund;
+        FundTransaction tx = fundTransactionRepository.save(new FundTransaction(fundId, memberUserId, FundTransactionType.CONTRIBUTION, amount));
+        OutboxEvent event = outboxEventRepository.save(OutboxEvent.pending(OutboxEventType.FUND_CONTRIBUTE_DEBIT,
+            writePayload(new OutboxPayload(fundId, memberUserId, amount, tx.getId(), stepUpConfirmed))));
+        return new ContributeResult(fund, tx.getId(), event.getId());
     }
 
+    /** Issue #22 — same local-claim-first shape as before (issue #14), but now writes a {@code
+     * FUND_WITHDRAW_CREDIT} outbox event instead of leaving the follow-up wallet-service credit to
+     * {@link FundService} — see that class's old javadoc (removed) for the bug this used to need a
+     * hand-rolled compensate-with-retry + background reconciler to paper over. */
     @Transactional
     WithdrawResult withdrawOnce(UUID fundId, UUID requesterUserId, BigDecimal amount) {
         Fund fund = fundRepository.findById(fundId)
@@ -117,7 +150,9 @@ class FundMutationExecutor {
         fundRepository.save(fund);
         FundTransaction tx = fundTransactionRepository.save(
             new FundTransaction(fundId, requesterUserId, FundTransactionType.WITHDRAWAL, amount));
-        return new WithdrawResult(fund, tx.getId());
+        OutboxEvent event = outboxEventRepository.save(OutboxEvent.pending(OutboxEventType.FUND_WITHDRAW_CREDIT,
+            writePayload(new OutboxPayload(fundId, requesterUserId, amount, tx.getId(), false))));
+        return new WithdrawResult(fund, tx.getId(), event.getId());
     }
 
     @Transactional
@@ -136,26 +171,33 @@ class FundMutationExecutor {
         fundRepository.save(fund);
         FundTransaction tx = fundTransactionRepository.save(
             new FundTransaction(fundId, requesterUserId, FundTransactionType.DISSOLVE, remainder));
-        return new DissolveResult(fund, remainder, tx.getId());
+        OutboxEvent event = outboxEventRepository.save(OutboxEvent.pending(OutboxEventType.FUND_DISSOLVE_CREDIT,
+            writePayload(new OutboxPayload(fundId, requesterUserId, remainder, tx.getId(), false))));
+        return new DissolveResult(fund, remainder, tx.getId(), event.getId());
     }
 
-    /** Compensates a withdrawal whose follow-up wallet-service credit call failed — see
-     * {@code FundService.withdraw}'s javadoc. Only the single caller that just performed
-     * {@link #withdrawOnce} ever calls this for a given attempt, but it's still wrapped in
-     * {@code FundService}'s optimistic-lock retry loop since the row's {@code @Version} has moved
-     * on since {@code withdrawOnce} committed and an unrelated concurrent contribution could have
-     * touched it in between.
-     *
-     * <p>Bug found by agent-tester on issue #14 (race ≥20 concurrent withdraws): reverting only
-     * {@code Fund.balance} left the {@code FundTransaction} WITHDRAWAL row {@code withdrawOnce}
-     * had already written — a "phantom" ledger entry for money that, thanks to this very
-     * compensation, never actually left the fund. {@code transactionId} is that row's id;
-     * deleting it here (same local transaction as the balance revert) keeps
-     * {@code fund_transactions} an exact record of money that actually moved, with no entry for a
-     * withdrawal that was fully undone. Uses find-then-delete (not {@code deleteById}, which
-     * throws {@code EmptyResultDataAccessException} on a missing row) so a retry of this whole
-     * method — e.g. after losing an optimistic-lock race on {@code fundRepository.save(fund)} — is
-     * a safe no-op on the already-deleted row instead of surfacing a spurious failure. */
+    /** Compensates a contribution whose outbox-relayed debit permanently failed (see {@link
+     * Fund#revertContribute}) — called only by {@code FundOutboxRelay}, see that class for the
+     * "permanently failed" decision. Find-then-delete (not {@code deleteById}), same reasoning as
+     * {@link #compensateWithdraw}: safe to re-run if a previous attempt got this far and then lost
+     * the optimistic-lock race on {@code fundRepository.save}. */
+    @Transactional
+    Fund compensateContribute(UUID fundId, BigDecimal amount, UUID transactionId) {
+        Fund fund = fundRepository.findById(fundId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy quỹ nhóm này"));
+        fund.revertContribute(amount);
+        fundRepository.save(fund);
+        fundTransactionRepository.findById(transactionId).ifPresent(fundTransactionRepository::delete);
+        return fund;
+    }
+
+    /** Compensates a withdrawal whose outbox-relayed credit permanently failed — see {@code
+     * FundOutboxRelay} for the retry/permanent-failure decision that leads here (issue #22) and
+     * issue #14's original bug for why {@code transactionId} must be deleted here too, not just
+     * {@code Fund.balance} reverted. Find-then-delete (not {@code deleteById}, which throws {@code
+     * EmptyResultDataAccessException} on a missing row) so a retry of this whole method — e.g.
+     * after losing an optimistic-lock race on {@code fundRepository.save(fund)} — is a safe no-op
+     * on the already-deleted row instead of surfacing a spurious failure. */
     @Transactional
     Fund compensateWithdraw(UUID fundId, BigDecimal amount, UUID transactionId) {
         Fund fund = fundRepository.findById(fundId)
@@ -166,11 +208,9 @@ class FundMutationExecutor {
         return fund;
     }
 
-    /** Compensates a dissolve whose follow-up wallet-service credit call failed — reopens the fund
+    /** Compensates a dissolve whose outbox-relayed credit permanently failed — reopens the fund
      * (back to ACTIVE) with the undelivered remainder restored, same reasoning as
-     * {@link #compensateWithdraw} (including deleting the phantom DISSOLVE ledger row — same bug
-     * class, confirmed present here too when checked directly instead of assuming the fix for
-     * withdraw covers it). */
+     * {@link #compensateWithdraw} (including deleting the phantom DISSOLVE ledger row). */
     @Transactional
     Fund compensateDissolve(UUID fundId, BigDecimal remainder, UUID transactionId) {
         Fund fund = fundRepository.findById(fundId)
@@ -179,5 +219,16 @@ class FundMutationExecutor {
         fundRepository.save(fund);
         fundTransactionRepository.findById(transactionId).ifPresent(fundTransactionRepository::delete);
         return fund;
+    }
+
+    private String writePayload(OutboxPayload payload) {
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException e) {
+            // Never actually happens for a flat record of primitives/UUID/BigDecimal — but if it
+            // somehow did, failing the whole local transaction (business state rolls back too) is
+            // far safer than silently writing a business-state row with no outbox follow-up at all.
+            throw new IllegalStateException("Không thể serialize outbox payload", e);
+        }
     }
 }

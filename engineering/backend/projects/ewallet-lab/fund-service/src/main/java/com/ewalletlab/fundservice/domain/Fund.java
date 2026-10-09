@@ -114,6 +114,21 @@ public class Fund {
         this.balance = this.balance.add(amount);
     }
 
+    /** Issue #22 — compensates a contribution whose follow-up wallet-service DEBIT (relayed via
+     * the outbox, see {@code FundOutboxRelay}) permanently failed — most commonly the member's
+     * wallet turned out not to have enough balance, discovered only when the relay finally calls
+     * wallet-service, not at the moment the member clicked "Góp quỹ" (the local claim in {@code
+     * contributeOnce} is optimistic: it credits {@code balance} immediately, same "claim trước,
+     * move tiền sau" shape as {@code withdraw}/{@code dissolve}, just inverted direction). Undoes
+     * exactly the increment {@code contribute(amount)} made. No status check, same as {@link
+     * #revertWithdraw} — deliberately unconditional so a fund dissolved in the meantime (an
+     * extreme, documented edge case in DESIGN.md) doesn't block the revert from running at all;
+     * accepting that this one specific interleaving can still leave the ledger needing manual
+     * reconciliation is a known, out-of-scope-for-this-pilot limitation. */
+    public void revertContribute(BigDecimal amount) {
+        this.balance = this.balance.subtract(amount);
+    }
+
     private void requireActive() {
         if (this.status != FundStatus.ACTIVE) {
             throw new IllegalStateException("Quỹ nhóm này đã được giải thể");
