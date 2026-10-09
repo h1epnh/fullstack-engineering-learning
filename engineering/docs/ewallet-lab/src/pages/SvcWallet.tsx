@@ -39,6 +39,32 @@ export default function SvcWallet() {
         <p className="ep-desc">Sổ giao dịch, mới nhất trước. Append-only — không dòng nào bị sửa sau khi ghi.</p>
       </Ep>
 
+      <Ep verb="GET" path="/wallets/{userId}/transactions/search" tag="public">
+        <p className="ep-desc">
+          Issue #36 — lọc <code>type</code>/<code>direction</code> (<code>IN</code>/<code>OUT</code>, xem{' '}
+          <code>TransactionType.direction()</code>)/<code>fromDate</code>/<code>toDate</code>, đều optional, kết hợp
+          AND — cộng phân trang (<code>page</code>/<code>size</code>/<code>sort</code>, Spring Data{' '}
+          <code>Pageable</code>). Trả <code>{'{ transactions, page, size, totalElements, totalPages }'}</code>.
+        </p>
+      </Ep>
+
+      <Ep verb="GET" path="/wallets/{userId}/statement?month=yyyy-MM" tag="public">
+        <p className="ep-desc">
+          Issue #36 — sao kê tháng: <code>openingBalance</code>/<code>totalCredits</code>/<code>totalDebits</code>/
+          <code>closingBalance</code> (luôn khớp đẳng thức <code>opening + credits - debits = closing</code> vì
+          <code>closing</code> được TÍNH từ 3 số kia, không query riêng) + danh sách giao dịch trong kỳ kèm{' '}
+          <code>balanceAfter</code> (số dư chạy).
+        </p>
+      </Ep>
+
+      <Ep verb="GET" path="/wallets/{userId}/statement/export?month=yyyy-MM&format=csv|json" tag="public">
+        <p className="ep-desc">
+          Issue #36 — cùng dữ liệu <code>statement</code>. <code>format=csv</code> (mặc định): <code>Content-Type:
+          text/csv</code> + <code>Content-Disposition: attachment</code>, cột <em>Mã GD, Thời gian, Loại, Số tiền
+          (có dấu), Số dư sau GD</em>.
+        </p>
+      </Ep>
+
       <Ep verb="POST internal" path="/wallets/{userId}/credit" tag="internal">
         <p className="ep-desc">Gọi bởi service khác (transfer-service, bill-payment-service) hoặc gián tiếp qua Kafka từ topup-service.</p>
         <FieldsTable

@@ -1371,6 +1371,209 @@ Fix theo cả 3 hướng agent-tester đề xuất trên issue:
   `compensateWithRetry`/`recordStuckCompensation`/`jitteredCompensationBackoff`/
   `FundCompensationReconciler`/`FundCompensationFailure`).
 
+**SUPERSEDED bởi Outbox pattern (issue #22) — xem mục ngay dưới đây.** Toàn bộ 3 bug fix ở trên
+(ledger "ma", raw 500, "tiền kẹt mid-flight" + retry budget riêng + reconciler) là lịch sử thật của
+việc cố vá cho đúng lớp "local-commit-rồi-mới-gọi-network" nhiều lần bằng compensate tay — giữ
+nguyên ở đây làm bằng chứng cụ thể CHO issue #22 (không xoá lịch sử), nhưng code thật
+(`compensateWithRetry`, `mapCreditFailure`, `MAX_COMPENSATION_ATTEMPTS`, `FundCompensationFailure`,
+`FundCompensationReconciler`) đã bị XOÁ khỏi `fund-service` — không còn tồn tại song song với outbox.
+
+## Outbox pattern — thí điểm trên `fund-service` (issue #22)
+
+### Bối cảnh — vì sao compensate tay (3 lần vá liên tiếp ở trên) không đủ
+
+Issue #14's 3 lần vá liên tiếp (ledger "ma" → raw 500 → "tiền kẹt mid-flight" + retry budget riêng +
+reconciler) đều là biến thể của ĐÚNG 1 lớp vấn đề: `withdraw()`/`dissolve()` ghi state cục bộ
+(`Fund.balance` + `FundTransaction`) TRƯỚC, rồi mới gọi `walletServiceClient.credit(...)` (network)
+SAU, bắt exception để compensate nếu network call fail. Compensate tay này CHỈ xử lý được lớp lỗi
+*đồng bộ* (exception bắt được trong cùng request) — **không hề xử lý được lớp lỗi crash-giữa-đường**:
+process bị kill/OOM/`kubectl delete pod` đúng lúc giữa khi local-commit đã xong và lúc
+`walletServiceClient.credit` kịp chạy. Khi đó: không có exception nào được bắt (process đã chết),
+không có compensate nào chạy, và local state nói "đã rút xong" dù tiền chưa bao giờ thực sự sang
+`wallet-service`. Đây là đúng lớp rủi ro mà `agent-ba` nêu trong Context của issue #22, nặng hơn cả
+3 bug đã vá — không có cách nào dò lại bằng try/catch, vì không có gì sống sót để catch.
+
+### Quyết định kiến trúc (đã được operator xác nhận trước qua phiên chat, không phải agent-dev tự
+quyết — ghi lại ở đây để không ai sau này nghĩ nhầm là agent-dev tự ý chọn)
+
+1. **Outbox riêng từng service, KHÔNG dùng thư viện chung.** Bảng `outbox_event` mới nằm trong
+   chính `ewallet_fund` DB — giữ đúng nguyên tắc "mỗi service tự chủ DB" đã có từ đầu dự án (xem
+   mục "Vì sao mỗi service có DB riêng"). Tạo 1 shared library cho pattern mới chỉ vừa thí điểm ở 1
+   service là quá sớm — sẽ revisit SAU KHI cả 3 service (fund/lucky-money/payment-request) đã
+   migrate xong và pattern đã ổn định qua ít nhất 1 vòng vận hành thật.
+2. **Polling interval 10 giây** (`@Scheduled(fixedDelay = 10_000, initialDelay = 10_000)` trong
+   `FundOutboxRelay`) — nhất quán với tiền lệ `FundCompensationReconciler` cũ (15s cho 1 job nền rất
+   giống nhau), RÚT NGẮN một chút vì khác với reconciler cũ (chỉ là safety net hiếm khi chạy),
+   outbox relay giờ là ĐƯỜNG CHUYỂN TIỀN CHÍNH cho mọi contribute/withdraw/dissolve — độ trễ
+   "tiền thực sự vào/ra ví" người dùng nhìn thấy trực tiếp phụ thuộc vào interval này. 10s giữ độ
+   trễ ở mức vài giây (đủ nhanh cho UX lab) mà vẫn chỉ poll `wallet-service` 1 lần/tick (không phải
+   1 lần/request), không tạo tải nặng.
+3. **`wallet-service`'s `/credit`/`/debit` idempotency — đã đọc code thật trước khi quyết, KHÔNG
+   đoán.** Trước #22, `Transaction.reference` (cột duy nhất liên quan) chỉ là metadata tham chiếu
+   nghiệp vụ tự do (bank txn id cho topup/withdraw, user id đối tác cho transfer, biller code cho
+   bill) — KHÔNG có check trùng thật nào, và quan trọng hơn: **không unique**, vì nhiều service tái
+   dùng giá trị NÀY LẶP LẠI cho các giao dịch hợp lệ khác nhau (vd. 2 lần chuyển tiền riêng biệt
+   giữa đúng 2 người CÙNG có `reference` = user id đối tác, không phải trùng lặp cần chặn). Một
+   UNIQUE constraint chung trên `(type, reference)` sẽ phá vỡ NGAY mọi flow cũ đó. Quyết định: thêm
+   1 cột MỚI, riêng biệt, `idempotency_key` (`Transaction.idempotencyKey`, nullable, UNIQUE) —
+   KHÔNG tái dùng `reference`. `null` cho MỌI caller không truyền (100% caller trước #22, không đổi
+   hành vi gì) — chỉ caller nào chủ động truyền (hiện tại: `fund-service`'s outbox relay, dùng
+   chính outbox event's `id`) mới có dedupe. 2 lớp bảo vệ: (a) pre-check nhanh trong
+   `WalletMutationExecutor.creditOnce`/`debitOnce` (tìm theo key trước khi mutate), (b) UNIQUE
+   constraint DB thật làm lưới an toàn cuối nếu 2 call đua nhau vượt qua (a) cùng lúc —
+   `WalletService.credit`/`debit` bắt `DataIntegrityViolationException`, tự query lại xem key đã
+   tồn tại chưa, nếu có thì trả về trạng thái ví HIỆN TẠI (200, không phải lỗi) — đúng yêu cầu
+   "idempotent-success" của dispatch. KHÔNG cần bảng riêng "đã xử lý key nào" — UNIQUE constraint
+   trên `transactions` đã đủ, đúng pattern UNIQUE constraint vừa dùng để fix #26's race condition.
+
+### Lưu ý vận hành quan trọng — Hibernate's `ddl-auto: update` lần này TỰ THÊM ĐÚNG UNIQUE constraint
+
+Khác với bài học đã ghi trong CLAUDE.md (table-level `@Table(uniqueConstraints=...)` KHÔNG được
+`ddl-auto: update` áp dụng lên bảng cũ đã tồn tại — xem bug #26's 4 lần QA), lần này dùng
+**column-level `@Column(unique = true)`** trên 1 CỘT MỚI (`idempotency_key`) — Hibernate's
+SchemaUpdate áp dụng khác nhau giữa 2 kiểu khai báo: column-level `unique=true` trên 1 cột MỚI vừa
+thêm được tự `ALTER TABLE ... ADD CONSTRAINT ... UNIQUE` ngay, verify trực tiếp bằng
+`\d transactions` trên Postgres thật sau deploy (`uke58eyb3fj0t2cl16q1ll436b7 UNIQUE CONSTRAINT`),
+**KHÔNG cần chạy `ALTER TABLE` thủ công** như checklist dự kiến ban đầu. Ghi rõ ở đây vì đây là 1
+phản-ví-dụ hữu ích bổ sung cho bài học CHECK-constraint/table-uniqueConstraints cũ trong CLAUDE.md:
+"ddl-auto:update không tự thêm constraint" KHÔNG đúng tuyệt đối cho MỌI loại constraint — cụ thể là
+column-level `unique=true` trên cột mới THÌ CÓ tự áp dụng, chỉ table-level
+`uniqueConstraints`/CHECK-constraint-sinh-từ-enum mới KHÔNG tự áp dụng. Luôn tự `\d <table>` verify
+thật sau deploy, đừng suy ra kết quả từ loại constraint khác đã gặp trước đó.
+
+Tương tự, phát hiện thêm 1 bug tự fix trong lượt làm: `@Lob` trên 1 field `String` (dùng cho
+`OutboxEvent.payload`) bị Hibernate map thành kiểu `oid` (Postgres large-object, cần API riêng) chứ
+KHÔNG phải `text` thường — phát hiện qua `\d outbox_event` thấy `payload | oid` ngay sau lần deploy
+đầu, không phải đoán. Fix: bỏ `@Lob`, dùng `@Column(columnDefinition = "TEXT")` thường. Hibernate's
+`ddl-auto: update` sau đó tự `ALTER COLUMN TYPE` đúng từ `oid` sang `text` khi redeploy (bảng còn
+rỗng, không có dữ liệu cũ cần migrate) — verify lại bằng `\d outbox_event` xác nhận `payload | text`.
+
+### Schema `outbox_event` (DB `ewallet_fund`)
+
+| Cột | Kiểu | Ghi chú |
+|---|---|---|
+| `id` | UUID (PK) | Chính là `idempotencyKey`/`referenceId` gửi cho `wallet-service` |
+| `event_type` | enum (`FUND_CONTRIBUTE_DEBIT`/`FUND_WITHDRAW_CREDIT`/`FUND_DISSOLVE_CREDIT`) | |
+| `payload` | TEXT (JSON, Jackson) | `fundId`/`userId`/`amount`/`fundTransactionId`/`stepUpConfirmed` |
+| `status` | enum (`PENDING`/`DELIVERED`/`FAILED`) | |
+| `created_at` | timestamp | |
+| `delivered_at` | timestamp (nullable) | |
+| `attempt_count` | int | |
+| `last_error` | varchar(2000, nullable) | HTTP status + body hoặc exception message gần nhất, thuần diagnostic |
+
+### Luồng mới — `contributeOnce`/`withdrawOnce`/`dissolveOnce` ghi outbox event CÙNG transaction
+
+`FundMutationExecutor`'s 3 method này giờ ghi state nghiệp vụ (`Fund.balance` + `FundTransaction`)
+VÀ 1 dòng `outbox_event(PENDING)` trong ĐÚNG 1 `@Transactional` method — `FundService` không còn
+gọi `walletServiceClient.credit`/`debit` trực tiếp ở đâu nữa (chỉ còn 1 ngoại lệ, xem mục kế tiếp).
+`FundOutboxRelay` (`@Scheduled(fixedDelay=10000)`) là nơi DUY NHẤT gọi `wallet-service` cho 3
+nghiệp vụ này: poll `outbox_event WHERE status='PENDING'`, gọi đúng `/credit`/`/debit` với
+`idempotencyKey = outbox event's id`, cập nhật `DELIVERED` khi 200.
+
+**`contribute()` giờ là "claim trước" (local tăng `Fund.balance` ngay), KHÔNG còn debit-trước-rồi-
+mới-local-sau như thiết kế ban đầu** — đảo ngược thứ tự so với "Thứ tự external-call vs local-commit"
+đã ghi ở mục Quỹ nhóm phía trên (quyết định MỚI của #22, thay thế quyết định cũ đó). Lý do: dispatch
+#22 yêu cầu rõ "không còn gọi `walletServiceClient` trực tiếp từ `FundService`" cho CẢ 3 method kể
+cả `contributeOnce` — áp dụng outbox đồng nhất cho cả debit (contribute) và credit (withdraw/
+dissolve), không chỉ 2/3 trường hợp.
+
+**Điểm rẽ cần xử lý riêng — Step-up (issue #15) không còn được check "miễn phí" bên trong network
+call đồng bộ như trước.** Trước #22, `contribute()` gọi `walletServiceClient.debit(...)` ĐỒNG BỘ,
+và chính lệnh debit đó (xử lý trong `wallet-service`'s `debitOnce`) tự check điều kiện step-up VÀ
+move tiền trong 1 lần gọi — nếu cần step-up mà chưa confirm, trả 428 ngay cho user. Khi debit chuyển
+sang chạy nền qua outbox relay, không còn HTTP request nào sống để user phản hồi 428 nữa. Fix: giữ
+NGUYÊN TẮC "tuân thủ pháp luật phải FAIL-CLOSED" (CLAUDE.md's Enterprise Architecture Alignment #2)
+bằng cách thêm 1 bước pre-check ĐỒNG BỘ, READ-ONLY, TRƯỚC khi claim bất cứ gì:
+`FundService.contribute()` gọi `WalletServiceClient.stepUpCheck(memberUserId, amount)` (GET
+`/wallets/{userId}/step-up-check`, endpoint đã có sẵn từ issue #15) — nếu `required() &&
+!stepUpConfirmed`, trả 428 NGAY, không claim gì cả. Đây CHÍNH XÁC là pattern `topup-service` đã dùng
+từ trước cho TOPUP's credit bất đồng bộ qua Kafka (xem `TopupService.initiate`'s javadoc) — không
+phải pattern mới, tái dùng tiền lệ đã có trong codebase. `stepUpConfirmed` (đã qua bước confirm của
+user) được đóng gói vào `outbox_event.payload` để relay's `debit` call sau đó truyền đúng flag này,
+tránh `wallet-service`'s `debitOnce` tự check lại và từ chối (daily cumulative tại THỜI ĐIỂM relay
+chạy có thể khác thời điểm user bấm xác nhận — chấp nhận là 1 race-window nhỏ, cùng category rủi ro
+đã biết của TOPUP's step-up precheck, ghi nhận trong javadoc `WalletServiceClient`).
+
+### Retry/permanent-failure — bất đối xứng theo loại lỗi, không phải 1 số cố định
+
+`FundOutboxRelay` KHÔNG coi mọi lỗi như nhau — 1 HTTP 409 từ `wallet-service` có thể là "số dư
+không đủ" (lỗi nghiệp vụ THẬT, retry vô ích) HOẶC "thua hết lượt optimistic-lock nội bộ của
+`wallet-service` dưới tải" (lỗi TẠM THỜI, retry ở tick sau rất nhiều khả năng sẽ qua) —
+`WalletController` map CẢ 2 vào CÙNG 409, không phân biệt được bằng status code. Xử lý:
+
+- **4xx (`HttpClientErrorException`: 400/409/428)** — tính vào `attempt_count`. Dưới 3 lần: giữ
+  `PENDING`, retry tick sau (đủ để vượt qua lock-contention tạm thời, không vội kết luận "vĩnh viễn
+  thất bại"). Từ lần thứ 3: coi là lỗi nghiệp vụ VĨNH VIỄN — gọi compensate tương ứng
+  (`compensateContribute`/`compensateWithdraw`/`compensateDissolve`, tái dùng nguyên method cũ của
+  #14, chỉ đổi người gọi), đánh `FAILED`. **Đã tự verify thật**: contribute 9.000.000đ khi ví member
+  chỉ còn 3.500.000đ → claim local ngay (balance quỹ +9.000.000), relay thua 409 đúng 3 lần liên
+  tiếp (`last_error = "409 Insufficient balance"`), tự compensate: balance quỹ trả lại đúng, dòng
+  `FundTransaction` CONTRIBUTION phantom bị xoá, ví member KHÔNG đổi (debit chưa từng thực sự xảy
+  ra) — không có tiền sinh ra từ hư không, đúng CLAUDE.md's Enterprise Architecture Alignment #3.
+- **Mọi lỗi khác (5xx, network/timeout)** — retry VÔ HẠN, KHÔNG BAO GIỜ tự compensate, vì
+  `wallet-service` CÓ THỂ đã áp dụng mutation thành công phía server trước khi lỗi xảy ra (kết quả
+  mơ hồ) — compensate ở đây có thể sai (revert nhầm 1 giao dịch đã thực sự thành công). An toàn vì
+  idempotency key: retry sau cùng key luôn là no-op sạch nếu đã áp dụng rồi, không bao giờ double-
+  apply. Log WARN, nâng ERROR (marker `FUND_OUTBOX_STUCK`, grep được) sau 10 lần liên tiếp để có
+  visibility vận hành — đây là hạn chế đã biết, cùng loại "cần can thiệp tay nếu kẹt lâu" như
+  `FundCompensationFailure` cũ, chỉ khác là giờ query trực tiếp `outbox_event` thay vì 1 bảng riêng.
+
+### Single-replica — chưa cần `SELECT ... FOR UPDATE SKIP LOCKED`
+
+`fund-service` hiện chạy 1 replica — không có 2 instance nào cùng đọc/update 1 outbox row đồng
+thời, nên `OutboxEventRepository.findByStatusOrderByCreatedAtAsc` không cần khoá đặc biệt. Ghi rõ
+là giả định, KHÔNG phải quyết định vĩnh viễn — bắt buộc phải thêm `FOR UPDATE SKIP LOCKED` (hoặc
+tương đương) nếu sau này scale `fund-service` lên >1 replica.
+
+### Đã tự verify thật qua Ingress (`http://api.ewallet-lab.local`, user đăng ký qua chính Ingress)
+
+- **Happy path claim-first**: contribute 500.000đ → `Fund.balance` tăng NGAY (trước khi relay chạy,
+  xác nhận bằng cách đọc lại trong vài giây đầu), ví member CHƯA đổi; ~10s sau, ví member giảm đúng
+  500.000đ, `outbox_event` → `DELIVERED`. Lặp lại với withdraw 200.000đ và dissolve (remainder
+  300.000đ) trên cùng quỹ: cả 2 đều claim-trước-relay-sau đúng, ví creator cộng đúng từng bước,
+  `fund_transactions`/`transactions` (lọc theo `reference=fundId`) khớp tuyệt đối 3 dòng, không
+  dòng "ma" nào — `idempotency_key` của cả 3 dòng `transactions` khớp đúng 3 `outbox_event.id`.
+- **Idempotency — gọi `/credit` lặp lại CÙNG 1 idempotencyKey**: 3 lần gọi tuần tự → cả 3 trả 200,
+  chỉ CÓ 1 dòng `Transaction` (số dư chỉ tăng đúng 1 lần). 8 lần gọi ĐỒNG THỜI THẬT (`curl ... &`
+  + `wait`, cùng key) → cả 8/8 trả 200 sạch (không 500 nào), `SELECT count(*) FROM transactions
+  WHERE idempotency_key=...` = đúng 1 — cả pre-check VÀ fallback UNIQUE-constraint-catch đều hoạt
+  động đúng dưới tải thật.
+- **Kịch bản BẮT BUỘC — kill pod THẬT giữa 2 bước** (bằng chứng quan trọng nhất, khác hẳn test
+  "network lỗi" cũ): thêm tạm 1 dòng `Thread.sleep` có điều kiện (gated bởi env var
+  `FUND_SERVICE_TEST_SLEEP_AFTER_WITHDRAW_MS`, KHÔNG set trong Helm chart thật) ngay SAU khi
+  `mutationExecutor.withdrawOnce(...)` return (nghĩa là `Fund.balance` + `FundTransaction` +
+  `outbox_event(PENDING)` ĐÃ COMMIT) nhưng TRƯỚC khi response trả về client. Gọi withdraw 300.000đ
+  trong background, xác nhận state cục bộ đã commit (`Fund.balance` giảm đúng, `outbox_event`
+  `PENDING`) TRONG LÚC pod vẫn đang "treo" ở sleep, rồi `kubectl -n ewallet-lab delete pod <pod>
+  --grace-period=0 --force` — client nhận `502 Bad Gateway` (xác nhận process chết THẬT, không phải
+  response bình thường). Pod mới tự khởi động (`rollout status` Ready, imageID khớp docker local),
+  **KHÔNG can thiệp tay gì khác** — trong vòng ~10-15s sau khi pod mới Ready, `FundOutboxRelay`'s
+  tick đầu tiên tự nhặt lại đúng outbox event còn `PENDING`, gọi `wallet-service`'s `/credit` thành
+  công (`attempt_count=0`, 1 lần duy nhất), đánh `DELIVERED`. Verify số liệu cuối: ví creator cộng
+  đúng 300.000đ (không thiếu, không nhân đôi), `transactions`/`fund_transactions` đúng 1 dòng mỗi
+  bảng cho giao dịch này, không dòng "ma". Đã xoá sạch code test-only này + env var trên Deployment
+  trước khi coi ticket xong, rebuild lại image sạch (`docker build` ra lại CHÍNH XÁC digest
+  `sha256:1cf3079801c5...` như build sạch trước khi thêm hook — xác nhận source đã revert đúng),
+  redeploy, verify lại 1 vòng contribute/withdraw bình thường vẫn đúng sau khi gỡ hook.
+- Build sạch `./gradlew build` (không skip test) cho cả `fund-service` và `wallet-service`
+  (`BUILD SUCCESSFUL`). `eval $(minikube docker-env)` trước mọi `docker build`. Image tag đúng
+  `ewallet-lab/fund-service:local` / `ewallet-lab/wallet-service:local`; `imageID` của pod khớp
+  chính xác digest `docker images` local sau mỗi lần build (`f0121a6ea7f7...` wallet-service,
+  `1cf3079801c5...` fund-service bản cuối).
+
+### Ngoài phạm vi thí điểm này (ghi rõ, không phải bỏ sót)
+
+- **`lucky-money-service`/`payment-request-service` CHƯA migrate** — đúng khuyến nghị "thí điểm 1
+  service trước" của Constraints issue #22. Issue #22 CHƯA được close (chỉ cover 1/3 service).
+- **`fund_compensation_failures` table cũ** — vẫn còn tồn tại trên Postgres (Hibernate không tự
+  `DROP TABLE` khi entity bị xoá khỏi code) nhưng không còn entity/code nào tham chiếu tới — an
+  toàn, chỉ là 1 bảng "mồ côi" không ảnh hưởng gì, có thể `DROP TABLE` tay sau nếu muốn dọn dẹp.
+- **Edge case `revertContribute` khi fund đã bị DISSOLVED đồng thời** — `Fund.revertContribute`
+  không check `status` (giống `revertWithdraw`/`revertDissolve` cũ), nên nếu 1 contribute bị
+  compensate ĐÚNG LÚC fund cũng vừa bị dissolve bởi creator ở giữa, balance có thể lệch khỏi 0 sau
+  dissolve. Rủi ro cực hiếm (cần đúng 2 thao tác hiếm xảy ra cùng lúc trên 1 fund), chưa test được
+  trực tiếp trong lượt này — ghi nhận là hạn chế biết trước, không phải bug ẩn.
+
 ## Quản lý chi tiêu (issue #16) — read-only, không bảng mới, không service mới
 
 **Nguồn — MoMo thật** (momo.vn/quan-ly-chi-tieu, agent-designer fetch trực tiếp 2026-10-03): tính
@@ -1621,3 +1824,178 @@ breakdown/total. `period=year` (giá trị không hợp lệ) → 400. CORS qua 
 | GET | `/telco/orders/{id}` | Xem chi tiết biên lai đơn hàng viễn thông |
 
 
+
+## Bộ lọc lịch sử giao dịch thông minh & Xuất sao kê tài chính (issue #36) — `wallet-service`
+
+Không thêm service/bảng mới — toàn bộ sống trong `wallet-service` (đúng Constraints của ticket:
+"nơi lưu giữ nguồn sự thật duy nhất về số dư và sổ cái giao dịch"), nâng cấp `Transaction`/
+`TransactionRepository`/`WalletController` hiện có.
+
+### `TransactionType.direction()` — single source of truth mới cho IN/OUT
+
+Mỗi `TransactionType` constant giờ mang kèm `TransactionDirection` (IN/OUT) ngay trong định nghĩa
+enum, thay vì 1 `Set` lọc tay riêng biệt (dễ quên cập nhật khi thêm type mới — đúng rủi ro
+`WalletMutationExecutor.MONTHLY_LIMIT_TYPES` đang gặp hôm nay, phải tự nhớ thêm type mới vào đúng
+chỗ). Đã đọc javadoc của TỪNG constant hiện có (không suy đoán) để gán đúng hướng:
+
+- **IN**: `TOPUP`, `TRANSFER_IN`, `REFUND`, `LOYALTY_REDEMPTION`, `INVESTMENT_SELL`,
+  `SAVINGS_GOAL_WITHDRAW`.
+- **OUT**: `WITHDRAW`, `TRANSFER_OUT`, `BILL_PAYMENT`, `BNPL_REPAYMENT`, `INVESTMENT_BUY`,
+  `SAVINGS_GOAL_DEPOSIT`, `VOUCHER_PASS_PURCHASE`.
+
+(Khớp đúng danh sách IN/OUT ticket tự liệt kê cho 8 type gốc; 5 type mới hơn — INVESTMENT_*/
+SAVINGS_GOAL_*/VOUCHER_PASS_PURCHASE — suy ra trực tiếp từ javadoc "Debit to.../Credit from..."
+của chính chúng, không phải tự đặt.)
+
+### 3 endpoint mới
+
+| Method | Path | Mô tả |
+|---|---|---|
+| GET | `/wallets/{userId}/transactions/search` | Lọc `type`/`direction`/`fromDate`/`toDate` (đều optional, AND nếu nhiều hơn 1) + phân trang (`page`/`size`/`sort`, Spring Data `Pageable` tự bind) |
+| GET | `/wallets/{userId}/statement?month=yyyy-MM` | Sao kê tháng: `openingBalance`/`totalCredits`/`totalDebits`/`closingBalance` + danh sách giao dịch kèm `balanceAfter` (số dư chạy) |
+| GET | `/wallets/{userId}/statement/export?month=yyyy-MM&format=csv\|json` | Cùng dữ liệu `statement`, `format=csv` (mặc định) trả `Content-Type: text/csv` + `Content-Disposition: attachment`, `format=json` trả `AccountStatementDto` |
+
+**Search dùng `JpaSpecificationExecutor`** (không dùng JPQL động/string) — 4 filter độc lập, mỗi
+filter optional, kết hợp qua `Specification.where(...).and(...)` (`null` component = bỏ qua, đúng
+contract của Spring Data) — tránh tổ hợp bùng nổ tên method hoặc JPQL string ghép tay dễ sai.
+
+### Tính opening/closing balance — đảm bảo khớp 100% BẰNG CÁCH XÂY DỰNG, không phải assert riêng
+
+`closingBalance` LUÔN được tính TỪ `openingBalance + totalCredits - totalDebits` (không query độc
+lập một lần nữa) — đẳng thức Acceptance criteria yêu cầu đúng 100% là tự động đúng do cách dựng,
+không phải 1 bất biến phải tự kiểm tra riêng. `openingBalance` = tổng IN trừ tổng OUT của MỌI giao
+dịch TRƯỚC `periodStart` (từ `Instant.EPOCH`, không phải từ 1 bảng snapshot số dư riêng — ledger
+này append-only, không cần snapshot). `balanceAfter` của từng dòng trong sao kê = cộng/trừ dồn từ
+`openingBalance`, đi qua các giao dịch trong kỳ theo thứ tự thời gian tăng dần.
+
+**Verify thật qua Ingress** (`http://api.ewallet-lab.local`, user đã có nhiều giao dịch thật từ
+các luồng khác trong ngày — TOPUP, TRANSFER_IN/OUT từ outbox relay của issue #22): sao kê tháng
+hiện tại trả `openingBalance=0` (ví mới tạo trong tháng), `totalCredits=6.673.456đ`,
+`totalDebits=1.000.000đ`, `closingBalance=5.673.456đ` — khớp TUYỆT ĐỐI với `GET
+/wallets/{userId}/balance` gọi riêng cùng lúc (`5.673.456đ`). CSV export: header đúng "Mã GD,Thời
+gian,Loại,Số tiền,Số dư sau GD", `Content-Type: text/csv`, `Content-Disposition: attachment;
+filename="statement-2026-10.csv"`, cột "Số tiền" có DẤU (âm cho giao dịch OUT) — quyết định thiết
+kế riêng (ticket không chỉ định dấu/không dấu): số có dấu giúp cộng dồn trực tiếp trong spreadsheet
+mà không cần tra thêm cột hướng dòng tiền. Tháng trước (chưa có giao dịch nào, ví tạo sau đó) trả
+đúng `openingBalance=totalCredits=totalDebits=closingBalance=0`, `transactions=[]`. `month` sai
+format (vd `"garbage"`) → 400 sạch (bắt riêng `DateTimeParseException`, không rơi 500 thô).
+Search: filter `type=TOPUP` trả đúng 1 dòng; filter `direction=OUT` trả đúng các dòng TRANSFER_OUT;
+filter `fromDate`/`toDate` hẹp (1 phút, không trùng giao dịch nào) trả `[]`/`totalElements=0` đúng.
+
+### Bảo mật truy cập — theo đúng convention đã có, không tự thêm lớp auth mới
+
+Giống MỌI endpoint khác của `wallet-service` hiện tại (`/balance`, `/transactions`,
+`/spending-report`...), 3 endpoint mới KHÔNG có authorization check thật (lab này không có hệ
+thống auth/session token nào ở tầng backend) — `userId` chỉ là path variable được tin tưởng. "Không
+cho phép xem/xuất sao kê ví người khác" trong Constraints được đáp ứng ở tầng FRONTEND (luôn gọi
+với `session.id` của chính người đang đăng nhập, không có UI nào cho nhập userId tuỳ ý) — đúng
+tiền lệ đã ghi nhận ở issue #16's "Quản lý chi tiêu": "Endpoint public... không tự thêm lớp auth
+mới ngoài phạm vi ticket". Ghi rõ ở đây để không ai sau này hiểu nhầm là đã có access-control thật.
+
+### Build/deploy
+
+`./gradlew clean build` sạch (`BUILD SUCCESSFUL`). Image `ewallet-lab/wallet-service:local` rebuild
+(digest `sha256:de25fba9a678...`), `imageID` pod khớp chính xác, `rollout status` Ready.
+
+## Hệ thống Nhiệm vụ tích điểm / Gamification (issue #38) — `loyalty-service`
+
+Mở rộng `loyalty-service` (issue #19) với 2 cơ chế engagement hàng ngày: điểm danh chuỗi (streak)
+và nhiệm vụ hàng ngày — không service mới, không bảng `loyalty_accounts`/`point_entries` thay đổi
+cấu trúc (chỉ 2 bảng mới hoàn toàn: `daily_checkins`, `user_mission_progress`).
+
+### Quyết định — `LoyaltyMission` là catalog tĩnh trong code, KHÔNG phải DB entity
+
+Ticket's Task #1 viết "Entity LoyaltyMission" (ngụ ý bảng DB mutable), nhưng đã CHỦ ĐỘNG lệch khỏi
+chữ nghĩa đó: `LoyaltyMissionCatalog.MISSIONS` là 1 `List` tĩnh trong code, giống NGUYÊN VẸN
+`VoucherPassCatalog` (issue #28) đã có sẵn trong CHÍNH service này. Lý do: đây là catalog cố định,
+không có UI admin để sửa, và đã có 1 convention y hệt trong cùng service rồi — tạo pattern thứ 2
+khác hẳn cho cùng 1 loại dữ liệu (catalog cố định) trong CÙNG 1 service sẽ gây rối hơn là lợi.
+`UserMissionProgress` (trạng thái MUTABLE theo từng user/ngày) MỚI là entity DB thật — đúng vai trò
+`VoucherPassPurchase` đã đóng cho catalog của #28.
+
+### Quyết định — tái dùng `PointEntryKind.EARN` cho điểm danh/nhiệm vụ, KHÔNG thêm giá trị enum mới
+
+Để tránh ĐÚNG bẫy CHECK-constraint đã ghi trong CLAUDE.md (thêm giá trị enum mới vào 1 cột
+`@Enumerated(EnumType.STRING)` của bảng ĐÃ TỒN TẠI — ở đây là `point_entries.kind` — không tự được
+Hibernate's `ddl-auto: update` thêm CHECK constraint mới), quyết định KHÔNG thêm `CHECK_IN`/
+`MISSION_CLAIM` vào `PointEntryKind`. Thay vào đó, tái dùng `EARN` cho MỌI cách điểm được cộng
+(thanh toán hoá đơn / điểm danh / nhận nhiệm vụ), phân biệt nguồn gốc qua field `tier` (vốn đã là
+String tự do, không ràng buộc enum) với tiền tố rõ nghĩa: `"CHECK_IN_DAY_<n>"` / `"MISSION_<code>"`
+(so với tên hạng thật như `"Thành viên"`/`"Thân thiết"` — phân biệt được ngay khi đọc DB thô).
+Frontend (`LoyaltyRewards.tsx`) đọc tiền tố này để hiện label đúng trong lịch sử điểm — xem frontend
+DESIGN.md. Verify: `\d point_entries` sau deploy xác nhận CHECK constraint `kind` KHÔNG đổi
+(`'EARN'`/`'REDEEM'` như cũ) — không chạm bảng cũ chút nào, không cần ALTER TABLE thủ công.
+
+`daily_checkins` (`UNIQUE(user_id, checkin_date)`) và `user_mission_progress`
+(`UNIQUE(user_id, mission_code, target_date)`, `@Version`) là bảng HOÀN TOÀN MỚI — `ddl-auto:
+update` tự tạo đúng cả 2 UNIQUE constraint ngay từ đầu (verify `\d` trực tiếp), khác hẳn trường hợp
+"thêm constraint vào bảng cũ" đã biết không tự áp dụng.
+
+### Concurrency — tái dùng pessimistic lock đã có của `LoyaltyAccount`, KHÔNG dùng optimistic-lock-retry như ticket gợi ý
+
+Ticket's Constraints gợi ý "Ràng buộc DB UNIQUE kết hợp `@Version` optimistic locking" — pattern
+NHIỀU service khác trong lab dùng khi KHÔNG có cơ chế khoá sẵn. Nhưng `loyalty-service` ĐÃ CÓ 1
+pessimistic lock (`LoyaltyAccountRepository.lockByUserId`, `SELECT ... FOR UPDATE`, issue #19) cho
+MỌI mutation trên `LoyaltyAccount` — dùng 2 kiểu khoá khác nhau cho 2 vấn đề cùng loại trong CÙNG 1
+service sẽ không nhất quán. Quyết định: `checkInOnce`/`claimMissionOnce` (`LoyaltyMutationExecutor`)
+chạy DƯỚI CÙNG lock đó — request thua cuộc re-query SAU khi request thắng đã commit, nên 409 là
+kết quả CHẮC CHẮN (không phải tình cờ serialize), không cần retry loop nào. `UNIQUE` constraint vẫn
+giữ làm lưới an toàn thứ 2 (đúng yêu cầu ticket), và `@Version` trên `UserMissionProgress` vẫn giữ
+(chỉ có ý nghĩa nếu tương lai có code nào bypass lock, hiện tại chưa có).
+
+**Đã tự verify ≥10 concurrent (bắt buộc theo Acceptance criteria)**: unit test
+`LoyaltyConcurrencyTest.concurrentCheckInsAwardPointsExactlyOnce` (12 thread) VÀ qua Ingress thật
+(`curl ... &` × 15 request đồng thời CÙNG user) — cả 2 đều: đúng 1×200, còn lại 409 sạch (không
+500), `daily_checkins` chỉ 1 dòng, balance tăng đúng 1 lần (5 điểm, không nhân bản).
+
+### Streak — chu kỳ 7 ngày, reset khi bỏ lỡ (tự thiết kế, không phải số MoMo xác minh)
+
+`CheckinCalculator.nextStreakDay`: cách ngày liền trước đúng 1 ngày → tiếp tục streak
+(`(prevStreakDay % 7) + 1` — ngày 7 tự quay lại ngày 1 cho chu kỳ mới); mọi trường hợp khác (lần
+đầu, hoặc cách ≥2 ngày) → reset về ngày 1. Điểm: 5 cơ bản + 15 (ngày 3) + 50 (ngày 7) — đúng số
+ticket đã cho (agent-ba/agent-designer đã khảo sát MoMo/Shopee Xu/ZaloPay/GrabRewards), KHÔNG tự
+fetch verify lại. Việc "sau ngày 7 quay vòng lại ngày 1" là suy luận riêng của lab này (ticket
+không nói rõ điều gì xảy ra sau ngày 7) — ghi rõ ở đây để không ai hiểu nhầm là số đã xác minh.
+
+**Đã tự verify qua Ingress thật** (chỉnh trực tiếp `daily_checkins` qua `psql` để mô phỏng "đã điểm
+danh hôm qua ở ngày N" — cách duy nhất test streak nhiều ngày mà không chờ thật): ngày 2→3 (+20,
+đúng mốc +15), ngày 6→7 (+55, đúng mốc +50), ngày 7→(bỏ lỡ 2 ngày)→reset ngày 1 (+5) — cả 3 kịch
+bản đều đúng số.
+
+### Nhiệm vụ hàng ngày — lazy-compute từ ledger `wallet-service`, KHÔNG event/webhook
+
+`GET /loyalty/missions` quét `wallet.transactions(userId)` (endpoint CÓ SẴN từ issue #19, lấy TOÀN
+BỘ lịch sử, không cần endpoint search mới của issue #36) lọc theo `createdAt` rơi vào HÔM NAY (zone
+`Asia/Ho_Chi_Minh`, cùng `Clock` bean đã có) VÀ `type` khớp `LoyaltyMission.requiredTransactionType`
+— data-driven (1 lookup chung, không branch riêng từng mission code). Cùng shape "fetch ngoài
+transaction, upsert trạng thái dưới khoá" mà `LoyaltyService.sync()` của issue #19 đã dùng cho tier
+sync — không phải pattern mới. `wallet-service` không phản hồi → fail OPEN (giữ trạng thái cũ, màn
+hình không sập), cùng tiền lệ `synced=false` của #19.
+
+**DAILY_BILL ("hoá đơn HOẶC dịch vụ số") hiện CHỈ khớp `BILL_PAYMENT`** — "dịch vụ số" (digital
+subscriptions, issue #30) chưa merge/xác nhận dùng `TransactionType` nào tại thời điểm làm ticket
+này (thấy có code WIP chưa commit trong `bill-payment-service` lúc bắt đầu lượt này, không rõ trạng
+thái) — nếu #30 cuối cùng dùng lại `BILL_PAYMENT`, mission này tự động cũng khớp đúng; nếu dùng type
+khác, cần bổ sung vào `requiredTransactionType` (có thể cần đổi thành `Set<String>` nếu 1 mission
+cần khớp NHIỀU type) — ghi nhận là follow-up, không phải bug.
+
+**Đã tự verify qua Ingress thật**: 3 mission đều `IN_PROGRESS` ban đầu; thực hiện 1 giao dịch
+`transfer-service` thật → `DAILY_TRANSFER` tự chuyển `COMPLETED` (không cần gọi thêm API nào khác,
+chỉ cần GET lại `/loyalty/missions`); claim → `CLAIMED` + balance +20; claim lần 2 → 409; claim
+mission chưa `COMPLETED` → 409; claim mission code không tồn tại → 404.
+
+### Lỗi/giới hạn phát hiện thêm (không phải do #38 gây ra, pre-existing)
+
+`LoyaltyController` KHÔNG có `@ExceptionHandler(ResponseStatusException.class)` trả `getReason()`
+như `FundController`/`WalletController` đã làm — mọi lỗi 409/404 của `loyalty-service` (CẢ code cũ
+của #19 lẫn code mới của #38) trả body JSON generic Spring Boot (`{"status":409,"error":"Conflict"}`),
+KHÔNG có message tiếng Việt cụ thể trong body — verify bằng cách gọi lại chính luồng redeem cũ
+(không đổi gì ở #38) thấy CÙNG hành vi. Không ảnh hưởng tính năng (frontend's `describeApiError`
+chỉ dựa vào status code, không đọc message server), nhưng ghi nhận là gap pre-existing của toàn
+`loyalty-service`, không riêng #38 — có thể fix chung 1 lần nếu có ticket riêng.
+
+### Build/deploy
+
+`./gradlew clean build` sạch (`BUILD SUCCESSFUL`, bao gồm `CheckinCalculatorTest` mới + test race
+≥10 concurrent trong `LoyaltyConcurrencyTest`). Image `ewallet-lab/loyalty-service:local` (digest
+`sha256:b479e68f5c9b...`), `imageID` pod khớp, `rollout status` Ready.

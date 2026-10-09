@@ -59,12 +59,26 @@ class WalletMutationExecutor {
         this.familyWalletServiceClient = familyWalletServiceClient;
     }
 
+    /**
+     * Issue #22 — {@code idempotencyKey} pre-check: if a {@code Transaction} with this exact key
+     * already exists, this call has already been fully applied (either by an earlier attempt that
+     * committed before a caller's own crash, or by a concurrent duplicate that just won the race) —
+     * short-circuit to the wallet's CURRENT state without crediting again. This is the fast path;
+     * {@link WalletService#credit} also catches the DB-level UNIQUE-constraint violation as a
+     * fallback for the rare case 2 calls race past this check at the same instant (see
+     * {@code Transaction.idempotencyKey}'s javadoc for why a separate column, not {@code
+     * reference}).
+     */
     @Transactional
-    Wallet creditOnce(UUID userId, BigDecimal amount, TransactionType type, String reference, String note) {
+    Wallet creditOnce(UUID userId, BigDecimal amount, TransactionType type, String reference, String note,
+                       String idempotencyKey) {
         Wallet wallet = getOrCreateWalletInternal(userId);
+        if (idempotencyKey != null && transactionRepository.findByIdempotencyKey(idempotencyKey).isPresent()) {
+            return wallet;
+        }
         wallet.credit(amount);
         walletRepository.save(wallet);
-        transactionRepository.save(new Transaction(wallet.getId(), type, amount, reference, note));
+        transactionRepository.save(new Transaction(wallet.getId(), type, amount, reference, note, idempotencyKey));
         return wallet;
     }
 
@@ -82,8 +96,11 @@ class WalletMutationExecutor {
      */
     @Transactional
     Wallet debitOnce(UUID userId, BigDecimal amount, TransactionType type, String reference, String note,
-                      boolean stepUpConfirmed) {
+                      boolean stepUpConfirmed, String idempotencyKey) {
         Wallet wallet = getOrCreateWalletInternal(userId);
+        if (idempotencyKey != null && transactionRepository.findByIdempotencyKey(idempotencyKey).isPresent()) {
+            return wallet;
+        }
         if (MONTHLY_LIMIT_TYPES.contains(type)) {
             BigDecimal spentThisMonth = transactionRepository.sumAmountByWalletIdAndTypeInSince(
                 wallet.getId(), MONTHLY_LIMIT_TYPES, currentMonthStart());
@@ -125,7 +142,7 @@ class WalletMutationExecutor {
         }
         wallet.debit(amount);
         walletRepository.save(wallet);
-        transactionRepository.save(new Transaction(wallet.getId(), type, amount, reference, note));
+        transactionRepository.save(new Transaction(wallet.getId(), type, amount, reference, note, idempotencyKey));
         return wallet;
     }
 

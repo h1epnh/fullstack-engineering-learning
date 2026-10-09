@@ -801,3 +801,56 @@ Kịch bản kiểm thử tự động tại `scratch/test_verify_issue30.py` v�
 
 
 
+
+## 23. Hệ thống Nhiệm vụ tích điểm / Gamification (issue #38) — `LoyaltyRewards.tsx` mở rộng, gọi `loyalty-service`
+
+Mở rộng CHÍNH màn hình `LoyaltyRewards.tsx` (issue #19) thêm 2 widget mới ngay dưới `TierCard` —
+không màn hình mới, không remote mới. Backend tương ứng: xem backend DESIGN.md's mục "Hệ thống
+Nhiệm vụ tích điểm / Gamification (issue #38)".
+
+### Widget "Điểm danh 7 ngày" (`CheckinStreakCard`)
+
+7 ô vuông, ô đã đạt trong chuỗi hiện tại tô màu accent, ô mốc ngày 3/ngày 7 viền riêng + nhãn
+"+15"/"+50". Tính `filledDays` = `currentStreakDay` (nếu ĐÃ điểm danh hôm nay, số này là ngày thật)
+hoặc `currentStreakDay - 1` (nếu CHƯA điểm danh hôm nay, số này là ngày DỰ KIẾN nếu bấm ngay bây
+giờ — xem `CheckInStatusDto`'s javadoc backend) — tránh tô sai 1 ô so với trạng thái thật. Nút
+"Điểm danh ngay" disable khi `checkedInToday=true`, hiện số điểm dự kiến nhận ngay trên nút (preview
+tính từ `currentStreakDay`, không cần gọi API thử).
+
+### Widget "Nhiệm vụ kiếm điểm" (`MissionsCard`)
+
+Danh sách 3 nhiệm vụ, icon đổi theo trạng thái (`radio_button_unchecked`/`check_circle`/`task_alt`
+cho `IN_PROGRESS`/`COMPLETED`/`CLAIMED`). Nút "Nhận điểm" chỉ hiện khi `COMPLETED` — tự ẩn khi chưa
+hoàn thành (không có nút disable gây hiểu nhầm "có thể bấm nhưng sẽ lỗi"), đổi thành badge "Đã
+nhận" khi `CLAIMED`.
+
+### Gap đã phát hiện + fix luôn — lịch sử điểm hiển thị sai label cho entry check-in/mission
+
+Backend tái dùng `PointEntryKind.EARN` cho CẢ 3 nguồn điểm (thanh toán hoá đơn/điểm danh/nhiệm vụ),
+phân biệt qua `tier` field (tiền tố `CHECK_IN_DAY_<n>`/`MISSION_<code>` — xem backend DESIGN.md).
+`LoyaltyRewards.tsx`'s lịch sử điểm TRƯỚC KHI sửa sẽ hiện SAI "Thanh toán hoá đơn 0đ" cho MỌI entry
+check-in/mission (vì code cũ giả định MỌI `EARN` đều từ bill payment). Đã thêm hàm
+`describeEarnOrRedeem` đọc tiền tố `tier` để hiện đúng "Điểm danh ngày N trong chuỗi" / "Nhận điểm
+nhiệm vụ: <code>" — và bỏ dòng phụ "· hạng <tier>" cho 2 loại entry này (tier ở đây không phải tên
+hạng thật, hiện ra sẽ gây hiểu nhầm).
+
+### `describeApiError` — thêm 2 context mới (`daily-checkin`, `mission-claim`)
+
+Theo đúng convention CLAUDE.md ("thêm field mới vào union type khi thêm luồng nghiệp vụ mới, không
+hardcode message rời rạc") — 409 của check-in (`"Bạn đã điểm danh hôm nay rồi."`) và mission-claim
+(`"Nhiệm vụ này chưa hoàn thành hôm nay, hoặc đã được nhận điểm rồi."`) đều map qua
+`packages/ui/formErrors.ts`, không viết message rời trong `LoyaltyRewards.tsx`.
+
+### Đã verify
+
+- Build sạch `npm run build -w mfe-wallet` (exit 0, không lỗi mới trong `LoyaltyRewards.tsx`/
+  `loyaltyService.ts`/`formErrors.ts` — xác nhận bằng cách chạy lại `tsc` riêng, cùng cách verify
+  đã dùng ở issue #36).
+- Image rebuild đúng tag `ewallet-lab/mfe-wallet:local`, deploy thật, `imageID` khớp. Grep bundle
+  đang chạy xác nhận "check-in"/"Điểm danh 7 ngày"/"Nhiệm vụ kiếm điểm" có trong
+  `LoyaltyRewards-*.js` thật trên pod.
+- Backend (3 endpoint mới + streak math + concurrency) đã verify đầy đủ qua Ingress thật với dữ
+  liệu thật trong backend DESIGN.md — bao gồm 1 giao dịch `transfer-service` thật làm
+  `DAILY_TRANSFER` chuyển `COMPLETED` đúng.
+- **Chưa verify bằng browser automation thật** (click UI, xem 7 ô streak render đúng màu) — không
+  có tool đó trong phiên này, cùng loại gap đã ghi nhận ở các issue #3/#4/#8/#10/#36.

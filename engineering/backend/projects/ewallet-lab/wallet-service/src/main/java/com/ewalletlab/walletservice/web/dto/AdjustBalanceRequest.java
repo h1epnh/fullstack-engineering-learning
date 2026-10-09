@@ -35,7 +35,18 @@ public record AdjustBalanceRequest(
      * against wallet-service's read-only GET /wallets/{userId}/step-up-check. See backend
      * DESIGN.md's "Step-up xác thực" section for the full reasoning.
      */
-    Boolean stepUpConfirmed
+    Boolean stepUpConfirmed,
+    /**
+     * Issue #22 — optional idempotency key. {@code null}/missing (every caller before this ticket,
+     * and every caller that still doesn't need it) behaves EXACTLY as before — no dedupe check runs
+     * at all. A caller that passes one (currently only fund-service's outbox relay) gets: (1) a
+     * cheap pre-check short-circuit if this key was already applied, and (2) a DB-level UNIQUE
+     * constraint as the real safety net if 2 calls somehow race past that pre-check — either way, a
+     * repeated call with the same key is a clean no-op returning the wallet's current state, never
+     * a double-credit/double-debit. See {@code Transaction.idempotencyKey}'s javadoc and backend
+     * DESIGN.md's "Outbox pattern" section.
+     */
+    String idempotencyKey
 ) {
     public boolean isStepUpConfirmed() {
         return Boolean.TRUE.equals(stepUpConfirmed);

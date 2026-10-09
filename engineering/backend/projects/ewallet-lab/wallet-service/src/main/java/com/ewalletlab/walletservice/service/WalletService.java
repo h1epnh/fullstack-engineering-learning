@@ -1,13 +1,21 @@
 package com.ewalletlab.walletservice.service;
 
 import com.ewalletlab.walletservice.domain.Transaction;
+import com.ewalletlab.walletservice.domain.TransactionDirection;
 import com.ewalletlab.walletservice.domain.TransactionType;
 import com.ewalletlab.walletservice.domain.Wallet;
 import com.ewalletlab.walletservice.repository.TransactionRepository;
 import com.ewalletlab.walletservice.repository.WalletRepository;
+import com.ewalletlab.walletservice.web.dto.AccountStatementDto;
 import com.ewalletlab.walletservice.web.dto.SpendingReportResponse;
+import com.ewalletlab.walletservice.web.dto.StatementTransactionDto;
+import com.ewalletlab.walletservice.web.dto.TransactionPageDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,8 +25,11 @@ import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
@@ -66,8 +77,28 @@ public class WalletService {
     }
 
     public Wallet credit(UUID userId, BigDecimal amount, TransactionType type, String reference, String note) {
-        return withOptimisticLockRetry("credit", userId,
-            () -> mutationExecutor.creditOnce(userId, amount, type, reference, note));
+        return credit(userId, amount, type, reference, note, null);
+    }
+
+    /**
+     * Issue #22 — {@code idempotencyKey} overload. {@code null} (the 5-arg overload above, every
+     * caller before this ticket) behaves exactly as before. A non-null key gets {@link
+     * WalletMutationExecutor#creditOnce}'s pre-check fast path PLUS this catch as the fallback for
+     * the rare race where 2 calls with the same key slip past that pre-check at the same instant —
+     * the DB's UNIQUE constraint on {@code Transaction.idempotencyKey} rejects the loser's insert
+     * (the whole {@code creditOnce} transaction rolls back, including the wallet balance change —
+     * standard transactional atomicity, nothing partially applied), and this treats that as the
+     * SAME idempotent-success outcome as the pre-check would have, instead of letting a raw {@code
+     * DataIntegrityViolationException} escape to a 500.
+     */
+    public Wallet credit(UUID userId, BigDecimal amount, TransactionType type, String reference, String note,
+                          String idempotencyKey) {
+        try {
+            return withOptimisticLockRetry("credit", userId,
+                () -> mutationExecutor.creditOnce(userId, amount, type, reference, note, idempotencyKey));
+        } catch (DataIntegrityViolationException e) {
+            return idempotentSuccessOrRethrow(userId, idempotencyKey, e);
+        }
     }
 
     /** Throws IllegalStateException (mapped to 409 by the controller) if balance is insufficient,
@@ -75,13 +106,132 @@ public class WalletService {
      * confirmation (issue #15) that {@code stepUpConfirmed} doesn't yet satisfy. */
     public Wallet debit(UUID userId, BigDecimal amount, TransactionType type, String reference, String note,
                          boolean stepUpConfirmed) {
-        return withOptimisticLockRetry("debit", userId,
-            () -> mutationExecutor.debitOnce(userId, amount, type, reference, note, stepUpConfirmed));
+        return debit(userId, amount, type, reference, note, stepUpConfirmed, null);
+    }
+
+    /** Issue #22 — {@code idempotencyKey} overload, same reasoning as {@link #credit}'s. */
+    public Wallet debit(UUID userId, BigDecimal amount, TransactionType type, String reference, String note,
+                         boolean stepUpConfirmed, String idempotencyKey) {
+        try {
+            return withOptimisticLockRetry("debit", userId,
+                () -> mutationExecutor.debitOnce(userId, amount, type, reference, note, stepUpConfirmed, idempotencyKey));
+        } catch (DataIntegrityViolationException e) {
+            return idempotentSuccessOrRethrow(userId, idempotencyKey, e);
+        }
+    }
+
+    /** Only ever reached with a non-null {@code idempotencyKey} (callers that pass {@code null}
+     * never hit this constraint in the first place) — re-checks the key actually exists before
+     * declaring victory, so an UNRELATED {@code DataIntegrityViolationException} (shouldn't happen
+     * today, nothing else constrains this table, but defensive) still surfaces as a real error
+     * instead of being silently swallowed. */
+    private Wallet idempotentSuccessOrRethrow(UUID userId, String idempotencyKey, DataIntegrityViolationException e) {
+        if (idempotencyKey != null && transactionRepository.findByIdempotencyKey(idempotencyKey).isPresent()) {
+            log.info("credit/debit for idempotencyKey={} already applied by a concurrent caller — " +
+                "idempotent no-op, returning current wallet state", idempotencyKey);
+            return getOrCreateWallet(userId);
+        }
+        throw e;
     }
 
     public List<Transaction> history(UUID userId) {
         Wallet wallet = getOrCreateWallet(userId);
         return transactionRepository.findByWalletIdOrderByCreatedAtDesc(wallet.getId());
+    }
+
+    /** Issue #36 — "Bộ lọc lịch sử giao dịch thông minh". {@code type}/{@code direction}/{@code
+     * fromDate}/{@code toDate} are each independently optional (see {@code
+     * TransactionSpecifications} for how {@code null} filters are dropped from the query rather
+     * than matching nothing). {@code direction} is resolved to its {@link TransactionType} set via
+     * {@link TransactionType#allOfDirection} — the one place this enum→set mapping is computed,
+     * not re-derived here. */
+    public TransactionPageDto searchTransactions(UUID userId, TransactionType type, TransactionDirection direction,
+                                                  Instant fromDate, Instant toDate, Pageable pageable) {
+        Wallet wallet = getOrCreateWallet(userId);
+        Specification<Transaction> spec = Specification
+            .where(TransactionSpecifications.walletId(wallet.getId()))
+            .and(TransactionSpecifications.type(type))
+            .and(TransactionSpecifications.typeIn(direction == null ? null : TransactionType.allOfDirection(direction)))
+            .and(TransactionSpecifications.createdAtFrom(fromDate))
+            .and(TransactionSpecifications.createdAtTo(toDate));
+        Page<Transaction> page = transactionRepository.findAll(spec, pageable);
+        return TransactionPageDto.from(page);
+    }
+
+    /**
+     * Issue #36 — "Xuất sao kê tài chính". {@code month} is {@code "yyyy-MM"} (e.g. {@code
+     * "2026-09"}), parsed via {@link YearMonth} — throws a clean 400 (not a raw {@code
+     * DateTimeParseException}) on a malformed value.
+     *
+     * <p>Opening balance is computed from scratch as "everything that happened before this period
+     * started" ({@code Instant.EPOCH} to {@code periodStart}), NOT read off {@code Wallet.balance}
+     * at some earlier point in time — this lab's ledger has no separate "balance snapshot" table,
+     * and re-deriving from the append-only {@code Transaction} ledger is both simpler and
+     * self-verifying: see {@link AccountStatementDto}'s javadoc for why {@code closingBalance} is
+     * guaranteed (by construction, not by a separate assertion) to satisfy {@code openingBalance +
+     * totalCredits - totalDebits == closingBalance}. For the CURRENT month, {@code closingBalance}
+     * computed this way is exactly {@code Wallet.balance} right now (nothing in the ledger exists
+     * beyond "now" to disagree with it) — this is what the acceptance criteria's "khớp chính xác
+     * 100% với lịch sử giao dịch thực tế" is verified against in DESIGN.md.
+     */
+    public AccountStatementDto statement(UUID userId, String month) {
+        YearMonth yearMonth;
+        try {
+            yearMonth = YearMonth.parse(month);
+        } catch (DateTimeParseException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "month phải theo định dạng yyyy-MM, ví dụ 2026-09");
+        }
+        Wallet wallet = getOrCreateWallet(userId);
+        UUID walletId = wallet.getId();
+        Instant periodStart = yearMonth.atDay(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+        Instant periodEnd = yearMonth.plusMonths(1).atDay(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+
+        Set<TransactionType> inTypes = TransactionType.allOfDirection(TransactionDirection.IN);
+        Set<TransactionType> outTypes = TransactionType.allOfDirection(TransactionDirection.OUT);
+
+        BigDecimal openingBalance = transactionRepository
+            .sumAmountByWalletIdAndTypeInBetween(walletId, inTypes, Instant.EPOCH, periodStart)
+            .subtract(transactionRepository.sumAmountByWalletIdAndTypeInBetween(walletId, outTypes, Instant.EPOCH, periodStart));
+        BigDecimal totalCredits = transactionRepository
+            .sumAmountByWalletIdAndTypeInBetween(walletId, inTypes, periodStart, periodEnd);
+        BigDecimal totalDebits = transactionRepository
+            .sumAmountByWalletIdAndTypeInBetween(walletId, outTypes, periodStart, periodEnd);
+        BigDecimal closingBalance = openingBalance.add(totalCredits).subtract(totalDebits);
+
+        List<Transaction> periodTransactions = transactionRepository
+            .findByWalletIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(walletId, periodStart, periodEnd);
+        List<StatementTransactionDto> rows = new ArrayList<>(periodTransactions.size());
+        BigDecimal runningBalance = openingBalance;
+        for (Transaction tx : periodTransactions) {
+            runningBalance = tx.getType().direction() == TransactionDirection.IN
+                ? runningBalance.add(tx.getAmount())
+                : runningBalance.subtract(tx.getAmount());
+            rows.add(StatementTransactionDto.of(tx, runningBalance));
+        }
+
+        return new AccountStatementDto(walletId, userId, month, openingBalance, totalCredits, totalDebits,
+            closingBalance, rows.size(), rows, Instant.now());
+    }
+
+    /** Issue #36 — "Xuất định dạng file CSV". Header columns are exactly the ticket's required
+     * set (Mã GD, Thời gian, Loại, Số tiền, Số dư sau GD) — note (deliberate design choice,
+     * documented in DESIGN.md): "Số tiền" is SIGNED (negative for an OUT transaction) rather than
+     * the ledger's always-positive {@code Transaction.amount}, since a signed column is what makes
+     * a CSV usable for a running reconciliation total in a spreadsheet without the reader having to
+     * separately know each row's direction. No need to escape {@code note}/{@code reference} —
+     * they're deliberately NOT included as columns (ticket's spec is exactly these 5). */
+    public String statementCsv(UUID userId, String month) {
+        AccountStatementDto statement = statement(userId, month);
+        StringBuilder csv = new StringBuilder("Mã GD,Thời gian,Loại,Số tiền,Số dư sau GD\n");
+        for (StatementTransactionDto row : statement.transactions()) {
+            BigDecimal signedAmount = row.direction() == TransactionDirection.IN ? row.amount() : row.amount().negate();
+            csv.append(row.id()).append(',')
+                .append(row.createdAt()).append(',')
+                .append(row.type()).append(',')
+                .append(signedAmount.toPlainString()).append(',')
+                .append(row.balanceAfter().toPlainString()).append('\n');
+        }
+        return csv.toString();
     }
 
     /**

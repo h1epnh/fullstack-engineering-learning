@@ -3,6 +3,7 @@ package com.ewalletlab.walletservice.repository;
 import com.ewalletlab.walletservice.domain.Transaction;
 import com.ewalletlab.walletservice.domain.TransactionType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -10,10 +11,22 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
-public interface TransactionRepository extends JpaRepository<Transaction, UUID> {
+/** {@code JpaSpecificationExecutor} (issue #36) backs {@code GET
+ * /wallets/{userId}/transactions/search}'s optional type/direction/date-range filters +
+ * pagination — see {@code TransactionSpecifications} for the actual predicate-building. Plain
+ * Spring Data derived-query methods can't express "any of these filters, each independently
+ * optional" without a combinatorial explosion of method names; a dynamic JPQL string has the same
+ * problem without the type-safety. Specifications are the standard Spring Data answer to exactly
+ * this shape. */
+public interface TransactionRepository extends JpaRepository<Transaction, UUID>, JpaSpecificationExecutor<Transaction> {
     List<Transaction> findByWalletIdOrderByCreatedAtDesc(UUID walletId);
+
+    /** Issue #22 — idempotency lookup backing {@code WalletMutationExecutor}/{@code WalletService}'s
+     * dedupe check (see {@code Transaction.idempotencyKey}'s javadoc). */
+    Optional<Transaction> findByIdempotencyKey(String idempotencyKey);
 
     /**
      * Cumulative amount for a wallet across a set of transaction types since a given instant —
@@ -26,6 +39,27 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
     BigDecimal sumAmountByWalletIdAndTypeInSince(@Param("walletId") UUID walletId,
                                                   @Param("types") Collection<TransactionType> types,
                                                   @Param("since") Instant since);
+
+    /**
+     * Issue #36 — half-open interval {@code [fromInclusive, toExclusive)}, backing both the
+     * opening-balance computation (types IN a direction, {@code fromInclusive = Instant.EPOCH},
+     * {@code toExclusive = periodStart}) and the in-period credit/debit totals ({@code
+     * fromInclusive = periodStart}, {@code toExclusive = next month's start}) on {@code GET
+     * /wallets/{userId}/statement}. Deliberately NOT reusing {@link #sumAmountByWalletIdAndTypeInSince}
+     * (open-ended "since now") — a statement needs a bounded window, not "everything up to now".
+     */
+    @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t "
+        + "WHERE t.walletId = :walletId AND t.type IN :types AND t.createdAt >= :fromInclusive AND t.createdAt < :toExclusive")
+    BigDecimal sumAmountByWalletIdAndTypeInBetween(@Param("walletId") UUID walletId,
+                                                    @Param("types") Collection<TransactionType> types,
+                                                    @Param("fromInclusive") Instant fromInclusive,
+                                                    @Param("toExclusive") Instant toExclusive);
+
+    /** Issue #36 — the statement's full detail table: every transaction in the period, oldest
+     * first (so a running balance can be accumulated forward from the opening balance in display
+     * order). */
+    List<Transaction> findByWalletIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(
+        UUID walletId, Instant fromInclusive, Instant toExclusive);
 
     /**
      * Issue #16 — breakdown-by-type backing {@code GET /wallets/{userId}/spending-report}. Group-by

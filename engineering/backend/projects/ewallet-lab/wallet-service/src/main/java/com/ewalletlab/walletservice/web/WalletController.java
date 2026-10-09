@@ -1,21 +1,30 @@
 package com.ewalletlab.walletservice.web;
 
 import com.ewalletlab.walletservice.domain.Transaction;
+import com.ewalletlab.walletservice.domain.TransactionDirection;
+import com.ewalletlab.walletservice.domain.TransactionType;
 import com.ewalletlab.walletservice.domain.Wallet;
 import com.ewalletlab.walletservice.service.StepUpRequiredException;
 import com.ewalletlab.walletservice.service.WalletService;
+import com.ewalletlab.walletservice.web.dto.AccountStatementDto;
 import com.ewalletlab.walletservice.web.dto.AdjustBalanceRequest;
 import com.ewalletlab.walletservice.web.dto.SpendingReportResponse;
 import com.ewalletlab.walletservice.web.dto.StepUpCheckResponse;
+import com.ewalletlab.walletservice.web.dto.TransactionPageDto;
 import com.ewalletlab.walletservice.web.dto.WalletResponse;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -45,6 +54,52 @@ public class WalletController {
         return walletService.history(userId);
     }
 
+    /** Issue #36 — "Bộ lọc lịch sử giao dịch thông minh". {@code type}/{@code direction}/{@code
+     * fromDate}/{@code toDate} đều optional, kết hợp AND nếu truyền nhiều hơn 1 — xem {@code
+     * WalletService#searchTransactions}'s javadoc. {@code page}/{@code size}/{@code sort} bind tự
+     * động vào {@link Pageable} (Spring Boot's {@code SpringDataWebAutoConfiguration}, không cần
+     * khai báo thủ công từng param) — mặc định {@code size=20}, sort theo {@code createdAt} giảm
+     * dần (giao dịch mới nhất trước, giống {@code getTransactions} ở trên). */
+    @GetMapping("/{userId}/transactions/search")
+    public TransactionPageDto searchTransactions(@PathVariable UUID userId,
+                                                  @RequestParam(required = false) TransactionType type,
+                                                  @RequestParam(required = false) TransactionDirection direction,
+                                                  @RequestParam(required = false) Instant fromDate,
+                                                  @RequestParam(required = false) Instant toDate,
+                                                  @PageableDefault(size = 20, sort = "createdAt",
+                                                      direction = org.springframework.data.domain.Sort.Direction.DESC)
+                                                  Pageable pageable) {
+        return walletService.searchTransactions(userId, type, direction, fromDate, toDate, pageable);
+    }
+
+    /** Issue #36 — "Xuất sao kê tài chính". {@code month} là {@code yyyy-MM} (vd {@code 2026-09}) —
+     * xem {@code WalletService#statement}'s javadoc cho cách tính opening/closing balance. */
+    @GetMapping("/{userId}/statement")
+    public AccountStatementDto statement(@PathVariable UUID userId, @RequestParam String month) {
+        return walletService.statement(userId, month);
+    }
+
+    /** Issue #36 — xuất CSV cùng dữ liệu với {@link #statement}, format {@code Content-Type:
+     * text/csv} + header cột đúng tên tiếng Việt yêu cầu trong Acceptance criteria (Mã GD, Thời
+     * gian, Loại, Số tiền, Số dư sau GD). {@code format=json} (hoặc bỏ trống) trả về cùng {@link
+     * AccountStatementDto} như {@link #statement} — giữ đúng Task #2 của ticket ("CSV hoặc JSON"),
+     * không bắt caller phải gọi 2 endpoint khác nhau cho 2 format. */
+    @GetMapping("/{userId}/statement/export")
+    public ResponseEntity<?> exportStatement(@PathVariable UUID userId, @RequestParam String month,
+                                              @RequestParam(defaultValue = "csv") String format) {
+        if ("json".equalsIgnoreCase(format)) {
+            return ResponseEntity.ok(walletService.statement(userId, month));
+        }
+        if (!"csv".equalsIgnoreCase(format)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "format phải là 'csv' hoặc 'json'");
+        }
+        String csv = walletService.statementCsv(userId, month);
+        return ResponseEntity.ok()
+            .contentType(MediaType.parseMediaType("text/csv"))
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"statement-" + month + ".csv\"")
+            .body(csv);
+    }
+
     /**
      * Issue #16 — "Quản lý chi tiêu" MVP báo cáo tự động, read-only trên ledger có sẵn (không bảng
      * mới, không service mới). {@code period} bắt buộc, chỉ nhận {@code week}/{@code month} — xem
@@ -55,18 +110,21 @@ public class WalletController {
         return walletService.spendingReport(userId, period);
     }
 
-    /** Internal — called by transfer-service (credit receiver) and, indirectly via Kafka, topup-service. */
+    /** Internal — called by transfer-service (credit receiver), indirectly via Kafka by
+     * topup-service, and (issue #22) fund-service's outbox relay with an {@code idempotencyKey}. */
     @PostMapping("/{userId}/credit")
     public WalletResponse credit(@PathVariable UUID userId, @Valid @RequestBody AdjustBalanceRequest request) {
-        Wallet wallet = walletService.credit(userId, request.amount(), request.type(), request.reference(), request.note());
+        Wallet wallet = walletService.credit(userId, request.amount(), request.type(), request.reference(),
+            request.note(), request.idempotencyKey());
         return WalletResponse.from(wallet);
     }
 
-    /** Internal — called by transfer-service (debit sender) and bill-payment-service. */
+    /** Internal — called by transfer-service (debit sender), bill-payment-service, and (issue #22)
+     * fund-service's outbox relay with an {@code idempotencyKey}. */
     @PostMapping("/{userId}/debit")
     public WalletResponse debit(@PathVariable UUID userId, @Valid @RequestBody AdjustBalanceRequest request) {
         Wallet wallet = walletService.debit(userId, request.amount(), request.type(), request.reference(),
-            request.note(), request.isStepUpConfirmed());
+            request.note(), request.isStepUpConfirmed(), request.idempotencyKey());
         return WalletResponse.from(wallet);
     }
 
