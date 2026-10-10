@@ -23,6 +23,8 @@ import { PaymentLinkCreate } from './screens/PaymentLinkCreate';
 import { PaymentLinkCreated } from './screens/PaymentLinkCreated';
 import { PaymentLinkPay } from './screens/PaymentLinkPay';
 import { PaymentReminderHome } from './screens/PaymentReminderHome';
+import { RecurringTransfers } from './screens/RecurringTransfers';
+import { SavedPayees } from './screens/SavedPayees';
 import { SplitBillCreate } from './screens/SplitBillCreate';
 import { SplitBillCreated } from './screens/SplitBillCreated';
 import { SplitBillGroup } from './screens/SplitBillGroup';
@@ -35,7 +37,11 @@ type Step =
   | { name: 'amount'; recipient: UserResponse }
   | { name: 'bank'; bank: VietQrBank }
   | { name: 'bank-status'; orderId: string }
-  | { name: 'done'; toName: string; amount: number; newBalance: number }
+  | { name: 'done'; toName: string; toPhone: string; amount: number; newBalance: number }
+  // Issue #31 — recurring-transfer
+  | { name: 'recurring-transfers' }
+  // Issue #32 — saved-payees
+  | { name: 'saved-payees' }
   // Issue #3 — payment-link
   | { name: 'payment-link-create' }
   | { name: 'payment-link-created'; link: PaymentRequest }
@@ -99,7 +105,7 @@ export default function App({
   async function submitTransfer(recipient: UserResponse, amount: number, stepUpConfirmed: boolean): Promise<string | null> {
     try {
       const res = await transferService.transfer(session.id, recipient.phone, amount, stepUpConfirmed);
-      setStep({ name: 'done', toName: res.toName, amount, newBalance: res.newBalance });
+      setStep({ name: 'done', toName: res.toName, toPhone: recipient.phone, amount, newBalance: res.newBalance });
       return null;
     } catch (e) {
       if (e instanceof ApiError && e.status === STEP_UP_REQUIRED_STATUS) {
@@ -155,9 +161,18 @@ export default function App({
   if (step.name === 'home') {
     return (
       <TransferHome
+        selfUserId={session.id}
         onSearch={handleSearch}
         onSelectBank={(bank) => setStep({ name: 'bank', bank })}
         onComingSoon={(feature) => {
+          if (feature === 'saved-payees') {
+            setStep({ name: 'saved-payees' });
+            return;
+          }
+          if (feature === 'recurring-transfer') {
+            setStep({ name: 'recurring-transfers' });
+            return;
+          }
           // issue #3 + #8: these 2 tiles are now real (payment-request-service), not comingSoon.
           if (feature === 'payment-link') {
             setStep({ name: 'payment-link-create' });
@@ -181,6 +196,25 @@ export default function App({
           }
           onComingSoon(feature);
         }}
+      />
+    );
+  }
+
+  if (step.name === 'saved-payees') {
+    return (
+      <SavedPayees
+        selfUserId={session.id}
+        onSelectPayee={(phone) => handleSearch(phone)}
+        onBack={() => setStep({ name: 'home' })}
+      />
+    );
+  }
+
+  if (step.name === 'recurring-transfers') {
+    return (
+      <RecurringTransfers
+        selfUserId={session.id}
+        onBack={() => setStep({ name: 'home' })}
       />
     );
   }
@@ -325,5 +359,14 @@ export default function App({
     return <StepUpModal message={step.message} onConfirm={step.onConfirm} onCancel={step.onCancel} />;
   }
 
-  return <TransferDone toName={step.toName} amount={step.amount} newBalance={step.newBalance} onDone={onDone} />;
+  return (
+    <TransferDone
+      toName={step.toName}
+      toPhone={step.toPhone}
+      selfUserId={session.id}
+      amount={step.amount}
+      newBalance={step.newBalance}
+      onDone={onDone}
+    />
+  );
 }

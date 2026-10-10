@@ -28,10 +28,13 @@ public class TransferService {
 
     private final UserServiceClient userServiceClient;
     private final WalletServiceClient walletServiceClient;
+    private final SavedPayeeService savedPayeeService;
 
-    public TransferService(UserServiceClient userServiceClient, WalletServiceClient walletServiceClient) {
+    public TransferService(UserServiceClient userServiceClient, WalletServiceClient walletServiceClient,
+                           SavedPayeeService savedPayeeService) {
         this.userServiceClient = userServiceClient;
         this.walletServiceClient = walletServiceClient;
+        this.savedPayeeService = savedPayeeService;
     }
 
     public TransferResponseDto transfer(TransferRequestDto request) {
@@ -55,6 +58,13 @@ public class TransferService {
                 "Hoàn tiền do chuyển thất bại");
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                 "Chuyển tiền thất bại, số tiền đã được hoàn lại vào ví");
+        }
+
+        try {
+            savedPayeeService.recordTransfer(request.fromUserId(), request.toPhone());
+        } catch (Exception e) {
+            log.warn("Failed to record transfer in saved payees for sender {} payee {}: {}",
+                request.fromUserId(), request.toPhone(), e.getMessage());
         }
 
         return new TransferResponseDto(request.fromUserId(), recipient.id(), recipient.name(), senderAfterDebit.balance());

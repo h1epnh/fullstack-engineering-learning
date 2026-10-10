@@ -1,12 +1,14 @@
-import { type VietQrBank, vietQrService } from '@ewallet-lab/api-client';
+import { type SavedPayee, type VietQrBank, transferService, vietQrService } from '@ewallet-lab/api-client';
 import { Button, Icon, Screen, TextField } from '@ewallet-lab/ui';
 import { useEffect, useState } from 'react';
 import { QrScanner } from './QrScanner';
 
-/** `wired: true` items are real (payment-request-service for #3/#8, lucky-money-service for #10)
- * — App.tsx's onComingSoon wrapper intercepts their key before it ever reaches the shell's
- * ComingSoon screen. Everything else here is still genuinely comingSoon. */
+/** `wired: true` items are real (payment-request-service for #3/#8, lucky-money-service for #10,
+ * transfer-service for #31/#32) — App.tsx's onComingSoon wrapper intercepts their key before it
+ * ever reaches the shell's ComingSoon screen. Everything else here is still genuinely comingSoon. */
 const OTHER_SERVICES: { key: string; icon: string; label: string; wired?: boolean }[] = [
+  { key: 'saved-payees', icon: 'contacts', label: 'Danh bạ', wired: true },
+  { key: 'recurring-transfer', icon: 'schedule', label: 'Lịch chuyển', wired: true },
   { key: 'send-card', icon: 'card_giftcard', label: 'Gửi thiệp' },
   { key: 'split-bill', icon: 'call_split', label: 'Chia tiền', wired: true },
   { key: 'payment-reminder', icon: 'notifications_active', label: 'Nhắc trả tiền', wired: true },
@@ -46,10 +48,12 @@ function parseEwalletLabQrPhone(raw: string): string | null {
  * for exactly this (identifying a bank in a transfer/QR flow), not a bundled trademark asset.
  */
 export function TransferHome({
+  selfUserId,
   onSearch,
   onSelectBank,
   onComingSoon,
 }: {
+  selfUserId?: string;
   onSearch: (phone: string) => Promise<string | null>;
   onSelectBank: (bank: VietQrBank) => void;
   onComingSoon: (feature: string) => void;
@@ -59,10 +63,14 @@ export function TransferHome({
   const [loading, setLoading] = useState(false);
   const [banks, setBanks] = useState<VietQrBank[]>([]);
   const [scanning, setScanning] = useState(false);
+  const [savedPayees, setSavedPayees] = useState<SavedPayee[]>([]);
 
   useEffect(() => {
     vietQrService.listBanks().then(setBanks);
-  }, []);
+    if (selfUserId) {
+      transferService.listPayees(selfUserId).then(setSavedPayees).catch(() => {});
+    }
+  }, [selfUserId]);
 
   const localError = phone.length > 0 && !PHONE_RE.test(phone) ? 'Số điện thoại chưa hợp lệ.' : undefined;
 
@@ -118,7 +126,7 @@ export function TransferHome({
           background: 'none',
           border: 0,
           padding: '4px 0',
-          marginBottom: 24,
+          marginBottom: 16,
           color: 'var(--el-accent-ink)',
           fontSize: 13,
           fontWeight: 700,
@@ -129,6 +137,98 @@ export function TransferHome({
         Quét mã QR
       </button>
       {scanning && <QrScanner onDetected={handleScanned} onClose={() => setScanning(false)} />}
+
+      {/* Quick Pay Bar (Issue #32) */}
+      {savedPayees.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>Người nhận đã lưu / yêu thích</span>
+            <button
+              onClick={() => onComingSoon('saved-payees')}
+              style={{
+                background: 'none',
+                border: 0,
+                color: 'var(--el-accent-ink)',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                padding: 0,
+              }}
+            >
+              Xem tất cả ({savedPayees.length})
+            </button>
+          </div>
+          <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 6 }}>
+            {savedPayees.slice(0, 6).map((payee) => {
+              const initial = (payee.nickname || payee.payeeName).charAt(0).toUpperCase();
+              return (
+                <div
+                  key={payee.id}
+                  onClick={() => {
+                    setPhone(payee.payeePhone);
+                    search(payee.payeePhone);
+                  }}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 4,
+                    cursor: 'pointer',
+                    minWidth: 54,
+                    maxWidth: 64,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: '50%',
+                      background: payee.isFavorite ? '#fffbe6' : 'var(--el-card-badge-bg, #f0f5ff)',
+                      border: payee.isFavorite ? '2px solid #faad14' : '1px solid #d9d9d9',
+                      color: 'var(--el-accent-ink, #1d39c4)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 700,
+                      fontSize: 16,
+                      position: 'relative',
+                    }}
+                  >
+                    {initial}
+                    {payee.isFavorite && (
+                      <span
+                        style={{
+                          position: 'absolute',
+                          bottom: -2,
+                          right: -2,
+                          color: '#faad14',
+                          background: '#fff',
+                          borderRadius: '50%',
+                          display: 'flex',
+                        }}
+                      >
+                        <Icon name="star" size={12} />
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      textAlign: 'center',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      width: '100%',
+                    }}
+                  >
+                    {payee.nickname || payee.payeeName}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <p style={{ fontSize: 13.5, fontWeight: 700, margin: '0 0 10px' }}>Chuyển tiền đến</p>
       <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>

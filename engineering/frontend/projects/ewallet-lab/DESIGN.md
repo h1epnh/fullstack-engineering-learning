@@ -854,3 +854,33 @@ hardcode message rời rạc") — 409 của check-in (`"Bạn đã điểm danh
   `DAILY_TRANSFER` chuyển `COMPLETED` đúng.
 - **Chưa verify bằng browser automation thật** (click UI, xem 7 ô streak render đúng màu) — không
   có tool đó trong phiên này, cùng loại gap đã ghi nhận ở các issue #3/#4/#8/#10/#36.
+
+## 24. Danh bạ người thụ hưởng & Lập lịch chuyển tiền định kỳ (issues #31, #32) — `mfe-transfer`
+
+Mở rộng `mfe-transfer` thành trung tâm quản lý giao dịch P2P nâng cao với 2 màn hình mới (`SavedPayees.tsx`, `RecurringTransfers.tsx`) và tích hợp trực tiếp vào màn hình chính `TransferHome.tsx` cùng màn hình kết quả `TransferDone.tsx`.
+
+### 1. Danh bạ người thụ hưởng (`SavedPayees.tsx` — Issue #32)
+
+- **Giao diện & Chức năng**:
+  - Danh sách người nhận hiển thị avatar tạo từ họ tên, nickname (nếu có), SĐT, icon yêu thích (ngôi sao vàng).
+  - Thanh tìm kiếm tức thời theo tên/SĐT/nickname.
+  - Quick action: Chuyển tiền nhanh ngay khi bấm vào người nhận, tự động điều hướng sang màn hình chuyển tiền với số điện thoại được điền sẵn.
+  - Quản lý danh bạ: Thêm người nhận mới (tự động tra cứu tên từ `user-service`), cập nhật nickname, toggle yêu thích, xoá khỏi danh bạ kèm modal xác nhận an toàn.
+- **Tích hợp vào Home**: Thanh "Chuyển nhanh cho người quen" cuộn ngang (horizontal avatar scroll) đặt ngay trên đầu `TransferHome.tsx` hiển thị các người nhận yêu thích và giao dịch gần đây, cho phép chuyển tiền 1 chạm.
+- **Tích hợp vào Kết quả**: Nút "Lưu người nhận vào danh bạ" xuất hiện tại `TransferDone.tsx` sau khi giao dịch P2P thành công (nếu người nhận chưa có trong danh bạ), mở modal cho phép đặt nickname ngay lập tức.
+
+### 2. Chuyển tiền định kỳ (`RecurringTransfers.tsx` — Issue #31)
+
+- **Giao diện & Chức năng**:
+  - Thẻ hiển thị các lịch chuyển tiền theo tần suất: Hàng ngày, Hàng tuần (kèm thứ trong tuần), Hàng tháng (kèm ngày trong tháng).
+  - Trạng thái rõ ràng với `StatusPill`: Đang bật (`ACTIVE` - xanh lá), Tạm dừng (`PAUSED` - vàng cam), Đã huỷ (`CANCELLED` - xám).
+  - Nút chuyển trạng thái nhanh (Tạm dừng / Kích hoạt lại / Huỷ lịch).
+  - Nút "Lịch sử thực thi" mở modal chi tiết các lần chạy trong quá khứ kèm trạng thái `SUCCESS` / `FAILED_INSUFFICIENT_FUNDS` / `FAILED_STEP_UP_REQUIRED` và thông điệp lỗi cụ thể.
+  - Form tạo lịch mới: Nhập SĐT, số tiền, lời nhắn, chọn chu kỳ và ngày kích hoạt. Tích hợp cảnh báo rõ ràng về giới hạn QĐ 2345/QĐ-NHNN (chỉ cho phép định kỳ tự động ≤ 10.000.000đ).
+
+### 3. Đã verify
+
+- Build sạch `npm run build -w mfe-transfer` (exit 0, Vite rollup hoàn tất).
+- Rebuild docker image `ewallet-lab/mfe-transfer:local` và rollout thành công lên Minikube.
+- Độc lập kiểm thử E2E backend thông qua Ingress Nginx (18080) đạt 100% 13/13 scenarios.
+

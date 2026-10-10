@@ -18,7 +18,7 @@ logic sản phẩm ví phổ quát, không giả vờ có nguồn.
 | `wallet-service` | Java/Spring Boot | Chủ sở hữu số dư + sổ giao dịch (ledger) — **nguồn sự thật duy nhất về tiền trong ví**, expose API nội bộ credit/debit cho service khác gọi | — |
 | `topup-service` | Java/Spring Boot | Orchestrator nạp/rút tiền, sở hữu `LinkedBankAccount`, gọi `mock-bank-gateway` | **Mô phỏng theo MoMo Collection Link + IPN thật** (xác minh từ developers.momo.vn) |
 | `mock-bank-gateway` | Go | Đóng vai "ngân hàng liên kết" — nhận request kiểu Collection Link, trả `payUrl`-style ack, sau đó gọi ngược IPN webhook | Field/HMAC dựa trên MoMo Collection Link API thật |
-| `transfer-service` | Java/Spring Boot | Orchestrator P2P transfer nội bộ (saga: debit người gửi → credit người nhận qua `wallet-service`) | — (P2P giữa 2 user cùng hệ thống không có spec MoMo công khai) |
+| `transfer-service` | Java/Spring Boot | Orchestrator P2P transfer nội bộ; quản lý Danh bạ người thụ hưởng (Saved Payees - issue #32) & Lập lịch chuyển tiền định kỳ (Recurring Transfers - issue #31), DB riêng `ewallet_transfer` | — (P2P giữa 2 user cùng hệ thống không có spec MoMo công khai) |
 | `bill-payment-service` | Java/Spring Boot | Tra cứu + thanh toán hoá đơn (mock biller), sở hữu DB riêng `ewallet_bill_payment` | — (bill aggregation là góc nhìn nội bộ MoMo, không public — toàn bộ service là mock, xem mục "Luồng bill payment") |
 | `payment-request-service` | Java/Spring Boot | Sở hữu `PaymentRequest` (link nhận tiền công khai — issue #3 — và nhắc trả tiền 1-1 nội bộ — issue #8), DB riêng `ewallet_payment_request`; tự nó **không** gọi wallet-service — mọi lần thanh toán đều gọi lại `transfer-service`'s `/transfers` thật | Payment-link: cấu trúc adapted từ MoMo Collection Link (merchant-side, KHÔNG phải spec P2P cá nhân đã xác nhận — xem mục dưới). Payment-reminder: luồng 4 bước đã xác minh trực tiếp từ momo.vn (xem mục dưới) |
 | `lucky-money-service` | Java/Spring Boot | Sở hữu `LuckyMoney` (lì xì 1-1 nội bộ, escrow thật — issue #10), DB riêng `ewallet_lucky_money`; **gọi thẳng `wallet-service`'s `/credit`/`/debit`** (khác `payment-request-service` — không đi qua `transfer-service` vì đây là escrow 2 bước theo thời gian, không phải "transfer ngay") | Hạn mức 1.000đ–20.000.000đ/lần và cơ chế 48h/tự động hoàn tiền đã xác minh trực tiếp từ momo.vn (xem mục dưới) |
@@ -1999,3 +1999,78 @@ chỉ dựa vào status code, không đọc message server), nhưng ghi nhận l
 `./gradlew clean build` sạch (`BUILD SUCCESSFUL`, bao gồm `CheckinCalculatorTest` mới + test race
 ≥10 concurrent trong `LoyaltyConcurrencyTest`). Image `ewallet-lab/loyalty-service:local` (digest
 `sha256:b479e68f5c9b...`), `imageID` pod khớp, `rollout status` Ready.
+
+## Danh bạ người thụ hưởng (issue #32) & Chuyển tiền định kỳ (issue #31) — `transfer-service`
+
+Tích hợp trực tiếp vào `transfer-service` với database riêng `ewallet_transfer` (được cấp qua Postgres pod chung, Hikari pool `maximum-pool-size=5` đúng chuẩn Issue #24). Phương án này gom toàn bộ nghiệp vụ liên quan đến luồng P2P transfer (danh bạ, lịch định kỳ, thực thi chuyển tiền) về cùng 1 bounded context `transfer-service`, không làm phình to số lượng pod trên cụm Minikube.
+
+### 1. Danh bạ người thụ hưởng (`SavedPayee`) — Issue #32
+
+- **Mục tiêu**: Lưu lại danh sách người nhận quen thuộc kèm nickname cá nhân hoá, đánh dấu yêu thích (`isFavorite`) và tự động cập nhật thời điểm giao dịch gần nhất (`lastTransferredAt`).
+- **Entity & Schema**: Bảng `saved_payees` trong `ewallet_transfer`:
+  - `id`: UUID Primary Key
+  - `user_id`: UUID của chủ danh bạ
+  - `payee_phone`: SĐT người nhận (chuẩn hoá)
+  - `payee_name`: Họ tên người nhận (tự động tra cứu từ `user-service` khi lưu)
+  - `nickname`: Biệt danh người dùng tự đặt
+  - `is_favorite`: Đánh dấu yêu thích (đưa lên đầu danh sách)
+  - `last_transferred_at`: Timestamp giao dịch gần nhất
+  - `created_at`, `updated_at`: Timestamp quản lý
+  - `UNIQUE(user_id, payee_phone)`: Ngăn chặn lưu trùng lặp 1 người nhận nhiều lần (trả `409 Conflict`).
+- **Ràng buộc nghiệp vụ**:
+  - Không cho phép tự lưu số điện thoại của chính mình (`400 Bad Request`).
+  - Khi thực hiện giao dịch chuyển tiền thành công qua `POST /transfers`, `TransferService` tự động kiểm tra xem người nhận có trong danh bạ của người gửi hay không. Nếu có, tự động cập nhật `lastTransferredAt = Instant.now()`.
+- **API endpoints**:
+  - `GET /payees/{userId}`: Lấy danh bạ người nhận, sắp xếp theo `isFavorite DESC, lastTransferredAt DESC NULLS LAST, createdAt DESC`.
+  - `POST /payees/{userId}`: Thêm người nhận mới vào danh bạ (kèm tự tra cứu họ tên từ `user-service`).
+  - `PUT /payees/{userId}/{id}`: Cập nhật nickname hoặc toggle trạng thái yêu thích.
+  - `DELETE /payees/{userId}/{id}`: Xoá người nhận khỏi danh bạ.
+
+### 2. Lập lịch chuyển tiền định kỳ (`RecurringTransfer`) — Issue #31
+
+- **Mục tiêu**: Tự động chuyển tiền theo lịch biểu (Hàng ngày `DAILY`, Hàng tuần `WEEKLY`, Hàng tháng `MONTHLY`) cho các nhu cầu như gửi tiền trợ cấp gia đình, đóng học phí, thanh toán chi phí định kỳ.
+- **Entity & Schema**:
+  - Bảng `recurring_transfers`:
+    - `id`: UUID Primary Key
+    - `sender_id`: UUID người gửi
+    - `recipient_phone`: SĐT người nhận
+    - `amount`: Số tiền chuyển mỗi kỳ
+    - `message`: Lời nhắn chuyển tiền
+    - `frequency`: `DAILY` | `WEEKLY` | `MONTHLY`
+    - `day_of_month`: Ngày trong tháng (cho `MONTHLY`, 1-31)
+    - `day_of_week`: Thứ trong tuần (cho `WEEKLY`, 1=Thứ 2 đến 7=Chủ nhật)
+    - `status`: `ACTIVE` | `PAUSED` | `CANCELLED`
+    - `next_execution_date`: `LocalDate` của kỳ chuyển tiếp theo
+    - `last_execution_date`: `LocalDate` của lần chuyển gần nhất
+  - Bảng `recurring_transfer_logs`:
+    - `id`: UUID Primary Key
+    - `schedule_id`: Foreign key trỏ về lịch chuyển tiền
+    - `executed_at`: Timestamp thực thi
+    - `status`: `SUCCESS` | `FAILED_INSUFFICIENT_FUNDS` | `FAILED_STEP_UP_REQUIRED` | `FAILED_OTHER`
+    - `amount`: Số tiền thực thi
+    - `error_message`: Lý do lỗi chi tiết (nếu có)
+- **Ràng buộc an toàn & Idempotency**:
+  - **Giới hạn Step-Up QĐ 2345/QĐ-NHNN**: Lịch chuyển tiền tự động có số tiền > 10.000.000 VND KHÔNG ĐƯỢC PHÉP tự động trừ tiền trong background (vì vượt ngưỡng bắt buộc sinh trắc học khuôn mặt sống theo QĐ 2345). Scheduler tự động ghi nhận log `FAILED_STEP_UP_REQUIRED` và từ chối chạy.
+  - **Xử lý số dư không đủ**: Nếu ví người gửi không đủ số dư tại thời điểm chạy, hệ thống không gây sập (fail safe), ghi nhận log `FAILED_INSUFFICIENT_FUNDS`, bảo toàn tính toàn vẹn dữ liệu.
+  - **Tính Idempotent**: Scheduler kiểm tra `lastExecutionDate == today`. Nếu đã chạy thành công trong ngày hôm nay, lần trigger thứ 2 sẽ tự động bỏ qua (`skipped`), tuyệt đối không chuyển tiền 2 lần.
+  - Khi hoàn thành thành công, `lastExecutionDate = today` và `nextExecutionDate` được cộng dồn theo tần suất: `+1 day` (DAILY), `+7 days` (WEEKLY), `+1 month` (MONTHLY).
+- **API endpoints**:
+  - `GET /recurring-transfers/{senderId}`: Danh sách lịch chuyển tiền định kỳ của user.
+  - `POST /recurring-transfers`: Tạo mới lịch chuyển tiền định kỳ.
+  - `PUT /recurring-transfers/{id}/status`: Đổi trạng thái (`PAUSED`, `ACTIVE`, `CANCELLED`).
+  - `GET /recurring-transfers/{id}/logs`: Lịch sử các lần thực thi định kỳ.
+  - `POST /recurring-transfers/trigger-run`: Admin trigger quét và thực thi các lịch đến hạn hôm nay.
+
+### 3. Độc lập kiểm thử E2E (scratch/test_verify_issues_31_32.py)
+
+Đã chạy qua Ingress Nginx thật trên cổng 18080 với 13 bước kiểm thử:
+- Lưu danh bạ, tự tra cứu tên từ `user-service`.
+- Sắp xếp thứ tự yêu thích / thời điểm giao dịch.
+- Chặn tự lưu chính mình (400) và chặn trùng SĐT (409).
+- Chuyển P2P thật và tự động cập nhật `lastTransferredAt`.
+- Lập lịch định kỳ hàng tuần, trigger chạy tự động (debit A -> credit B).
+- Chạy trigger lần 2: Đảm bảo Idempotency không double transfer.
+- Kiểm thử số dư không đủ: ghi nhận `FAILED_INSUFFICIENT_FUNDS`.
+- Kiểm thử ngưỡng 10M QĐ 2345: chặn an toàn với `FAILED_STEP_UP_REQUIRED`.
+- Tạm dừng lịch (`PAUSED`) thành công.
+
