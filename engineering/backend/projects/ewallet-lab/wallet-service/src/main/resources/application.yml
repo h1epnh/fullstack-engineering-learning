@@ -64,3 +64,8 @@ ewallet-lab:
   # FamilyWalletServiceClient's javadoc for the fail-open behavior if this is unreachable.
   family-wallet-service:
     base-url: ${FAMILY_WALLET_SERVICE_URL:http://localhost:8098}
+  # Issue #40 — eKYC tier limit (5.000.000đ/tháng cho tài khoản UNVERIFIED)
+  unverified-monthly-limit: ${UNVERIFIED_MONTHLY_LIMIT:5000000}
+  user-service:
+    base-url: ${USER_SERVICE_URL:http://localhost:8090}
+

@@ -985,5 +985,28 @@ Tích hợp sản phẩm Thiệp mừng điện tử & Lì xì theo chủ đề 
 - Rebuild docker image `ewallet-lab/mfe-transfer:local` và rollout thành công lên Minikube.
 - Độc lập kiểm thử E2E backend/frontend thông qua Ingress Nginx (18080) đạt 100% 13/13 test suites.
 
+## 29. Định danh cấp độ ví eKYC & Hạn mức xác thực (issue #40) — `Home.tsx` trong `mfe-wallet`
+
+Tích hợp giao diện quản lý cấp độ định danh (eKYC tier) vào màn hình chính `Home.tsx` của `mfe-wallet`.
+
+### 1. Banner cảnh báo trạng thái Chưa định danh (`UNVERIFIED`)
+- Khi người dùng ở trạng thái `UNVERIFIED`, màn hình chính hiển thị banner cảnh báo màu vàng cam nổi bật:
+  - Thông điệp: *"Ví chưa định danh eKYC — Hạn mức tối đa 5.000.000đ/tháng. Xác thực CCCD để mở hạn mức 100.000.000đ/tháng."*
+  - Nút bấm *"Xác thực ngay"* mở modal giả lập định danh eKYC.
+- Khi người dùng đã định danh (`VERIFIED`), hiển thị huy hiệu xanh lá cây tinh gọn: *"✓ eKYC Đã xác thực"* ngay cạnh tên người dùng.
+
+### 2. Hộp thoại xác thực định danh (eKYC Verification Modal)
+- Người dùng nhập số Căn cước công dân (12 chữ số) kèm ghi chú quy định Thông tư 41/2025/TT-NHNN.
+- Thao tác gửi gọi đến `userService.verifyKyc(userId, cccdNumber)` để cập nhật trạng thái tài khoản lên `VERIFIED`.
+- Sau khi xác thực thành công, modal đóng lại, banner cảnh báo biến mất, trạng thái hiển thị được cập nhật ngay lập tức mà không cần tải lại trang.
+
+### 3. Đã verify
+- Cập nhật `userService.ts` trong `packages/api-client` bổ sung kiểu `KycTier` và hàm `verifyKyc()`.
+- Tích hợp banner và modal eKYC vào `Home.tsx` của `mfe-wallet`.
+- Build sạch `npm run build -w mfe-wallet` (hoàn tất trong 3.34s).
+- Rebuild docker image `ewallet-lab/mfe-wallet:local` và rollout thành công lên Minikube.
+- Độc lập kiểm thử E2E qua Ingress Nginx (18080) đạt 100% các bước kiểm thử.
+
+
 
 

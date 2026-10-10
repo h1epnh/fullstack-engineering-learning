@@ -46,17 +46,23 @@ class WalletMutationExecutor {
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
     private final BigDecimal monthlyOutboundLimit;
+    private final BigDecimal unverifiedMonthlyLimit;
     private final StepUpPolicy stepUpPolicy;
     private final FamilyWalletServiceClient familyWalletServiceClient;
+    private final UserServiceClient userServiceClient;
 
     WalletMutationExecutor(WalletRepository walletRepository, TransactionRepository transactionRepository,
                             @Value("${ewallet-lab.monthly-outbound-limit:100000000}") BigDecimal monthlyOutboundLimit,
-                            StepUpPolicy stepUpPolicy, FamilyWalletServiceClient familyWalletServiceClient) {
+                            @Value("${ewallet-lab.unverified-monthly-limit:5000000}") BigDecimal unverifiedMonthlyLimit,
+                            StepUpPolicy stepUpPolicy, FamilyWalletServiceClient familyWalletServiceClient,
+                            UserServiceClient userServiceClient) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.monthlyOutboundLimit = monthlyOutboundLimit;
+        this.unverifiedMonthlyLimit = unverifiedMonthlyLimit;
         this.stepUpPolicy = stepUpPolicy;
         this.familyWalletServiceClient = familyWalletServiceClient;
+        this.userServiceClient = userServiceClient;
     }
 
     /**
@@ -105,10 +111,24 @@ class WalletMutationExecutor {
             BigDecimal spentThisMonth = transactionRepository.sumAmountByWalletIdAndTypeInSince(
                 wallet.getId(), MONTHLY_LIMIT_TYPES, currentMonthStart());
             BigDecimal projectedSpend = spentThisMonth.add(amount);
-            if (projectedSpend.compareTo(monthlyOutboundLimit) > 0) {
-                throw new IllegalStateException(
-                    "Đã vượt hạn mức giao dịch chuyển tiền/thanh toán %s/tháng theo Điều 26 Thông tư 40/2024/TT-NHNN (sửa bởi Thông tư 41/2025/TT-NHNN)"
-                        .formatted(formatVnd(monthlyOutboundLimit)));
+
+            // Issue #40: check eKYC tier limit (5.000.000đ if UNVERIFIED, 100.000.000đ if VERIFIED)
+            boolean isUnverified = userServiceClient.findUser(userId)
+                .map(u -> "UNVERIFIED".equalsIgnoreCase(u.kycTier()))
+                .orElse(false);
+
+            BigDecimal effectiveMonthlyLimit = isUnverified ? unverifiedMonthlyLimit : monthlyOutboundLimit;
+
+            if (projectedSpend.compareTo(effectiveMonthlyLimit) > 0) {
+                if (isUnverified) {
+                    throw new IllegalStateException(
+                        "Đã vượt hạn mức giao dịch %s/tháng cho tài khoản chưa định danh eKYC. Vui lòng xác thực CCCD để nâng hạn mức lên %s/tháng."
+                            .formatted(formatVnd(unverifiedMonthlyLimit), formatVnd(monthlyOutboundLimit)));
+                } else {
+                    throw new IllegalStateException(
+                        "Đã vượt hạn mức giao dịch chuyển tiền/thanh toán %s/tháng theo Điều 26 Thông tư 40/2024/TT-NHNN (sửa bởi Thông tư 41/2025/TT-NHNN)"
+                            .formatted(formatVnd(monthlyOutboundLimit)));
+                }
             }
             // Issue #12 — "Ví Gia Đình" (VNPay-inspired, NOT MoMo). Reuses the exact same
             // spentThisMonth/projectedSpend already computed above for the legal limit — a

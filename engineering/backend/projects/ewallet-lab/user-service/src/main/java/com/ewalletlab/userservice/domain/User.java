@@ -18,6 +18,13 @@ public class User {
     @Column(nullable = false)
     private String name;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "kyc_tier")
+    private KycTier kycTier = KycTier.UNVERIFIED;
+
+    @Column(name = "id_card_number")
+    private String idCardNumber;
+
     protected User() {
         // JPA
     }
@@ -25,6 +32,19 @@ public class User {
     public User(String phone, String name) {
         this.phone = phone;
         this.name = name;
+        this.kycTier = KycTier.UNVERIFIED;
+    }
+
+    @PostLoad
+    void onPostLoad() {
+        if (this.kycTier == null) {
+            this.kycTier = KycTier.VERIFIED;
+        }
+    }
+
+    public void verifyKyc(String idCardNumber) {
+        this.kycTier = KycTier.VERIFIED;
+        this.idCardNumber = idCardNumber;
     }
 
     public UUID getId() {
@@ -37,5 +57,13 @@ public class User {
 
     public String getName() {
         return name;
+    }
+
+    public KycTier getKycTier() {
+        return kycTier != null ? kycTier : KycTier.VERIFIED;
+    }
+
+    public String getIdCardNumber() {
+        return idCardNumber;
     }
 }

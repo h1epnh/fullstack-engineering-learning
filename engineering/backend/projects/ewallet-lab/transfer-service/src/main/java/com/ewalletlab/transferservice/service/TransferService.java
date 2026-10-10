@@ -84,6 +84,10 @@ public class TransferService {
                 request.fromUserId(), request.amount(), recipient.id().toString(),
                 "Chuyển tiền cho " + recipient.name(), request.isStepUpConfirmed());
         } catch (HttpClientErrorException.Conflict e) {
+            String msg = e.getResponseBodyAsString();
+            if (msg != null && !msg.isBlank()) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, msg);
+            }
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Số dư không đủ để chuyển");
         } catch (HttpClientErrorException e) {
             // Issue #15 — wallet-service surfaces "step-up required" as 428 (see

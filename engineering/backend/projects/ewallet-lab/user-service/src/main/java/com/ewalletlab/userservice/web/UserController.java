@@ -50,4 +50,24 @@ public class UserController {
             .map(UserResponse::from)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No user with phone: " + phone));
     }
+
+    public record VerifyKycRequest(
+        @jakarta.validation.constraints.NotBlank(message = "Số CCCD không được để trống")
+        String idCardNumber
+    ) {}
+
+    /**
+     * Issue #40: Định danh tài khoản eKYC mô phỏng (cập nhật kycTier thành VERIFIED và lưu CCCD).
+     */
+    @PostMapping("/{id}/verify-kyc")
+    public ResponseEntity<UserResponse> verifyKyc(
+        @PathVariable UUID id,
+        @Valid @RequestBody VerifyKycRequest request
+    ) {
+        User user = userRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found: " + id));
+        user.verifyKyc(request.idCardNumber());
+        User saved = userRepository.save(user);
+        return ResponseEntity.ok(UserResponse.from(saved));
+    }
 }

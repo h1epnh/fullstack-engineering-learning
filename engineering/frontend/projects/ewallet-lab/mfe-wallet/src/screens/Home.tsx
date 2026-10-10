@@ -1,4 +1,4 @@
-import { type Transaction, savingsPocketService, walletService } from '@ewallet-lab/api-client';
+import { type Transaction, type UserResponse, savingsPocketService, userService, walletService } from '@ewallet-lab/api-client';
 import type { Session } from '@ewallet-lab/session';
 import {
   Card,
@@ -212,19 +212,26 @@ export default function Home({
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [pocketOpened, setPocketOpened] = useState(false);
   const [pocketBalance, setPocketBalance] = useState(0);
+  const [user, setUser] = useState<UserResponse | null>(null);
+  const [showKycModal, setShowKycModal] = useState(false);
+  const [cccdInput, setCccdInput] = useState('');
+  const [kycSubmitting, setKycSubmitting] = useState(false);
+  const [kycError, setKycError] = useState<string | null>(null);
 
   async function refresh() {
     setLoading(true);
-    const [balanceRes, txRes, pocketRes] = await Promise.all([
+    const [balanceRes, txRes, pocketRes, userRes] = await Promise.all([
       walletService.getBalance(session.id),
       walletService.getTransactions(session.id),
       savingsPocketService.view(session.id),
+      userService.getById(session.id).catch(() => null),
     ]);
     setBalance(balanceRes.balance);
     setTransactions(txRes);
     setReadIds(loadReadIds(session.id));
     setPocketOpened(pocketRes.opened);
     setPocketBalance(pocketRes.balance);
+    if (userRes) setUser(userRes);
     setLoading(false);
   }
 
@@ -256,12 +263,78 @@ export default function Home({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
         <div>
           <p style={{ fontSize: 13, color: 'var(--el-muted)', margin: '0 0 4px' }}>Xin chào,</p>
-          <h1 style={{ fontFamily: 'var(--el-font-display)', fontSize: 19, fontWeight: 800, margin: 0 }}>
-            {session.name}
-          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h1 style={{ fontFamily: 'var(--el-font-display)', fontSize: 19, fontWeight: 800, margin: 0 }}>
+              {session.name}
+            </h1>
+            {user?.kycTier === 'VERIFIED' && (
+              <span
+                style={{
+                  fontSize: 11,
+                  color: '#389e0d',
+                  background: '#f6ffed',
+                  border: '1px solid #b7eb8f',
+                  borderRadius: 6,
+                  padding: '2px 6px',
+                  fontWeight: 600,
+                }}
+              >
+                ✓ eKYC Đã xác thực
+              </span>
+            )}
+          </div>
         </div>
         <NotificationBell count={unreadCount} onClick={onOpenNotifications} />
       </div>
+
+      {/* Issue #40: eKYC Unverified Warning Banner */}
+      {user?.kycTier === 'UNVERIFIED' && (
+        <div
+          style={{
+            background: '#fffbe6',
+            border: '1px solid #ffe58f',
+            borderRadius: 12,
+            padding: '12px 14px',
+            marginBottom: 16,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+            <Icon name="warning" size={20} style={{ color: '#d46b08' }} />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#d46b08' }}>
+                Ví chưa định danh eKYC
+              </div>
+              <div style={{ fontSize: 11.5, color: '#873800' }}>
+                Hạn mức tối đa 5.000.000đ/tháng. Xác thực CCCD để mở hạn mức 100.000.000đ/tháng.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setCccdInput('');
+              setKycError(null);
+              setShowKycModal(true);
+            }}
+            style={{
+              background: '#fa8c16',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              padding: '6px 12px',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Xác thực ngay
+          </button>
+        </div>
+      )}
 
       {/* Quick row — 4 icons, matches real app's top action row */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
@@ -431,6 +504,116 @@ export default function Home({
           }}
         />
       ))}
+
+      {/* Issue #40: eKYC Modal */}
+      {showKycModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--el-surface, #fff)',
+              borderRadius: 16,
+              padding: 20,
+              maxWidth: 400,
+              width: '100%',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Xác thực định danh eKYC</h3>
+              <button
+                onClick={() => setShowKycModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--el-muted)' }}
+              >
+                ✕
+              </button>
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--el-muted)', margin: '0 0 14px' }}>
+              Mô phỏng xác thực CCCD gắn chip theo quy định Thông tư 41/2025/TT-NHNN. Định danh giúp nâng hạn mức giao dịch lên 100.000.000đ/tháng.
+            </p>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                Số Căn cước công dân (12 số)
+              </label>
+              <input
+                type="text"
+                value={cccdInput}
+                onChange={(e) => setCccdInput(e.target.value)}
+                placeholder="Ví dụ: 001200001234"
+                maxLength={12}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  border: '1px solid var(--el-line)',
+                  fontSize: 14,
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+            {kycError && (
+              <p style={{ fontSize: 12, color: '#cf1322', margin: '0 0 12px' }}>{kycError}</p>
+            )}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowKycModal(false)}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 8,
+                  border: '1px solid var(--el-line)',
+                  background: 'var(--el-surface, #fff)',
+                  color: 'inherit',
+                  cursor: 'pointer',
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                disabled={kycSubmitting || !cccdInput.trim()}
+                onClick={async () => {
+                  if (cccdInput.trim().length < 9) {
+                    setKycError('Số CCCD không hợp lệ (tối thiểu 9-12 số)');
+                    return;
+                  }
+                  setKycSubmitting(true);
+                  setKycError(null);
+                  try {
+                    const updated = await userService.verifyKyc(session.id, cccdInput.trim());
+                    setUser(updated);
+                    setShowKycModal(false);
+                  } catch (err: any) {
+                    setKycError(err?.message || 'Xác thực không thành công. Vui lòng thử lại.');
+                  } finally {
+                    setKycSubmitting(false);
+                  }
+                }}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: 'var(--el-accent)',
+                  color: '#fff',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  opacity: kycSubmitting || !cccdInput.trim() ? 0.6 : 1,
+                }}
+              >
+                {kycSubmitting ? 'Đang xác thực…' : 'Xác nhận eKYC'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Screen>
   );
 }

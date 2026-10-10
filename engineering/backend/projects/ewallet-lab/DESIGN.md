@@ -2254,4 +2254,38 @@ Tích hợp tính năng gửi Thiệp mừng điện tử kèm tiền (E-Gift Ca
 - Người nhận gửi lời cảm ơn thành công và người gửi xem lại được lời cảm ơn.
 - Phục vụ bundle `mfe-transfer /remoteEntry.js` đạt HTTP 200 OK.
 
+## eKYC Tier — Định danh Cấp độ Ví & Hạn mức Theo Mức độ Xác thực (Issue #40)
+
+### 1. Bối cảnh & Căn cứ Pháp lý
+- **Quy định pháp lý**: Theo Thông tư 40/2024/TT-NHNN và Thông tư 41/2025/TT-NHNN của Ngân hàng Nhà nước Việt Nam về quản lý và cung ứng dịch vụ trung gian thanh toán, ví điện tử phải được định danh thông tin khách hàng (eKYC bằng CCCD/hộ chiếu gắn chip).
+- **Phân biệt với các cơ chế hạn mức khác đã làm trong lab**:
+  - `MONTHLY_LIMIT_TYPES` (Issue #7): Hạn mức luật định 100.000.000đ/tháng dương lịch áp dụng cho các giao dịch chuyển tiền/thanh toán ra ngoài ví.
+  - `StepUpPolicy` (Issue #15 theo QĐ 2345/QĐ-NHNN): Xác thực bổ sung sinh trắc học theo từng lần giao dịch cụ thể (>10.000.000đ/lần hoặc >20.000.000đ/ngày).
+  - `eKYC Tier` (Issue #40): Cấp độ tài khoản (Account-level tier). Khi chưa định danh (`UNVERIFIED`), hạn mức giao dịch toàn bộ ví bị thu hẹp đáng kể xuống **5.000.000đ/tháng**. Sau khi hoàn tất định danh (`VERIFIED`), hạn mức được mở khóa về mức tiêu chuẩn **100.000.000đ/tháng**.
+- **Disclaimer bắt buộc**: Đây là **MÔ PHỎNG** quy trình eKYC phục vụ học tập kiến trúc. Lab không tích hợp máy quét chip CCCD/NFC hoặc dịch vụ nhận diện khuôn mặt OCR thật.
+
+### 2. Quyết định Kiến trúc (Operator Sign-off: Phương án a)
+1. **Quản lý danh tính tại `user-service`**:
+   - `User` entity lưu trữ `kycTier` (`UNVERIFIED`, `VERIFIED`) và `idCardNumber` (số CCCD).
+   - User mới đăng ký mặc định là `UNVERIFIED`.
+   - Bảo toàn tương thích ngược: Các user cũ trước khi có Issue #40 hoặc các bản ghi nạp với `kyc_tier` null khi tải qua `@PostLoad` sẽ mặc định là `VERIFIED` để bảo toàn 100% kết quả kiểm thử của 38 issue trước.
+   - Endpoint `POST /users/{id}/verify-kyc`: Tiếp nhận CCCD và chuyển đổi trạng thái tài khoản sang `VERIFIED`.
+2. **Kiểm soát hạn mức tại `wallet-service`**:
+   - `WalletMutationExecutor` tích hợp `UserServiceClient` để tra cứu thông tin cấp độ xác thực của user khi thực hiện các giao dịch chi tiêu (`MONTHLY_LIMIT_TYPES`).
+   - Hạn mức hiệu dụng: Nếu `isUnverified`, `effectiveMonthlyLimit = 5.000.000đ`; nếu `VERIFIED`, `effectiveMonthlyLimit = 100.000.000đ`.
+   - Khi vượt hạn mức chưa định danh, hệ thống trả về HTTP 409 Conflict với thông điệp hướng dẫn rõ ràng: *"Đã vượt hạn mức giao dịch 5.000.000đ/tháng cho tài khoản chưa định danh eKYC. Vui lòng xác thực CCCD để nâng hạn mức lên 100.000.000đ/tháng."*
+3. **Chính sách Fail-open an toàn**:
+   - Nếu `user-service` tạm thời không phản hồi hoặc gặp sự cố mạng, `UserServiceClient` mặc định xem user là `VERIFIED` (không downgrade), ngăn chặn nguy cơ sự cố dịch vụ phụ trợ làm tắc nghẽn toàn bộ luồng chuyển tiền/thanh toán cốt lõi.
+
+### 3. Độc lập kiểm thử E2E (`scratch/test_verify_issue40.py`)
+Đã thực thi kiểm thử toàn diện qua Ingress Nginx thật trên cổng 18080:
+- **Test 1**: User mới đăng ký có trạng thái `UNVERIFIED`, `idCardNumber = None`.
+- **Test 2**: Nạp 10.000.000đ vào ví tài khoản chưa định danh.
+- **Test 3**: Chuyển 4.000.000đ (nằm trong hạn mức 5.000.000đ) thành công (HTTP 200).
+- **Test 4**: Chuyển tiếp 2.000.000đ (dự kiến tổng chi 6.000.000đ > 5.000.000đ) bị chặn với HTTP 409 Conflict. Số dư gốc 6.000.000đ được bảo toàn nguyên vẹn.
+- **Test 5**: Gọi `POST /users/{id}/verify-kyc` với CCCD -> Trạng thái nâng cấp thành công lên `VERIFIED`.
+- **Test 6**: Thử lại giao dịch chuyển 2.000.000đ ngay sau khi eKYC -> Giao dịch thành công ngay lập tức (HTTP 200), số dư ví cập nhật chính xác 4.000.000đ.
+- **Test 7 (Concurrency Race Condition)**: 20 request chuyển 1.000.000đ đồng thời từ một tài khoản chưa định danh có 10.000.000đ. Kết quả: Đúng chính xác 5 request thành công (đạt trần 5.000.000đ) và đúng 15 request bị chặn 409. Số dư cuối cùng còn lại đúng 5.000.000đ, sai lệch sổ cái tuyệt đối bằng 0 (Zero ledger discrepancy).
+
+
 
