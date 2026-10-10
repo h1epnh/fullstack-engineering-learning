@@ -25,6 +25,9 @@ public class WalletServiceClient {
                                          Boolean stepUpConfirmed) {
     }
 
+    public record CreditResult(UUID userId, BigDecimal balance) {
+    }
+
     public DebitResult debit(UUID userId, BigDecimal amount, String note, boolean stepUpConfirmed) {
         return debit(userId, amount, null, note, stepUpConfirmed);
     }
@@ -36,5 +39,14 @@ public class WalletServiceClient {
             .body(request)
             .retrieve()
             .body(DebitResult.class);
+    }
+
+    public CreditResult credit(UUID userId, BigDecimal amount, String type, String reference, String note) {
+        AdjustBalanceRequest request = new AdjustBalanceRequest(amount, type != null ? type : "REFUND", reference, note, false);
+        return restClient.post()
+            .uri("/wallets/{userId}/credit", userId)
+            .body(request)
+            .retrieve()
+            .body(CreditResult.class);
     }
 }

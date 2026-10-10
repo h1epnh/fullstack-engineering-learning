@@ -136,4 +136,16 @@ spec:
             pathType: Prefix
             backend:
               service: { name: wallet-service, port: { number: 8091 } }
+          - path: /travel
+            pathType: Prefix
+            backend:
+              service: { name: bill-payment-service, port: { number: 8095 } }
+          - path: /insurance
+            pathType: Prefix
+            backend:
+              service: { name: bill-payment-service, port: { number: 8095 } }
+          - path: /gift-cards
+            pathType: Prefix
+            backend:
+              service: { name: lucky-money-service, port: { number: 8097 } }
 

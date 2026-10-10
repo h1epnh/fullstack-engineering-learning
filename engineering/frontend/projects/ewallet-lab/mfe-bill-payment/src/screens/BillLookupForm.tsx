@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { BILL_CATEGORIES } from '../categories';
 import { cancelMandate, loadMandates, type AutoBillRegistration } from '../mandates';
 import { DigitalServices } from './DigitalServices';
+import { TravelTicketing } from './TravelTicketing';
 
 export function BillLookupForm({
   userId,
@@ -12,7 +13,7 @@ export function BillLookupForm({
   userId?: string;
   onLookup: (category: BillCategory, customerCode: string) => Promise<string | null>;
 }) {
-  const [tab, setTab] = useState<'lookup' | 'digital' | 'mandates'>('lookup');
+  const [tab, setTab] = useState<'lookup' | 'digital' | 'travel' | 'mandates'>('lookup');
   const [category, setCategory] = useState<BillCategory>('ELECTRICITY');
   const [customerCode, setCustomerCode] = useState('');
   const [error, setError] = useState<string | undefined>();
@@ -99,6 +100,23 @@ export function BillLookupForm({
           }}
         >
           Dịch vụ số
+        </button>
+        <button
+          onClick={() => setTab('travel')}
+          style={{
+            flex: 1,
+            padding: '7px 0',
+            borderRadius: 8,
+            border: 0,
+            background: tab === 'travel' ? 'var(--el-surface)' : 'none',
+            color: tab === 'travel' ? 'var(--el-ink)' : 'var(--el-muted)',
+            fontWeight: tab === 'travel' ? 700 : 500,
+            fontSize: 13,
+            cursor: 'pointer',
+            boxShadow: tab === 'travel' ? 'var(--el-shadow)' : 'none',
+          }}
+        >
+          Vé xe & Vé bay
         </button>
         <button
           onClick={() => {
@@ -265,6 +283,7 @@ export function BillLookupForm({
       )}
 
       {tab === 'digital' && userId && <DigitalServices userId={userId} />}
+      {tab === 'travel' && userId && <TravelTicketing userId={userId} />}
     </Screen>
   );
 }

@@ -907,3 +907,26 @@ Nâng cấp `mfe-bill-payment` hỗ trợ người dùng lựa chọn linh hoạ
 - Rebuild docker image `ewallet-lab/mfe-bill-payment:local` và rollout thành công lên Minikube.
 - Độc lập kiểm thử E2E backend/frontend thông qua Ingress Nginx (18080) đạt 100% 9/9 scenarios.
 
+## 26. Mua vé xe khách, tàu hoả, máy bay (issue #33) — `mfe-bill-payment`
+
+Mở rộng `mfe-bill-payment` với phân hệ đặt vé du lịch và vận tải trực tuyến (`TravelTicketing.tsx`) được tích hợp vào thanh điều hướng tab "Vé xe & Vé bay" trên màn hình chính `BillLookupForm.tsx`.
+
+### 1. Tìm kiếm chuyến đi & Đặt vé
+- Bộ lọc phương tiện linh hoạt: Tất cả, Xe khách (BUS), Máy bay (FLIGHT), Tàu hoả (TRAIN).
+- Tra cứu theo điểm đi, điểm đến, và ngày khởi hành với danh sách chuyến đi trực quan.
+- Hiển thị đầy đủ thông tin: Hãng vận chuyển (Phương Trang, Vietnam Airlines, Vietjet Air, Đường Sắt Việt Nam...), giá vé, số ghế trống khả dụng, và thời gian khởi hành/đến.
+- Form nhập thông tin hành khách: Họ tên, số điện thoại, và số ghế mong muốn.
+- Tuyên bố miễn trừ trách nhiệm bắt buộc: *"Hệ thống đặt vé du lịch và vé điện tử mô phỏng cho mục đích học tập — không có chuyến bay hay xe khách thật nào được đặt"*.
+
+### 2. Quản lý Vé điện tử & Huỷ vé (E-Ticket)
+- Tab "Vé của tôi" hiển thị danh sách vé điện tử đã đặt.
+- Vé điện tử với mã đặt chỗ lớn (`BK-XXXXXX`), mã vé (`TK-XXXXXX`), trạng thái `Đã xác nhận` / `Đã huỷ & Hoàn tiền`.
+- Khung mô phỏng mã QR vé điện tử dùng để làm thủ tục check-in hoặc lên xe.
+- Tính năng Huỷ vé: Hoàn lại **85% giá vé** về ví chính của người dùng kèm modal xác nhận an toàn, phục hồi lại ghế trống cho chuyến đi.
+
+### 3. Đã verify
+- Thêm `travelBookingService` trong `packages/api-client`.
+- Build sạch `npm run build -w mfe-bill-payment` (exit 0, rollup hoàn tất).
+- Rebuild docker image `ewallet-lab/mfe-bill-payment:local` và rollout thành công lên Minikube.
+- Độc lập kiểm thử E2E backend/frontend thông qua Ingress Nginx (18080) đạt 100% 7/7 test suites (bao gồm concurrency race test 10 luồng tranh 1 ghế cuối cùng không overselling).
+

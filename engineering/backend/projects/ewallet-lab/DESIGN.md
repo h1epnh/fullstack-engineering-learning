@@ -257,6 +257,42 @@ Mở rộng `bill-payment-service` hỗ trợ thanh toán hoá đơn qua nguồn
   8. Hoá đơn 12.000.000đ (> 10M) -> chặn 428 Precondition Required; xác thực step-up -> 200 OK.
   9. Race condition test (5 luồng đồng thời rút 5.777.000đ trên hạn mức 1.000.000đ) -> chính xác 1 luồng thành công, 4 luồng 409, số dư cuối khớp 100%, không over-limit.
 
+### Mua vé xe khách, tàu hoả, máy bay (Travel & Transportation Ticketing, issue #33)
+
+Tích hợp tính năng đặt vé du lịch và vận tải trực tuyến vào `bill-payment-service` theo phương án kiến trúc (b) được Operator phê duyệt, gắn kết qua Ingress route `/travel`.
+
+#### 1. Mô hình Dữ liệu (`TravelTrip` & `TravelBooking`)
+- **`TravelTrip`**:
+  - Quản lý chuyến đi và kho ghế: `tripType` (`BUS`, `FLIGHT`, `TRAIN`), `carrierName` (Phương Trang, Thành Bưởi, Vietnam Airlines, Vietjet Air, Đường Sắt Việt Nam...), `origin`, `destination`, `departureTime`, `arrivalTime`, `price`, `totalSeats`, `availableSeats`.
+  - Khóa lạc quan `@Version Long version` bắt buộc trên thực thể chuyến đi để bảo vệ kho ghế và chống overselling tuyệt đối.
+- **`TravelBooking`**:
+  - Bản ghi đặt vé & vé điện tử: `userId`, `tripId`, `passengerName`, `passengerPhone`, `seatNumber`, `totalAmount`, `bookingCode` (định dạng `BK-XXXXXX`), `ticketCode` (định dạng `TK-XXXXXX`), `status` (`CONFIRMED`, `CANCELLED_REFUNDED`).
+- Khởi tạo dữ liệu mẫu (`TravelTripDataInitializer`): Tự động nạp sẵn 11 chuyến đi đa dạng (4 xe khách, 4 chuyến bay, 3 chuyến tàu hoả) vào các ngày sắp tới trên các trục Hà Nội, TP.HCM, Đà Nẵng, Đà Lạt, Sa Pa...
+
+#### 2. Quy trình Nghiệp vụ & Chống Bán Quá Số Lượng (Overselling)
+1. **Tìm kiếm chuyến đi (`GET /travel/trips/search`)**: Hỗ trợ lọc linh hoạt theo loại phương tiện (`type`), điểm đi (`origin`), điểm đến (`destination`), và ngày đi (`date`).
+2. **Đặt vé & Trừ tiền ví (`POST /travel/bookings`)**:
+   - Kiểm tra chuyến đi còn ghế trống (`availableSeats > 0`).
+   - Giảm `availableSeats` đi 1 và flush (được bảo vệ bởi `@Version`).
+   - Gọi `walletServiceClient.debit()` trừ tiền ví chính của người dùng với loại giao dịch `BILL_PAYMENT`. Nếu ví không đủ số dư, trả về `409 Conflict` ("Số dư không đủ để thanh toán vé").
+   - Sinh mã đặt chỗ duy nhất `BK-*` và mã vé điện tử `TK-*`. Lưu bản ghi với trạng thái `CONFIRMED`.
+3. **Huỷ vé & Hoàn tiền 85% (`POST /travel/bookings/{id}/cancel`)**:
+   - Xác thực quyền sở hữu (`userId`) và trạng thái vé (`CONFIRMED`).
+   - Kiểm tra thời gian: Chỉ cho phép huỷ trước giờ khởi hành (`departureTime > Instant.now()`). Nếu chuyến đã chạy, từ chối `400 Bad Request`.
+   - Tính toán hoàn tiền: Tự động khấu trừ 15% phí huỷ vé và hoàn lại chính xác **85% giá vé** về ví chính của người dùng qua `walletServiceClient.credit()`.
+   - Phục hồi lại 1 ghế trống cho chuyến đi (`availableSeats + 1`) và cập nhật trạng thái sang `CANCELLED_REFUNDED`.
+
+#### 3. Tuyên bố Miễn trừ Trách nhiệm (Disclaimer)
+Hiển thị thường trực trên UI và biên lai: *"Hệ thống đặt vé du lịch và vé điện tử mô phỏng cho mục đích học tập — không có chuyến bay hay xe khách thật nào được đặt"*.
+
+#### 4. Kiểm thử Độc lập (100% Passed)
+- Script kiểm thử `scratch/test_verify_issue33.py` qua Minikube Ingress (cổng 18080):
+  1. Tra cứu danh mục và lọc theo phương tiện (BUS, FLIGHT, TRAIN) thành công 100%.
+  2. Đặt vé máy bay Vietnam Airlines: Ví chính bị trừ đúng 1.850.000đ, số ghế trống giảm đúng 1, sinh đúng mã `BK-*` và `TK-*`.
+  3. Từ chối an toàn khi ví không đủ tiền: Nhận mã `409 Conflict`, số dư và số ghế giữ nguyên.
+  4. Huỷ vé: User nhận lại đúng 85% giá vé (1.572.500đ), số ghế trống được cộng trả lại 1. Chặn người khác huỷ vé trái phép (403 Forbidden) và chặn huỷ lần 2 (400 Bad Request).
+  5. **Concurrency Race Test**: 10 luồng đồng thời tranh chiếc ghế cuối cùng của chuyến đi -> Đúng 1 luồng thành công (201), 9 luồng bị chặn xung đột (409), số ghế cuối cùng bằng đúng 0 (không âm, không overselling), và 9 người thua giữ nguyên 100% số dư.
+
 ## Concurrent debit/credit trên cùng ví — optimistic lock, không phải bug về tính toàn vẹn (issue #5)
 
 `Wallet` dùng `@Version` (optimistic locking) — khi 2 request debit/credit cùng ví chạy đồng thời,
