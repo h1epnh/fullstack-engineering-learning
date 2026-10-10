@@ -17,6 +17,7 @@ export type TopupResponse = {
 export type WithdrawalResponse = {
   userId: string;
   balance: number;
+  fee?: number;
 };
 
 export type BankTransferOutResponse = {

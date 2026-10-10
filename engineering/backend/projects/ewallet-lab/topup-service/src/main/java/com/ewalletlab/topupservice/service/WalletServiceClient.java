@@ -73,4 +73,13 @@ public class WalletServiceClient {
             .retrieve()
             .body(StepUpCheckResult.class);
     }
+
+    public BigDecimal getBalance(UUID userId) {
+        record BalanceResponse(UUID id, UUID userId, BigDecimal balance) {}
+        BalanceResponse res = restClient.get()
+            .uri("/wallets/{userId}/balance", userId)
+            .retrieve()
+            .body(BalanceResponse.class);
+        return res != null ? res.balance() : BigDecimal.ZERO;
+    }
 }

@@ -1007,6 +1007,34 @@ Tích hợp giao diện quản lý cấp độ định danh (eKYC tier) vào mà
 - Rebuild docker image `ewallet-lab/mfe-wallet:local` và rollout thành công lên Minikube.
 - Độc lập kiểm thử E2E qua Ingress Nginx (18080) đạt 100% các bước kiểm thử.
 
+## 30. Tài khoản Merchant / Doanh nghiệp & QR Đa Năng thu hộ — Phí rút tiền merchant (issue #39)
+
+Tích hợp giao diện và mô hình 2-sided platform cho người dùng doanh nghiệp/hộ kinh doanh (Merchant):
+
+### 1. Mô hình 2-Sided Platform & Trải nghiệm Người dùng
+- **Phía Consumer**: Hoàn toàn miễn phí khi quét mã QR thanh toán của cửa hàng/merchant (sử dụng hạ tầng QR hiện có của lab `parseEwalletLabQrPhone`).
+- **Phía Merchant**:
+  - Khởi tạo mã QR Đa Năng nhận tiền cố định: `ewalletlab://pay?merchant={id}&phone={phone}&name={name}`.
+  - Phí thu hộ giao dịch: Hoàn toàn MIỄN PHÍ (0đ).
+  - Rút tiền về ngân hàng:
+    * Miễn phí hoàn toàn cho hạn mức 30.000.000đ/tháng dương lịch.
+    * Vượt 30.000.000đ/tháng: tính phí 0,5% trên phần rút vượt hạn mức (chính sách MoMo thật ngày 20/09/2023).
+- **Lưu ý & Disclaimer**: Mô phỏng phục vụ học tập, không có thẩm định hồ sơ đăng ký kinh doanh/KYC doanh nghiệp thật.
+
+### 2. Giao diện Nạp/Rút (`mfe-topup`)
+- Màn hình `NapRut.tsx`:
+  - Trong chế độ Rút tiền (`mode === 'withdraw'`), hiển thị thông báo chính sách rút tiền merchant rõ ràng:
+    * *"💡 Chính sách rút tiền Merchant: Miễn phí hạn mức 30.000.000đ/tháng dương lịch; vượt hạn mức tính phí 0,5% trên phần rút vượt (chính sách MoMo 20/09/2023). Mô phỏng phục vụ học tập."*
+- Màn hình kết quả `WithdrawDone.tsx`:
+  - Hiển thị chi tiết số dư mới và dòng thông báo phí rút tiền riêng biệt màu đỏ nếu có phát sinh phí vượt hạn mức (`fee > 0`).
+
+### 3. Đã verify
+- Cập nhật `packages/api-client`: Bổ sung `merchantService.ts` (`register`, `getByUserId`, `getById`), cập nhật `WithdrawalResponse` mang trường `fee`.
+- Cập nhật `mfe-topup`: Hiển thị chính sách phí và chi tiết phí tại `NapRut.tsx`, `WithdrawDone.tsx`, `App.tsx`.
+- Build sạch `npm run build -w mfe-topup`.
+- Rebuild docker image `ewallet-lab/mfe-topup:local` và deploy lên Minikube.
+- Độc lập kiểm thử E2E qua Ingress Nginx (18080) đạt 100% 11/11 test cases bao gồm concurrency 20 requests.
+
 
 
 

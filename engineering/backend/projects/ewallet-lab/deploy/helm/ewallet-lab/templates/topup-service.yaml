@@ -40,6 +40,8 @@ spec:
               value: "http://mock-bank-gateway:{{ .Values.mockBankGateway.port }}"
             - name: WALLET_SERVICE_URL
               value: "http://wallet-service:{{ .Values.walletService.port }}"
+            - name: USER_SERVICE_URL
+              value: "http://user-service:{{ .Values.userService.port }}"
             # IPN is a server-to-server callback from mock-bank-gateway back to this service —
             # in-cluster Service DNS, not the public Ingress host.
             - name: SELF_BASE_URL

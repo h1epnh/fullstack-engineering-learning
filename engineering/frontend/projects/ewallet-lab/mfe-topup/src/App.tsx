@@ -18,7 +18,7 @@ type Step =
   | { name: 'link-bank' }
   | { name: 'main'; account: LinkedBankAccount; mode: 'topup' | 'withdraw' }
   | { name: 'topup-status'; orderId: string }
-  | { name: 'withdraw-done'; balance: number }
+  | { name: 'withdraw-done'; balance: number; fee?: number }
   // Issue #15 — step-up authentication (mô phỏng QĐ 2345/QĐ-NHNN)
   | { name: 'step-up'; message: string; onConfirm: () => Promise<void>; onCancel: () => void };
 
@@ -86,7 +86,7 @@ export default function App({
     async function submitWithdraw(amount: number, stepUpConfirmed: boolean): Promise<string | null> {
       try {
         const res = await topupService.initiateWithdrawal(session.id, amount, stepUpConfirmed);
-        setStep({ name: 'withdraw-done', balance: res.balance });
+        setStep({ name: 'withdraw-done', balance: res.balance, fee: res.fee });
         return null;
       } catch (e) {
         if (e instanceof ApiError && e.status === STEP_UP_REQUIRED_STATUS) {
@@ -116,7 +116,7 @@ export default function App({
   }
 
   if (step.name === 'withdraw-done') {
-    return <WithdrawDone balance={step.balance} onDone={onDone} />;
+    return <WithdrawDone balance={step.balance} fee={step.fee} onDone={onDone} />;
   }
 
   if (step.name === 'step-up') {

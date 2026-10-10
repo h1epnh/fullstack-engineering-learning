@@ -186,7 +186,24 @@ export function NapRut({
         </>
       )}
 
-      <div style={{ marginTop: mode === 'topup' ? 20 : 4 }}>
+      {mode === 'withdraw' && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: '10px 12px',
+            background: 'var(--el-surface-alt, #f8fafc)',
+            border: '1px solid var(--el-line)',
+            borderRadius: 8,
+            fontSize: 12,
+            color: 'var(--el-muted)',
+            lineHeight: 1.5,
+          }}
+        >
+          💡 <strong>Chính sách rút tiền Merchant:</strong> Miễn phí hạn mức 30.000.000đ/tháng dương lịch; vượt hạn mức tính phí 0,5% trên phần rút vượt (chính sách MoMo 20/09/2023). Mô phỏng phục vụ học tập.
+        </div>
+      )}
+
+      <div style={{ marginTop: mode === 'topup' ? 20 : 16 }}>
         <Button onClick={submit} disabled={loading || amount === '' || invalid}>
           {loading ? 'Đang xử lý…' : mode === 'topup' ? 'Nạp tiền' : 'Rút tiền'}
         </Button>

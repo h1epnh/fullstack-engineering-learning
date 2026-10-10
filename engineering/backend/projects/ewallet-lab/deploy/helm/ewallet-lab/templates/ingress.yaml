@@ -72,6 +72,10 @@ spec:
             pathType: Prefix
             backend:
               service: { name: user-service, port: { number: 8090 } }
+          - path: /merchants
+            pathType: Prefix
+            backend:
+              service: { name: user-service, port: { number: 8090 } }
           - path: /wallets
             pathType: Prefix
             backend:

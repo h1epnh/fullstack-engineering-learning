@@ -2287,5 +2287,75 @@ Tích hợp tính năng gửi Thiệp mừng điện tử kèm tiền (E-Gift Ca
 - **Test 6**: Thử lại giao dịch chuyển 2.000.000đ ngay sau khi eKYC -> Giao dịch thành công ngay lập tức (HTTP 200), số dư ví cập nhật chính xác 4.000.000đ.
 - **Test 7 (Concurrency Race Condition)**: 20 request chuyển 1.000.000đ đồng thời từ một tài khoản chưa định danh có 10.000.000đ. Kết quả: Đúng chính xác 5 request thành công (đạt trần 5.000.000đ) và đúng 15 request bị chặn 409. Số dư cuối cùng còn lại đúng 5.000.000đ, sai lệch sổ cái tuyệt đối bằng 0 (Zero ledger discrepancy).
 
+## Merchant / Business Account & QR Đa Năng Thu Hộ — Phí Rút Tiền Merchant (Issue #39)
+
+### 1. Bối cảnh Nghiệp vụ & Mô hình 2-Sided Platform
+- **Mô hình 2-Sided Platform mới**:
+  - Khác biệt bản chất với 38 ticket trước (vốn chỉ phục vụ người tiêu dùng cá nhân Consumer P2P hoặc thanh toán hoá đơn cá nhân).
+  - Đây là domain đầu tiên áp dụng cơ chế 2-sided platform: doanh thu nền tảng phát sinh từ chính sách phí đối với người dùng kinh doanh (Merchant).
+- **Nguồn chính sách phí thực tế**:
+  - Dữ liệu thu thập trực tiếp từ thông báo chính thức của MoMo (`momo.vn/tin-tuc/thong-bao/quan-trong-cap-nhat-cac-chinh-sach-phi-va-quyen-4904`, hiệu lực áp dụng từ ngày 20/09/2023).
+  - **Quy tắc tính phí**:
+    * Phía Consumer: Miễn phí hoàn toàn khi quét mã QR thanh toán cho merchant.
+    * Phía Merchant:
+      - Phí thu hộ giao dịch: **MIỄN HOÀN TOÀN** cho merchant.
+      - QR Đa Năng: Miễn phí khởi tạo và nhận tiền.
+      - Rút tiền về tài khoản ngân hàng liên kết: Không giới hạn số lần rút trong tháng, nhưng có hạn mức **MIỄN PHÍ 30.000.000đ/tháng dương lịch**.
+      - Khi tổng số tiền rút tích luỹ trong tháng vượt quá 30.000.000đ, áp dụng phí **0,5% trên phần tiền rút vượt hạn mức** (không tính 0,5% trên toàn bộ tổng tiền).
+- **Disclaimer bắt buộc**:
+  - Đây là tính năng **MÔ PHỎNG** phục vụ mục đích học tập thiết kế hệ thống.
+  - Lab không có quy trình thẩm định hồ sơ đăng ký kinh doanh, giấy phép doanh nghiệp hay eKYC doanh nghiệp thật nào đứng sau.
+
+### 2. Quyết định Kiến trúc (Operator Sign-off: Phương án b)
+1. **Quản lý tài khoản Merchant tại `user-service`**:
+   - Tạo thực thể `Merchant` độc lập liên kết 1-1 với `User` qua `user_id` (với ràng buộc duy nhất `uk_merchant_user_id`).
+   - Lưu trữ: `id` (UUID), `userId` (UUID), `merchantName`, `businessCategory`, `merchantQrCode`, `createdAt`, `updatedAt`.
+   - Endpoint:
+     * `POST /merchants/register`: Đăng ký nâng cấp tài khoản người dùng thành Merchant. Kiểm tra chống trùng lặp (trả về HTTP 409 Conflict nếu user đã là merchant). Tự động sinh mã `merchantQrCode`.
+     * `GET /merchants/by-user/{userId}`: Tra cứu thông tin merchant theo `userId`.
+     * `GET /merchants/{id}`: Tra cứu thông tin merchant theo mã `id`.
+2. **Định dạng Payload QR Đa Năng**:
+   - `ewalletlab://pay?merchant={merchantId}&phone={phone}&name={encodedName}`.
+   - Định dạng này hoàn toàn tương thích ngược với bộ bóc tách URI `parseEwalletLabQrPhone` của `mfe-transfer` (lấy ra `phone` để khởi tạo luồng chuyển tiền ngay lập tức mà không phát sinh thêm phí thu hộ).
+3. **Mở rộng xử lý rút tiền tại `topup-service`**:
+   - Tích hợp `UserServiceClient` để kiểm tra trạng thái merchant khi thực hiện `POST /withdrawals`. Nếu không phải merchant, giao dịch rút tiền vẫn miễn phí 100% như các ticket trước.
+   - Bảng `withdrawals`: Lưu trữ từng lượt rút tiền (`userId`, `amount`, `fee`, `status`, `createdAt`).
+   - Bảng `merchant_withdrawal_trackers`: Theo dõi tổng số tiền merchant đã rút trong tháng dương lịch (`year_month` định dạng `YYYY-MM`, `cumulative_withdrawn`, `updatedAt`).
+   - **Công thức tính phí**:
+     * Giả sử merchant đã rút tích luỹ `C` trong tháng, lượt này rút thêm số tiền `A`, tổng mới là `N = C + A`:
+     * Nếu `N <= 30.000.000đ`: `fee = 0đ`.
+     * Nếu `C < 30.000.000đ` và `N > 30.000.000đ`: phần vượt = `N - 30.000.000đ`, `fee = round((N - 30.000.000đ) * 0.005)`.
+     * Nếu `C >= 30.000.000đ`: toàn bộ lượt rút nằm ngoài hạn mức miễn phí, `fee = round(A * 0.005)`.
+4. **Minh bạch Sổ cái & Kiểm soát Concurrency**:
+   - Số tiền rút (`amount`) và phí rút (`fee`) được ghi nhận thành **2 giao dịch riêng biệt** trong `wallet-service`:
+     * Giao dịch rút tiền chính: Loại `WITHDRAW`, note *"Rút tiền qua topup-service"*.
+     * Giao dịch phí rút tiền: Loại `WITHDRAW`, note *"Phí rút tiền merchant vượt hạn mức 30tr/tháng (0,5%)"*.
+     * Tuyệt đối không trộn lẫn hoặc ẩn phí vào số tiền rút gốc.
+   - **Xử lý số dư không đủ**: Hệ thống kiểm tra trước `balance >= amount + fee`. Nếu số dư không đủ thanh toán cả gốc lẫn phí, giao dịch bị chặn ngay với HTTP 409 Conflict, bảo toàn số dư gốc.
+   - **Xử lý Race condition**:
+     * Sử dụng câu lệnh nguyên tử `INSERT INTO merchant_withdrawal_trackers ... ON CONFLICT (user_id, year_month) DO NOTHING`.
+     * Khóa dòng ghi nhận bằng `@Lock(LockModeType.PESSIMISTIC_WRITE)` (`SELECT ... FOR UPDATE`) kết hợp `entityManager.refresh(tracker)` để nạp giá trị mới nhất trực tiếp từ cơ sở dữ liệu.
+     * Mọi giao dịch rút tiền đồng thời của cùng một merchant được tuần tự hóa tuyệt đối, loại trừ hoàn toàn rủi ro tính thiếu phí hoặc trốn phí khi chạm ngưỡng 30M.
+5. **Tuân thủ Thông tư 40/2024/TT-NHNN và Thông tư 41/2025/TT-NHNN**:
+   - Chưa xác minh được ngoại lệ miễn trừ cho giao dịch merchant trong văn bản pháp luật gốc, áp dụng mặc định như giao dịch thông thường.
+
+### 3. Độc lập kiểm thử E2E (`scratch/test_verify_issue39.py`)
+Đã thực thi kiểm thử toàn diện qua Ingress Nginx thật trên cổng 18080:
+- **Test 1**: Tạo User Merchant và xác thực eKYC.
+- **Test 2**: Đăng ký Merchant Account thành công, sinh mã QR Đa Năng chuẩn định dạng `ewalletlab://pay?merchant=...`.
+- **Test 3**: Tra cứu merchant theo `userId` trả về đúng bản ghi đã tạo.
+- **Test 4**: Chặn đăng ký trùng lặp merchant cho cùng 1 user với HTTP 409 Conflict.
+- **Test 5**: Khách hàng quét mã QR chuyển 50.000.000đ cho merchant: Phí thu hộ của merchant bằng 0đ, khách hàng và merchant biến động đúng 50.000.000đ.
+- **Test 6**: Merchant rút 20.000.000đ (<= 30M hạn mức) -> Phí bằng 0đ, số dư giảm đúng 20.000.000đ.
+- **Test 7**: Merchant rút tiếp 20.000.000đ (tích luỹ thành 40M) -> Phần vượt 10M chịu phí 0,5% = 50.000đ. Số dư giảm đúng 20.050.000đ.
+- **Test 8**: Kiểm tra sổ cái `wallet-service`: Bản ghi rút tiền và bản ghi phí hiển thị tách biệt rõ ràng.
+- **Test 9**: Merchant rút 5.000.000đ khi đã vượt 30M -> Toàn bộ 5M chịu phí 0,5% = 25.000đ.
+- **Test 10**: Chặn yêu cầu rút tiền khi số dư không đủ thanh toán phí với HTTP 409 Conflict, bảo toàn số dư gốc.
+- **Test 11 (Concurrency Race Test)**: 20 request đồng thời mỗi request rút 1.000.000đ từ merchant đang ở mức tích luỹ 20.000.000đ chạm và vượt ngưỡng 30.000.000đ.
+  * Toàn bộ 20/20 request thành công.
+  * Tổng phí thu được trên 20 thread đạt chính xác tuyệt đối **50.000đ** (0,5% của đúng 10.000.000đ vượt).
+  * Số dư ví sau khi chạy 20 thread khớp chính xác, sai lệch sổ cái tuyệt đối bằng 0 (Zero ledger discrepancy).
+
+
 
 

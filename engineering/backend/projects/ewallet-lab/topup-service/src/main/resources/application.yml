@@ -43,5 +43,7 @@ ewallet-lab:
     base-url: ${BANK_GATEWAY_URL:http://localhost:8093}
   wallet-service:
     base-url: ${WALLET_SERVICE_URL:http://localhost:8091}
+  user-service:
+    base-url: ${USER_SERVICE_URL:http://localhost:8090}
   self:
     base-url: ${SELF_BASE_URL:http://localhost:8092}

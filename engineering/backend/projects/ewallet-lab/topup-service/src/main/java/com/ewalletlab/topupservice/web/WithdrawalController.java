@@ -1,7 +1,6 @@
 package com.ewalletlab.topupservice.web;
 
-import com.ewalletlab.topupservice.repository.LinkedBankAccountRepository;
-import com.ewalletlab.topupservice.service.WalletServiceClient;
+import com.ewalletlab.topupservice.service.WithdrawalService;
 import com.ewalletlab.topupservice.web.dto.WithdrawalRequestDto;
 import com.ewalletlab.topupservice.web.dto.WithdrawalResponseDto;
 import jakarta.validation.Valid;
@@ -12,7 +11,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Real wallet-side withdrawal: debits wallet-service synchronously (no simulated bank payout leg
@@ -22,23 +20,15 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 public class WithdrawalController {
 
-    private final LinkedBankAccountRepository linkedBankAccountRepository;
-    private final WalletServiceClient walletServiceClient;
+    private final WithdrawalService withdrawalService;
 
-    public WithdrawalController(LinkedBankAccountRepository linkedBankAccountRepository,
-                                 WalletServiceClient walletServiceClient) {
-        this.linkedBankAccountRepository = linkedBankAccountRepository;
-        this.walletServiceClient = walletServiceClient;
+    public WithdrawalController(WithdrawalService withdrawalService) {
+        this.withdrawalService = withdrawalService;
     }
 
     @PostMapping("/withdrawals")
     public WithdrawalResponseDto withdraw(@Valid @RequestBody WithdrawalRequestDto request) {
-        if (linkedBankAccountRepository.findByUserId(request.userId()).isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chưa liên kết tài khoản ngân hàng");
-        }
-        WalletServiceClient.DebitResult result = walletServiceClient.debit(
-            request.userId(), request.amount(), "Rút tiền qua topup-service", request.isStepUpConfirmed());
-        return new WithdrawalResponseDto(result.userId(), result.balance());
+        return withdrawalService.processWithdrawal(request);
     }
 
     @ExceptionHandler(HttpClientErrorException.Conflict.class)
