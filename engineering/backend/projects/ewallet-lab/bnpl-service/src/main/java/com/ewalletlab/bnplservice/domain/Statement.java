@@ -64,6 +64,10 @@ public class Statement {
         principal = principal.add(amount);
     }
 
+    public void subtractPrincipal(BigDecimal amount) {
+        principal = principal.subtract(amount);
+    }
+
     /** Applies (positive) or reverts (negative) one repayment's allocation to this statement. */
     public void applyPayment(BigDecimal lateFee, BigDecimal fee, BigDecimal principalPart) {
         lateFeePaid = lateFeePaid.add(lateFee);

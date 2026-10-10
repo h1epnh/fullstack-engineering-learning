@@ -884,3 +884,26 @@ Mở rộng `mfe-transfer` thành trung tâm quản lý giao dịch P2P nâng ca
 - Rebuild docker image `ewallet-lab/mfe-transfer:local` và rollout thành công lên Minikube.
 - Độc lập kiểm thử E2E backend thông qua Ingress Nginx (18080) đạt 100% 13/13 scenarios.
 
+## 25. Nguồn tiền thanh toán ưu tiên & Trả góp Ví Trả Sau BNPL (issue #37) — `mfe-bill-payment`
+
+Nâng cấp `mfe-bill-payment` hỗ trợ người dùng lựa chọn linh hoạt nguồn tiền thanh toán giữa **Ví chính** và **Ví Trả Sau (BNPL)**, đồng thời hiển thị cảnh báo, số dư và hạn mức trực quan theo thời gian thực.
+
+### 1. Nguồn tiền thanh toán (`BillConfirm.tsx`)
+- Thẻ lựa chọn nguồn tiền trực quan (Radio Cards):
+  - **Ví chính**: Hiển thị số dư khả dụng từ `wallet-service`. Tự động vô hiệu hoá (disabled) kèm nhãn "Số dư không đủ" nếu số dư < số tiền thanh toán sau giảm giá.
+  - **Ví Trả Sau (BNPL)**: Hiển thị hạn mức khả dụng từ `bnpl-service`. Nếu người dùng chưa mở Ví Trả Sau (`opened == false`), hiển thị badge "Chưa kích hoạt" và vô hiệu hoá lựa chọn. Nếu hạn mức < số tiền thanh toán, hiển thị nhãn "Hạn mức không đủ".
+- Tự động gợi ý chuyển đổi nguồn tiền (Auto-fallback Suggestion):
+  - Nếu nguồn tiền mặc định không đủ điều kiện (ví dụ: ví chính không đủ tiền nhưng BNPL đủ hạn mức), giao diện hiển thị banner thông báo đề xuất chuyển sang nguồn tiền còn lại.
+- Tích hợp Step-Up Modal:
+  - Nếu thanh toán bằng BNPL với số tiền > 10.000.000đ, màn hình mở `StepUpModal` (mô phỏng xác thực sinh trắc học theo QĐ 2345/QĐ-NHNN) trước khi gửi yêu cầu `pay()`.
+
+### 2. Biên lai thanh toán (`BillReceipt.tsx`)
+- Hiển thị badge nguồn tiền đã thanh toán: `Ví chính` (màu trung tính) hoặc `Ví Trả Sau` (màu tím/brand BNPL nổi bật).
+- Hiển thị số dư ví chính hoặc hạn mức Ví Trả Sau còn lại sau khi thanh toán.
+
+### 3. Đã verify
+- Cập nhật `packages/api-client/src/billPaymentService.ts` bổ sung `PaymentSource`.
+- Build sạch `npm run build -w mfe-bill-payment` (exit 0, rollup sạch).
+- Rebuild docker image `ewallet-lab/mfe-bill-payment:local` và rollout thành công lên Minikube.
+- Độc lập kiểm thử E2E backend/frontend thông qua Ingress Nginx (18080) đạt 100% 9/9 scenarios.
+

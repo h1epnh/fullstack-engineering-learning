@@ -38,6 +38,8 @@ spec:
               value: "http://wallet-service:{{ .Values.walletService.port }}"
             - name: LOYALTY_SERVICE_URL
               value: "http://loyalty-service:{{ .Values.loyaltyService.port }}"
+            - name: BNPL_SERVICE_URL
+              value: "http://bnpl-service:{{ .Values.bnplService.port }}"
             - name: ALLOWED_ORIGIN_PATTERN
               value: {{ .Values.corsAllowedOriginPattern | quote }}
           readinessProbe:

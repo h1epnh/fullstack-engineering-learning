@@ -48,6 +48,10 @@ public class BillPayment {
     @Column(name = "final_amount", precision = 19, scale = 2)
     private BigDecimal finalAmount;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_source", nullable = false)
+    private PaymentSource paymentSource = PaymentSource.MAIN_WALLET;
+
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
 
@@ -56,15 +60,20 @@ public class BillPayment {
     }
 
     public BillPayment(UUID userId, BillCategory category, String customerCode, BigDecimal amount) {
-        this(userId, category, customerCode, amount, null, BigDecimal.ZERO, null, amount);
+        this(userId, category, customerCode, amount, null, BigDecimal.ZERO, null, amount, PaymentSource.MAIN_WALLET);
     }
 
     public BillPayment(UUID userId, BillCategory category, String customerCode, BigDecimal amount, String period) {
-        this(userId, category, customerCode, amount, period, BigDecimal.ZERO, null, amount);
+        this(userId, category, customerCode, amount, period, BigDecimal.ZERO, null, amount, PaymentSource.MAIN_WALLET);
     }
 
     public BillPayment(UUID userId, BillCategory category, String customerCode, BigDecimal amount, String period,
                        BigDecimal discountAmount, UUID voucherId, BigDecimal finalAmount) {
+        this(userId, category, customerCode, amount, period, discountAmount, voucherId, finalAmount, PaymentSource.MAIN_WALLET);
+    }
+
+    public BillPayment(UUID userId, BillCategory category, String customerCode, BigDecimal amount, String period,
+                       BigDecimal discountAmount, UUID voucherId, BigDecimal finalAmount, PaymentSource paymentSource) {
         this.userId = userId;
         this.category = category;
         this.customerCode = customerCode;
@@ -73,6 +82,7 @@ public class BillPayment {
         this.discountAmount = discountAmount != null ? discountAmount : BigDecimal.ZERO;
         this.voucherId = voucherId;
         this.finalAmount = finalAmount != null ? finalAmount : amount;
+        this.paymentSource = paymentSource != null ? paymentSource : PaymentSource.MAIN_WALLET;
     }
 
     public UUID getId() {
@@ -113,5 +123,9 @@ public class BillPayment {
 
     public BigDecimal getFinalAmount() {
         return finalAmount;
+    }
+
+    public PaymentSource getPaymentSource() {
+        return paymentSource;
     }
 }

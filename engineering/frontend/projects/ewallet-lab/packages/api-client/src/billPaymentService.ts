@@ -17,6 +17,8 @@ export type BillLookupResponse = {
   period: string;
 };
 
+export type PaymentSource = 'MAIN_WALLET' | 'BNPL_WALLET';
+
 export type BillPaymentReceipt = {
   id: string;
   userId: string;
@@ -28,6 +30,7 @@ export type BillPaymentReceipt = {
   discountAmount?: number;
   voucherId?: string;
   finalAmount?: number;
+  paymentSource?: PaymentSource;
 };
 
 /** Issue #26 — Auto-debit Mandates, persisted server-side in bill-payment-service
@@ -82,6 +85,7 @@ export const billPaymentService = {
     customerCode: string,
     stepUpConfirmed?: boolean,
     voucherId?: string,
+    paymentSource?: PaymentSource,
   ) =>
     http.post<BillPaymentReceipt>(`${API_BASE.billPayment}/bills/pay`, {
       userId,
@@ -89,6 +93,7 @@ export const billPaymentService = {
       customerCode,
       stepUpConfirmed,
       voucherId,
+      paymentSource: paymentSource ?? 'MAIN_WALLET',
     }),
 };
 

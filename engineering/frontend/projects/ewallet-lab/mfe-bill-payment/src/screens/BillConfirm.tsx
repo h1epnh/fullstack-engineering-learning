@@ -1,4 +1,11 @@
-import { type BillLookupResponse, type VoucherDto, voucherPassService } from '@ewallet-lab/api-client';
+import {
+  type BillLookupResponse,
+  type PaymentSource,
+  type VoucherDto,
+  bnplService,
+  voucherPassService,
+  walletService,
+} from '@ewallet-lab/api-client';
 import { Button, Card, Icon, Screen, TextField, formatVnd } from '@ewallet-lab/ui';
 import { useEffect, useState } from 'react';
 import { BILL_CATEGORIES } from '../categories';
@@ -17,7 +24,7 @@ export function BillConfirm({
   bill: BillLookupResponse;
   userId: string;
   onBack: () => void;
-  onConfirm: (autoDebit?: AutoDebitOption, voucherId?: string) => Promise<string | null>;
+  onConfirm: (autoDebit?: AutoDebitOption, voucherId?: string, paymentSource?: PaymentSource) => Promise<string | null>;
 }) {
   const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
@@ -25,6 +32,13 @@ export function BillConfirm({
   const [usableVouchers, setUsableVouchers] = useState<VoucherDto[]>([]);
   const [selectedVoucherId, setSelectedVoucherId] = useState<string | null>(null);
   const [loadingVouchers, setLoadingVouchers] = useState(true);
+
+  // Issue #37: Payment Source Selector (MAIN_WALLET vs BNPL_WALLET)
+  const [paymentSource, setPaymentSource] = useState<PaymentSource>('MAIN_WALLET');
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [bnplLimit, setBnplLimit] = useState<number | null>(null);
+  const [bnplOpened, setBnplOpened] = useState(false);
+  const [loadingBalances, setLoadingBalances] = useState(true);
 
   // Default max cap rounded up to next 50,000đ above bill amount, or 1.5x
   const defaultCap = Math.max(
@@ -38,42 +52,66 @@ export function BillConfirm({
 
   useEffect(() => {
     let cancelled = false;
-    async function loadVouchers() {
+    async function loadSourcesAndVouchers() {
+      try {
+        setLoadingBalances(true);
+        const [w, b] = await Promise.allSettled([
+          walletService.get(userId),
+          bnplService.get(userId),
+        ]);
+        if (!cancelled) {
+          if (w.status === 'fulfilled') {
+            setWalletBalance(w.value.balance);
+          }
+          if (b.status === 'fulfilled') {
+            setBnplOpened(b.value.opened);
+            setBnplLimit(b.value.availableLimit ?? null);
+          }
+        }
+      } catch {
+        // Fallback gracefully
+      } finally {
+        if (!cancelled) setLoadingBalances(false);
+      }
+
       try {
         setLoadingVouchers(true);
         const list = await voucherPassService.getUsableVouchers(userId, bill.category, bill.amount);
         if (!cancelled) {
           setUsableVouchers(list);
           if (list.length > 0) {
-            // Auto-select first available voucher
             setSelectedVoucherId(list[0].id);
           }
         }
       } catch {
-        // Loyalty service might be offline or empty, fallback gracefully
+        // Loyalty service might be offline or empty
       } finally {
-        if (!cancelled) {
-          setLoadingVouchers(false);
-        }
+        if (!cancelled) setLoadingVouchers(false);
       }
     }
-    loadVouchers();
+    loadSourcesAndVouchers();
     return () => {
       cancelled = true;
     };
   }, [userId, bill.category, bill.amount]);
 
   const selectedVoucher = usableVouchers.find((v) => v.id === selectedVoucherId);
-  // Voucher.java (loyalty-service) chỉ có một kiểu giảm giá: số tiền cố định (discountAmount),
-  // không có percentage/maxDiscountAmount — không suy đoán field backend chưa có.
   const discountAmount = selectedVoucher ? Math.min(bill.amount, selectedVoucher.discountAmount) : 0;
   const finalAmount = Math.max(0, bill.amount - discountAmount);
+
+  // Tự động gợi ý chuyển sang Ví Trả Sau nếu ví chính không đủ mà Ví Trả Sau đủ hạn mức
+  useEffect(() => {
+    if (walletBalance !== null && walletBalance < finalAmount && bnplOpened && bnplLimit !== null && bnplLimit >= finalAmount) {
+      setPaymentSource('BNPL_WALLET');
+    }
+  }, [walletBalance, bnplLimit, bnplOpened, finalAmount]);
 
   async function submit() {
     setLoading(true);
     const err = await onConfirm(
       autoDebit ? { enabled: true, maxCap: numericMaxCap } : undefined,
       selectedVoucherId || undefined,
+      paymentSource,
     );
     setLoading(false);
     if (err) setError(err);
@@ -188,6 +226,138 @@ export function BillConfirm({
                 Hạn sử dụng: {new Date(selectedVoucher.expiresAt).toLocaleDateString('vi-VN')}
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* Issue #37: Bộ chọn nguồn tiền thanh toán (Payment Source Selector) */}
+      <div
+        style={{
+          marginTop: 14,
+          background: 'var(--el-surface)',
+          border: '1.5px solid var(--el-line)',
+          borderRadius: 14,
+          padding: '14px 16px',
+          boxShadow: 'var(--el-shadow)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <Icon name="payments" size={18} style={{ color: 'var(--el-accent)' }} />
+          <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--el-ink)' }}>Nguồn tiền thanh toán</span>
+        </div>
+
+        {loadingBalances ? (
+          <div style={{ fontSize: 12, color: 'var(--el-muted)' }}>Đang kiểm tra số dư và hạn mức…</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* Nguồn 1: Ví chính */}
+            {(() => {
+              const notEnoughWallet = walletBalance !== null && walletBalance < finalAmount;
+              const isSelected = paymentSource === 'MAIN_WALLET';
+              return (
+                <div
+                  onClick={() => !notEnoughWallet && setPaymentSource('MAIN_WALLET')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px 14px',
+                    borderRadius: 12,
+                    border: `1.5px solid ${isSelected ? 'var(--el-accent)' : 'var(--el-line)'}`,
+                    background: isSelected ? 'var(--el-accent-soft)' : notEnoughWallet ? 'var(--el-surface-2)' : 'var(--el-surface)',
+                    opacity: notEnoughWallet ? 0.6 : 1,
+                    cursor: notEnoughWallet ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Icon name="account_balance_wallet" size={20} style={{ color: isSelected ? 'var(--el-accent-ink)' : 'var(--el-muted)' }} />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--el-ink)' }}>Ví chính</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--el-muted)' }}>
+                        Số dư khả dụng: {walletBalance !== null ? formatVnd(walletBalance) : '—'}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    {notEnoughWallet ? (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--el-danger)', background: 'var(--el-danger-soft)', padding: '2px 8px', borderRadius: 6 }}>
+                        Không đủ số dư
+                      </span>
+                    ) : (
+                      <input
+                        type="radio"
+                        name="paymentSource"
+                        checked={isSelected}
+                        onChange={() => setPaymentSource('MAIN_WALLET')}
+                        style={{ accentColor: 'var(--el-accent)', width: 16, height: 16, cursor: 'pointer' }}
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Nguồn 2: Ví Trả Sau */}
+            {(() => {
+              const notOpened = !bnplOpened;
+              const notEnoughLimit = bnplOpened && bnplLimit !== null && bnplLimit < finalAmount;
+              const disabled = notOpened || notEnoughLimit;
+              const isSelected = paymentSource === 'BNPL_WALLET';
+              return (
+                <div
+                  onClick={() => !disabled && setPaymentSource('BNPL_WALLET')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px 14px',
+                    borderRadius: 12,
+                    border: `1.5px solid ${isSelected ? 'var(--el-accent)' : 'var(--el-line)'}`,
+                    background: isSelected ? 'var(--el-accent-soft)' : disabled ? 'var(--el-surface-2)' : 'var(--el-surface)',
+                    opacity: disabled ? 0.6 : 1,
+                    cursor: disabled ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Icon name="credit_card" size={20} style={{ color: isSelected ? 'var(--el-accent-ink)' : 'var(--el-muted)' }} />
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--el-ink)' }}>Ví Trả Sau (BNPL)</span>
+                        <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--el-accent-soft)', color: 'var(--el-accent-ink)', padding: '1px 5px', borderRadius: 4 }}>
+                          Mua trước trả sau
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--el-muted)' }}>
+                        {notOpened
+                          ? 'Chưa kích hoạt Ví Trả Sau'
+                          : `Hạn mức khả dụng: ${bnplLimit !== null ? formatVnd(bnplLimit) : '—'}`}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    {notOpened ? (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--el-muted)', background: 'var(--el-surface-2)', padding: '2px 8px', borderRadius: 6 }}>
+                        Chưa mở
+                      </span>
+                    ) : notEnoughLimit ? (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--el-danger)', background: 'var(--el-danger-soft)', padding: '2px 8px', borderRadius: 6 }}>
+                        Không đủ hạn mức
+                      </span>
+                    ) : (
+                      <input
+                        type="radio"
+                        name="paymentSource"
+                        checked={isSelected}
+                        onChange={() => setPaymentSource('BNPL_WALLET')}
+                        style={{ accentColor: 'var(--el-accent)', width: 16, height: 16, cursor: 'pointer' }}
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
@@ -314,12 +484,19 @@ export function BillConfirm({
       )}
 
       <div style={{ marginTop: 20 }}>
-        <Button onClick={submit} disabled={loading}>
+        <Button
+          onClick={submit}
+          disabled={
+            loading ||
+            (paymentSource === 'MAIN_WALLET' && walletBalance !== null && walletBalance < finalAmount) ||
+            (paymentSource === 'BNPL_WALLET' && (!bnplOpened || (bnplLimit !== null && bnplLimit < finalAmount)))
+          }
+        >
           {loading
             ? 'Đang thanh toán…'
             : autoDebit
               ? `Thanh toán & Bật Auto-debit (${formatVnd(finalAmount)})`
-              : `Xác nhận thanh toán ${formatVnd(finalAmount)}`}
+              : `Thanh toán bằng ${paymentSource === 'BNPL_WALLET' ? 'Ví Trả Sau' : 'Ví chính'} (${formatVnd(finalAmount)})`}
         </Button>
       </div>
     </Screen>

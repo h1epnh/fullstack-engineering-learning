@@ -6,6 +6,7 @@ import com.ewalletlab.billpaymentservice.domain.BillCategory;
 import com.ewalletlab.billpaymentservice.repository.AutoBillRegistrationRepository;
 import com.ewalletlab.billpaymentservice.repository.BillPaymentRepository;
 import com.ewalletlab.billpaymentservice.service.BillPaymentService;
+import com.ewalletlab.billpaymentservice.service.BnplServiceClient;
 import com.ewalletlab.billpaymentservice.service.LoyaltyServiceClient;
 import com.ewalletlab.billpaymentservice.service.WalletServiceClient;
 import com.ewalletlab.billpaymentservice.web.dto.AutoPayRunSummaryDto;
@@ -35,6 +36,7 @@ class BillPaymentServiceTests {
     private AutoBillRegistrationRepository autoBillRegistrationRepository;
     private WalletServiceClient walletServiceClient;
     private LoyaltyServiceClient loyaltyServiceClient;
+    private BnplServiceClient bnplServiceClient;
     private BillPaymentService billPaymentService;
 
     @BeforeEach
@@ -43,7 +45,8 @@ class BillPaymentServiceTests {
         autoBillRegistrationRepository = Mockito.mock(AutoBillRegistrationRepository.class);
         walletServiceClient = Mockito.mock(WalletServiceClient.class);
         loyaltyServiceClient = Mockito.mock(LoyaltyServiceClient.class);
-        billPaymentService = new BillPaymentService(billPaymentRepository, autoBillRegistrationRepository, walletServiceClient, loyaltyServiceClient);
+        bnplServiceClient = Mockito.mock(BnplServiceClient.class);
+        billPaymentService = new BillPaymentService(billPaymentRepository, autoBillRegistrationRepository, walletServiceClient, loyaltyServiceClient, bnplServiceClient);
     }
 
     @Test
@@ -228,6 +231,93 @@ class BillPaymentServiceTests {
         );
 
         verify(loyaltyServiceClient).revertVoucher(eq(voucherId), eq(userId));
+    }
+
+    @Test
+    void testPayWithBnplWalletSuccess() {
+        UUID userId = UUID.randomUUID();
+        var req = new com.ewalletlab.billpaymentservice.web.dto.BillPayRequestDto(
+            userId, BillCategory.ELECTRICITY, "PE01001234", false, null,
+            com.ewalletlab.billpaymentservice.domain.PaymentSource.BNPL_WALLET
+        );
+
+        when(bnplServiceClient.getWallet(eq(userId)))
+            .thenReturn(new BnplServiceClient.BnplWalletDto(true, new BigDecimal("20000000"), new BigDecimal("15000000"), BigDecimal.ZERO, BigDecimal.ZERO));
+
+        when(bnplServiceClient.draw(eq(userId), any(), anyString()))
+            .thenReturn(new BnplServiceClient.BnplWalletDto(true, new BigDecimal("20000000"), new BigDecimal("14500000"), new BigDecimal("500000"), BigDecimal.ZERO));
+
+        when(billPaymentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var receipt = billPaymentService.pay(req);
+        assertNotNull(receipt);
+        assertEquals(com.ewalletlab.billpaymentservice.domain.PaymentSource.BNPL_WALLET, receipt.paymentSource());
+        assertEquals(new BigDecimal("14500000"), receipt.newBalance());
+        verify(walletServiceClient, never()).debit(any(), any(), any(), any(), anyBoolean());
+        verify(bnplServiceClient).draw(eq(userId), any(), anyString());
+    }
+
+    @Test
+    void testPayWithBnplWalletNotOpenedThrows400() {
+        UUID userId = UUID.randomUUID();
+        var req = new com.ewalletlab.billpaymentservice.web.dto.BillPayRequestDto(
+            userId, BillCategory.ELECTRICITY, "PE01001234", false, null,
+            com.ewalletlab.billpaymentservice.domain.PaymentSource.BNPL_WALLET
+        );
+
+        when(bnplServiceClient.getWallet(eq(userId)))
+            .thenReturn(new BnplServiceClient.BnplWalletDto(false, null, null, null, null));
+
+        var ex = org.junit.jupiter.api.Assertions.assertThrows(
+            org.springframework.web.server.ResponseStatusException.class,
+            () -> billPaymentService.pay(req)
+        );
+        assertEquals(org.springframework.http.HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        verify(bnplServiceClient, never()).draw(any(), any(), anyString());
+    }
+
+    @Test
+    void testPayWithBnplWalletInsufficientLimitThrows409() {
+        UUID userId = UUID.randomUUID();
+        var req = new com.ewalletlab.billpaymentservice.web.dto.BillPayRequestDto(
+            userId, BillCategory.ELECTRICITY, "PE01001234", false, null,
+            com.ewalletlab.billpaymentservice.domain.PaymentSource.BNPL_WALLET
+        );
+
+        when(bnplServiceClient.getWallet(eq(userId)))
+            .thenReturn(new BnplServiceClient.BnplWalletDto(true, new BigDecimal("20000000"), new BigDecimal("1000"), BigDecimal.ZERO, BigDecimal.ZERO));
+
+        var ex = org.junit.jupiter.api.Assertions.assertThrows(
+            org.springframework.web.server.ResponseStatusException.class,
+            () -> billPaymentService.pay(req)
+        );
+        assertEquals(org.springframework.http.HttpStatus.CONFLICT, ex.getStatusCode());
+        verify(bnplServiceClient, never()).draw(any(), any(), anyString());
+    }
+
+    @Test
+    void testPayWithBnplWalletCompensationOnSaveFailure() {
+        UUID userId = UUID.randomUUID();
+        var req = new com.ewalletlab.billpaymentservice.web.dto.BillPayRequestDto(
+            userId, BillCategory.ELECTRICITY, "PE01001234", false, null,
+            com.ewalletlab.billpaymentservice.domain.PaymentSource.BNPL_WALLET
+        );
+
+        when(bnplServiceClient.getWallet(eq(userId)))
+            .thenReturn(new BnplServiceClient.BnplWalletDto(true, new BigDecimal("20000000"), new BigDecimal("15000000"), BigDecimal.ZERO, BigDecimal.ZERO));
+
+        when(bnplServiceClient.draw(eq(userId), any(), anyString()))
+            .thenReturn(new BnplServiceClient.BnplWalletDto(true, new BigDecimal("20000000"), new BigDecimal("14500000"), new BigDecimal("500000"), BigDecimal.ZERO));
+
+        when(billPaymentRepository.save(any())).thenThrow(new RuntimeException("DB crash"));
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+            org.springframework.web.server.ResponseStatusException.class,
+            () -> billPaymentService.pay(req)
+        );
+
+        // Verify compensation refund called!
+        verify(bnplServiceClient).refund(eq(userId), any(), anyString());
     }
 }
 

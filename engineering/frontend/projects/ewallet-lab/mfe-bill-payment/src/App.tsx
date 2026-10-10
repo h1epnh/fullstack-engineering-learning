@@ -4,6 +4,7 @@ import {
   type BillCategory,
   type BillLookupResponse,
   type BillPaymentReceipt,
+  type PaymentSource,
   billPaymentService,
 } from '@ewallet-lab/api-client';
 import type { Session } from '@ewallet-lab/session';
@@ -54,9 +55,21 @@ export default function App({
   if (step.name === 'confirm') {
     const bill = step.bill;
 
-    async function submitPay(stepUpConfirmed: boolean, autoDebitOption?: AutoDebitOption, voucherId?: string): Promise<string | null> {
+    async function submitPay(
+      stepUpConfirmed: boolean,
+      autoDebitOption?: AutoDebitOption,
+      voucherId?: string,
+      paymentSource?: PaymentSource,
+    ): Promise<string | null> {
       try {
-        const receipt = await billPaymentService.pay(session.id, bill.category, bill.customerCode, stepUpConfirmed, voucherId);
+        const receipt = await billPaymentService.pay(
+          session.id,
+          bill.category,
+          bill.customerCode,
+          stepUpConfirmed,
+          voucherId,
+          paymentSource,
+        );
         if (autoDebitOption?.enabled) {
           // Đăng ký thật với backend (bill-payment-service's AutoBillRegistration) — không
           // phải chỉ lưu localStorage — để scheduler/trigger-run thực sự xử lý kỳ sau.
@@ -74,7 +87,7 @@ export default function App({
           setStep({
             name: 'step-up',
             message: e.message,
-            onConfirm: () => submitPay(true, autoDebitOption, voucherId).then(() => undefined),
+            onConfirm: () => submitPay(true, autoDebitOption, voucherId, paymentSource).then(() => undefined),
             onCancel: () => setStep({ name: 'confirm', bill }),
           });
           return null;
@@ -88,7 +101,7 @@ export default function App({
         bill={step.bill}
         userId={session.id}
         onBack={() => setStep({ name: 'lookup' })}
-        onConfirm={(autoDebitOption, voucherId) => submitPay(false, autoDebitOption, voucherId)}
+        onConfirm={(autoDebitOption, voucherId, paymentSource) => submitPay(false, autoDebitOption, voucherId, paymentSource)}
       />
     );
   }

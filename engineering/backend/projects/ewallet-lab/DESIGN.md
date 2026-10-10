@@ -221,6 +221,42 @@ Mở rộng `bill-payment-service` hỗ trợ người dùng đăng ký uỷ nhi
 - `PUT /bills/auto-pay/{id}/status`: Cập nhật trạng thái (`ACTIVE`, `PAUSED`, `CANCELLED`).
 - `POST /bills/auto-pay/trigger-run?forceAll=false`: Test harness endpoint cho phép kích hoạt chu kỳ quét trích nợ ngay lập tức mà không cần chờ cron `AutoBillScheduler` (mặc định chạy 07:00 ngày 1 và ngày 15 hàng tháng).
 
+### Nguồn tiền thanh toán ưu tiên & Trả góp Ví Trả Sau BNPL (issue #37)
+
+Mở rộng `bill-payment-service` hỗ trợ thanh toán hoá đơn qua nguồn tiền **Ví Trả Sau (BNPL_WALLET)** song song với nguồn tiền truyền thống **Ví Chính (MAIN_WALLET)**, tích hợp với `bnpl-service`.
+
+#### 1. Mô hình Nguồn tiền (`PaymentSource`)
+- Enum `PaymentSource`:
+  - `MAIN_WALLET`: Trừ số dư thực tế từ `wallet-service`.
+  - `BNPL_WALLET`: Trừ hạn mức khả dụng từ `bnpl-service` (`POST /bnpl/wallets/{userId}/draw`).
+- Bảng `bill_payments` bổ sung cột `payment_source VARCHAR(255) DEFAULT 'MAIN_WALLET' NOT NULL` (kèm migration script đảm bảo backward compatibility 100% cho các bản ghi cũ).
+- `BillPayRequestDto` và `BillPaymentReceiptDto` đều mang thông tin `paymentSource` (mặc định fallback về `MAIN_WALLET` nếu client không truyền).
+
+#### 2. Kiến trúc & Luồng xử lý phân nhánh nguồn tiền
+1. **Kiểm tra trạng thái Ví Trả Sau**:
+   - Nếu `paymentSource == BNPL_WALLET`, gọi `GET /bnpl/wallets/{userId}`.
+   - Nếu ví chưa mở (`opened == false`), ném ngay `400 Bad Request` ("Bạn chưa mở Ví Trả Sau. Vui lòng mở Ví Trả Sau trước khi thanh toán").
+   - Nếu hạn mức khả dụng `availableLimit < finalAmount`, ném `409 Conflict` ("Hạn mức khả dụng Ví Trả Sau không đủ").
+2. **Tuân thủ QĐ 2345/QĐ-NHNN (issue #15)**:
+   - Nếu `finalAmount > 10.000.000đ` và `isStepUpConfirmed == false`, ném mã HTTP `428 Precondition Required` ("Giao dịch thanh toán hoá đơn trên 10.000.000đ bằng Ví Trả Sau cần xác thực bổ sung theo QĐ 2345/QĐ-NHNN").
+3. **Cơ chế Bù trừ Saga (Compensating Transaction)**:
+   - `bnpl-service` bổ sung endpoint `POST /bnpl/wallets/{userId}/refund` (khấu trừ ngược lại principal trong statement và giải phóng hạn mức).
+   - Trong `BillPaymentService`: nếu gọi trừ hạn mức `draw()` thành công nhưng xảy ra lỗi khi lưu bản ghi hoá đơn `billPaymentRepository.save()`, hệ thống tự động kích hoạt lời gọi bù trừ `bnplServiceClient.refund(userId, finalAmount, "Hoàn trả hạn mức do lưu hoá đơn thất bại")`, bảo đảm **Zero Ledger Discrepancy**.
+4. **Voucher Integration**:
+   - Khấu trừ voucher qua `loyalty-service` trước khi tính `finalAmount`. Nếu BNPL draw hoặc save fail, hoàn lại voucher (`revertVoucher`) đồng bộ.
+
+#### 3. Kiểm thử Độc lập (100% Passed)
+- Script kiểm thử `scratch/test_verify_issue37.py` qua Minikube Ingress (cổng 18080):
+  1. Đăng ký user A, nạp 2.000.000đ vào ví chính.
+  2. Tra cứu hoá đơn điện.
+  3. Thanh toán bằng BNPL khi chưa kích hoạt -> chặn 400 Bad Request.
+  4. Mở Ví Trả Sau (hạn mức 20.000.000đ).
+  5. Thanh toán hoá đơn bằng BNPL -> 200 OK, ví chính giữ nguyên 2.000.000đ, BNPL trừ chính xác số tiền hoá đơn.
+  6. Thanh toán hoá đơn khác bằng ví chính -> 200 OK, ví chính giảm, BNPL giữ nguyên.
+  7. Rút gần hết hạn mức BNPL -> thử thanh toán vượt hạn mức -> từ chối 409 Conflict.
+  8. Hoá đơn 12.000.000đ (> 10M) -> chặn 428 Precondition Required; xác thực step-up -> 200 OK.
+  9. Race condition test (5 luồng đồng thời rút 5.777.000đ trên hạn mức 1.000.000đ) -> chính xác 1 luồng thành công, 4 luồng 409, số dư cuối khớp 100%, không over-limit.
+
 ## Concurrent debit/credit trên cùng ví — optimistic lock, không phải bug về tính toàn vẹn (issue #5)
 
 `Wallet` dùng `@Version` (optimistic locking) — khi 2 request debit/credit cùng ví chạy đồng thời,

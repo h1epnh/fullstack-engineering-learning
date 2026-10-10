@@ -4,6 +4,7 @@ import com.ewalletlab.billpaymentservice.domain.AutoBillRegistration;
 import com.ewalletlab.billpaymentservice.domain.AutoBillStatus;
 import com.ewalletlab.billpaymentservice.domain.BillCategory;
 import com.ewalletlab.billpaymentservice.domain.BillPayment;
+import com.ewalletlab.billpaymentservice.domain.PaymentSource;
 import com.ewalletlab.billpaymentservice.repository.AutoBillRegistrationRepository;
 import com.ewalletlab.billpaymentservice.repository.BillPaymentRepository;
 import com.ewalletlab.billpaymentservice.web.dto.AutoBillRegistrationDto;
@@ -50,15 +51,18 @@ public class BillPaymentService {
     private final AutoBillRegistrationRepository autoBillRegistrationRepository;
     private final WalletServiceClient walletServiceClient;
     private final LoyaltyServiceClient loyaltyServiceClient;
+    private final BnplServiceClient bnplServiceClient;
 
     public BillPaymentService(BillPaymentRepository billPaymentRepository,
                               AutoBillRegistrationRepository autoBillRegistrationRepository,
                               WalletServiceClient walletServiceClient,
-                              LoyaltyServiceClient loyaltyServiceClient) {
+                              LoyaltyServiceClient loyaltyServiceClient,
+                              BnplServiceClient bnplServiceClient) {
         this.billPaymentRepository = billPaymentRepository;
         this.autoBillRegistrationRepository = autoBillRegistrationRepository;
         this.walletServiceClient = walletServiceClient;
         this.loyaltyServiceClient = loyaltyServiceClient;
+        this.bnplServiceClient = bnplServiceClient;
     }
 
     public BillLookupResponse lookup(BillCategory category, String customerCode) {
@@ -84,9 +88,6 @@ public class BillPaymentService {
                     finalAmount = originalAmount.subtract(discountAmount);
                 }
             } catch (HttpClientErrorException e) {
-                // Dùng status code value thay vì instanceof subclass (HttpClientErrorException.Conflict/
-                // BadRequest) — bền hơn khi exception được tạo qua đường khác (vd. test tự construct
-                // bằng constructor base class) không trúng đúng subclass cụ thể.
                 int status = e.getStatusCode().value();
                 if (status == 409) {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Voucher đã được sử dụng hoặc không còn khả dụng");
@@ -99,7 +100,92 @@ public class BillPaymentService {
             }
         }
 
-        // 2. Trừ tiền ví chính với finalAmount
+        // 2. Phân nhánh nguồn tiền thanh toán (Issue #37: MAIN_WALLET vs BNPL_WALLET)
+        if (request.getPaymentSource() == PaymentSource.BNPL_WALLET) {
+            // Ràng buộc Step-up #15 cho BNPL > 10M
+            if (finalAmount.compareTo(STEP_UP_THRESHOLD) > 0 && !request.isStepUpConfirmed()) {
+                if (request.voucherId() != null) {
+                    loyaltyServiceClient.revertVoucher(request.voucherId(), request.userId());
+                }
+                throw new ResponseStatusException(HttpStatus.valueOf(428),
+                    "Giao dịch thanh toán hoá đơn trên 10.000.000đ bằng Ví Trả Sau cần xác thực bổ sung theo QĐ 2345/QĐ-NHNN");
+            }
+
+            // Kiểm tra trạng thái và hạn mức Ví Trả Sau
+            BnplServiceClient.BnplWalletDto bnplWallet;
+            try {
+                bnplWallet = bnplServiceClient.getWallet(request.userId());
+            } catch (Exception e) {
+                if (request.voucherId() != null) {
+                    loyaltyServiceClient.revertVoucher(request.voucherId(), request.userId());
+                }
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Không kết nối được dịch vụ Ví Trả Sau: " + e.getMessage());
+            }
+
+            if (bnplWallet == null || !bnplWallet.opened()) {
+                if (request.voucherId() != null) {
+                    loyaltyServiceClient.revertVoucher(request.voucherId(), request.userId());
+                }
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bạn chưa mở Ví Trả Sau. Vui lòng mở Ví Trả Sau trước khi thanh toán.");
+            }
+
+            if (bnplWallet.availableLimit() == null || bnplWallet.availableLimit().compareTo(finalAmount) < 0) {
+                if (request.voucherId() != null) {
+                    loyaltyServiceClient.revertVoucher(request.voucherId(), request.userId());
+                }
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Hạn mức khả dụng Ví Trả Sau không đủ (còn " + (bnplWallet.availableLimit() != null ? bnplWallet.availableLimit() : 0) + "đ)");
+            }
+
+            String note = "Thanh toán hoá đơn " + describeCategory(request.category())
+                + (discountAmount.signum() > 0 ? " (voucher -" + discountAmount + "đ)" : " (mock biller)");
+
+            BnplServiceClient.BnplWalletDto drawResult;
+            try {
+                drawResult = bnplServiceClient.draw(request.userId(), finalAmount, note);
+            } catch (HttpClientErrorException e) {
+                if (request.voucherId() != null) {
+                    loyaltyServiceClient.revertVoucher(request.voucherId(), request.userId());
+                }
+                int status = e.getStatusCode().value();
+                if (status == 409) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Hạn mức khả dụng Ví Trả Sau không đủ để thanh toán");
+                }
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Lỗi trích xuất hạn mức Ví Trả Sau: " + e.getMessage());
+            } catch (Exception e) {
+                if (request.voucherId() != null) {
+                    loyaltyServiceClient.revertVoucher(request.voucherId(), request.userId());
+                }
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Không gọi được Ví Trả Sau: " + e.getMessage());
+            }
+
+            String period = LocalDate.now().format(PERIOD_FORMAT);
+            BillPayment saved;
+            try {
+                saved = billPaymentRepository.save(
+                    new BillPayment(request.userId(), request.category(), request.customerCode(), originalAmount, period,
+                        discountAmount, request.voucherId(), finalAmount, PaymentSource.BNPL_WALLET));
+            } catch (Exception e) {
+                // BẮT BUỘC bù trừ (compensate): Hoàn trả hạn mức đã draw trên bnpl-service khi lưu hoá đơn thất bại
+                try {
+                    bnplServiceClient.refund(request.userId(), finalAmount, "Hoàn trả hạn mức do lỗi lưu biên lai hoá đơn");
+                } catch (Exception refundEx) {
+                    log.error("Lỗi khi bồi hoàn hạn mức Ví Trả Sau cho user {}: {}", request.userId(), refundEx.getMessage());
+                }
+                if (request.voucherId() != null) {
+                    loyaltyServiceClient.revertVoucher(request.voucherId(), request.userId());
+                }
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Lỗi khi lưu hoá đơn, đã hoàn lại hạn mức Ví Trả Sau", e);
+            }
+
+            BigDecimal remainingLimit = drawResult != null && drawResult.availableLimit() != null ? drawResult.availableLimit() : BigDecimal.ZERO;
+            return new BillPaymentReceiptDto(
+                saved.getId(), saved.getUserId(), saved.getCategory(), saved.getCustomerCode(),
+                saved.getAmount(), remainingLimit, saved.getCreatedAt(),
+                discountAmount, request.voucherId(), finalAmount, PaymentSource.BNPL_WALLET);
+        }
+
+        // 3. Trừ tiền ví chính với finalAmount (Nguồn tiền MAIN_WALLET)
         WalletServiceClient.DebitResult debitResult;
         try {
             String note = "Thanh toán hoá đơn " + describeCategory(request.category())
@@ -111,10 +197,6 @@ public class BillPaymentService {
                 note,
                 request.isStepUpConfirmed());
         } catch (HttpClientErrorException e) {
-            // Hoàn lại voucher nếu trừ ví thất bại (áp dụng cho MỌI lỗi HTTP từ wallet-service,
-            // không chỉ riêng status code đã có subclass cụ thể trong Spring — tránh bug
-            // "instanceof subclass" không khớp khi exception được tạo qua
-            // HttpClientErrorException.create() với subclass khác không mong đợi).
             if (request.voucherId() != null) {
                 loyaltyServiceClient.revertVoucher(request.voucherId(), request.userId());
             }
@@ -126,7 +208,6 @@ public class BillPaymentService {
             }
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Lỗi khi trích nợ ví: " + e.getMessage());
         } catch (Exception e) {
-            // Hoàn lại voucher nếu có lỗi không phải lỗi HTTP (network, timeout, v.v.)
             if (request.voucherId() != null) {
                 loyaltyServiceClient.revertVoucher(request.voucherId(), request.userId());
             }
@@ -136,12 +217,12 @@ public class BillPaymentService {
         String period = LocalDate.now().format(PERIOD_FORMAT);
         BillPayment saved = billPaymentRepository.save(
             new BillPayment(request.userId(), request.category(), request.customerCode(), originalAmount, period,
-                discountAmount, request.voucherId(), finalAmount));
+                discountAmount, request.voucherId(), finalAmount, PaymentSource.MAIN_WALLET));
 
         return new BillPaymentReceiptDto(
             saved.getId(), saved.getUserId(), saved.getCategory(), saved.getCustomerCode(),
             saved.getAmount(), debitResult.balance(), saved.getCreatedAt(),
-            discountAmount, request.voucherId(), finalAmount);
+            discountAmount, request.voucherId(), finalAmount, PaymentSource.MAIN_WALLET);
     }
 
     public List<BillPayment> history(UUID userId) {
@@ -307,6 +388,9 @@ public class BillPaymentService {
      * always quotes the same amount (so lookup and pay never disagree), but it is not a real
      * biller balance. */
     private BigDecimal mockDueAmount(BillCategory category, String customerCode) {
+        if (customerCode != null && customerCode.trim().toUpperCase(Locale.ROOT).startsWith("STEPUP_")) {
+            return new BigDecimal("12000000");
+        }
         long hash = stableHash(category.name() + ":" + customerCode.trim().toUpperCase(Locale.ROOT));
         long range = 2_000_000 - 50_000;
         long amount = 50_000 + Math.floorMod(hash, range);

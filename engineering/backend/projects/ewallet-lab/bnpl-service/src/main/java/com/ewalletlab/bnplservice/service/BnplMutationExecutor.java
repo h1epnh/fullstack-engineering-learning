@@ -86,6 +86,19 @@ class BnplMutationExecutor {
         return draws.save(new Draw(line.getId(), statement.getId(), amount, label, Instant.now(clock)));
     }
 
+    /** Compensation: bill-payment failed after draw — refund drawn amount. */
+    @Transactional
+    void refund(UUID userId, BigDecimal amount, String reason) {
+        CreditLine line = lockOrThrow(userId);
+        YearMonth period = YearMonth.now(clock);
+        Statement statement = statements.findByCreditLineIdAndPeriod(line.getId(), period.toString())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy kỳ sao kê"));
+        statement.subtractPrincipal(amount);
+        line.subtractPrincipal(amount);
+        draws.save(new Draw(line.getId(), statement.getId(), amount.negate(),
+            reason == null || reason.isBlank() ? "Hoàn trả hạn mức" : reason.strip(), Instant.now(clock)));
+    }
+
     @Transactional
     Repayment claimRepayment(UUID userId, BigDecimal amount) {
         CreditLine line = lockOrThrow(userId);

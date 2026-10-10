@@ -35,8 +35,25 @@ export function BillReceipt({
               Đã thanh toán <strong>{formatVnd(receipt.amount)}</strong> cho <strong>{categoryLabel}</strong> (mã KH {receipt.customerCode})
             </p>
           )}
+          {receipt.paymentSource === 'BNPL_WALLET' ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '4px 0', background: 'var(--el-accent-soft)', padding: '4px 10px', borderRadius: 8 }}>
+              <Icon name="credit_card" size={16} style={{ color: 'var(--el-accent-ink)' }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--el-accent-ink)' }}>
+                Nguồn tiền: Ví Trả Sau (BNPL)
+              </span>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '4px 0', background: 'var(--el-surface-2)', padding: '4px 10px', borderRadius: 8 }}>
+              <Icon name="account_balance_wallet" size={16} style={{ color: 'var(--el-muted)' }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--el-ink)' }}>
+                Nguồn tiền: Ví chính
+              </span>
+            </div>
+          )}
           <p style={{ fontSize: 12.5, color: 'var(--el-muted)', margin: 0 }}>
-            Số dư mới: <strong>{formatVnd(receipt.newBalance)}</strong>
+            {receipt.paymentSource === 'BNPL_WALLET'
+              ? <>Hạn mức Ví Trả Sau còn lại: <strong>{formatVnd(receipt.newBalance)}</strong></>
+              : <>Số dư ví chính mới: <strong>{formatVnd(receipt.newBalance)}</strong></>}
           </p>
         </div>
       </Card>

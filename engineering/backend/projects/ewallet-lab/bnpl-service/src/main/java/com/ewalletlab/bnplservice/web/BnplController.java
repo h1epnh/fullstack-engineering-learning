@@ -4,6 +4,7 @@ import com.ewalletlab.bnplservice.service.BnplService;
 import com.ewalletlab.bnplservice.web.dto.BnplWalletDto;
 import com.ewalletlab.bnplservice.web.dto.DrawRequestDto;
 import com.ewalletlab.bnplservice.web.dto.OpenRequestDto;
+import com.ewalletlab.bnplservice.web.dto.RefundRequestDto;
 import com.ewalletlab.bnplservice.web.dto.RepayRequestDto;
 import jakarta.validation.Valid;
 import org.springframework.dao.PessimisticLockingFailureException;
@@ -27,7 +28,7 @@ public class BnplController {
 
     /** 200 with {@code opened=false} (not 404) when the user hasn't opened one yet — the UI shows the
      * "chưa mở" screen from it. */
-    @GetMapping("/{userId}")
+    @GetMapping({"/wallets/{userId}", "/{userId}"})
     public BnplWalletDto get(@PathVariable UUID userId) {
         return service.get(userId).map(BnplWalletDto::from).orElseGet(BnplWalletDto::notOpened);
     }
@@ -37,9 +38,14 @@ public class BnplController {
         return BnplWalletDto.from(service.open(userId, request.acceptedDisclaimer()));
     }
 
-    @PostMapping("/{userId}/draws")
+    @PostMapping({"/wallets/{userId}/draw", "/{userId}/draws"})
     public BnplWalletDto draw(@PathVariable UUID userId, @Valid @RequestBody DrawRequestDto request) {
         return BnplWalletDto.from(service.draw(userId, request.amount(), request.label()));
+    }
+
+    @PostMapping({"/wallets/{userId}/refund", "/{userId}/refund"})
+    public BnplWalletDto refund(@PathVariable UUID userId, @Valid @RequestBody RefundRequestDto request) {
+        return BnplWalletDto.from(service.refund(userId, request.amount(), request.reason()));
     }
 
     @PostMapping("/{userId}/repayments")

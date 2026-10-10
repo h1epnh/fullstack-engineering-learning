@@ -73,6 +73,11 @@ public class BnplService {
         return snapshotOf(userId);
     }
 
+    public Snapshot refund(UUID userId, BigDecimal amount, String reason) {
+        executor.refund(userId, amount, reason);
+        return snapshotOf(userId);
+    }
+
     /**
      * Claim (debt reduced + PENDING repayment, committed) → real wallet-service debit → mark
      * COMPLETED. On any debit failure the claim is reverted before the error is surfaced.
