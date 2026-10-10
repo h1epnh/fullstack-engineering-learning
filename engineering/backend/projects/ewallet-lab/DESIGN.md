@@ -2192,3 +2192,66 @@ Tích hợp trực tiếp vào `transfer-service` với database riêng `ewallet
 - Kiểm thử ngưỡng 10M QĐ 2345: chặn an toàn với `FAILED_STEP_UP_REQUIRED`.
 - Tạm dừng lịch (`PAUSED`) thành công.
 
+## Thiệp mừng điện tử & Lì xì theo chủ đề (issue #34) — mở rộng `lucky-money-service`
+
+Tích hợp tính năng gửi Thiệp mừng điện tử kèm tiền (E-Gift Cards & Occasion Money Transfers) vào `lucky-money-service` theo phương án kiến trúc (a) được Operator phê duyệt, mở rộng dịch vụ thành trung tâm "Quà tặng & Giao dịch xã hội", dùng chung DB `ewallet_lucky_money`, gắn kết qua Ingress route `/gift-cards`.
+
+### 1. Khác biệt cốt lõi giữa Lì xì (Lucky Money) và Thiệp mừng (Gift Cards)
+- **Lì xì (Issue #10)**: Sử dụng cơ chế Escrow 48h — tiền rời ví người gửi nhưng được giữ trong quỹ treo, người nhận phải chủ động bấm "Nhận lì xì" thì tiền mới vào ví; nếu quá hạn 48h, hệ thống tự động hoàn tiền về ví người gửi.
+- **Thiệp mừng (Issue #34)**: Tiền mừng chuyển THẲNG vào ví người nhận ngay tại thời điểm gửi thông qua saga thanh toán hai bước (`TRANSFER_OUT` ở người gửi và `TRANSFER_IN` ở người nhận, có compensation `REFUND` nếu bước 2 thất bại). Người nhận không cần "claim" để lấy tiền mà chỉ cần mở thiệp để thưởng thức hiệu ứng chúc mừng và gửi lại lời cảm ơn.
+
+### 2. Mô hình Dữ liệu (`GiftCardTransfer`)
+- Bảng `gift_card_transfers` trong DB `ewallet_lucky_money`:
+  - `id`: UUID Primary Key
+  - `sender_id`: UUID người gửi
+  - `sender_name`: Họ tên người gửi
+  - `recipient_phone`: SĐT người nhận
+  - `recipient_user_id`: UUID người nhận
+  - `recipient_name`: Họ tên người nhận
+  - `amount`: Số tiền mừng gửi kèm
+  - `template_code`: Mã chủ đề thiệp (`BIRTHDAY_CHEER`, `WEDDING_LOVE`, `THANK_YOU_WARM`, `CONGRATS_SUCCESS`)
+  - `custom_message`: Lời chúc riêng (tối đa 255 ký tự)
+  - `status`: Enum `SENT`, `OPENED`
+  - `opened_at`: Thời điểm người nhận mở thiệp
+  - `reply_message`: Lời cảm ơn phản hồi từ người nhận (tối đa 255 ký tự)
+  - `created_at`, `updated_at`, `version`: `@Version Long version` hỗ trợ kiểm soát khóa lạc quan.
+
+### 3. Danh mục Chủ đề Mẫu thiệp (Templates Catalog)
+1. `BIRTHDAY_CHEER`: Chủ đề sinh nhật — Icon `cake`, màu `amber`, câu chúc mặc định: "Chúc mừng sinh nhật. Sinh nhật vui vẻ! Thêm tuổi mới nhiều niềm vui, may mắn và hạnh phúc!".
+2. `WEDDING_LOVE`: Chủ đề cưới hỏi — Icon `favorite`, màu `rose`, câu chúc mặc định: "Trăm năm hạnh phúc. Chúc hai bạn trăm năm hạnh phúc, đầu bạc răng long, vạn sự như ý!".
+3. `THANK_YOU_WARM`: Chủ đề cảm ơn — Icon `thumb_up`, màu `emerald`, câu chúc mặc định: "Cảm ơn chân thành. Cảm ơn bạn rất nhiều vì sự giúp đỡ và đồng hành nhiệt tình!".
+4. `CONGRATS_SUCCESS`: Chủ đề chúc mừng — Icon `emoji_events`, màu `indigo`, câu chúc mặc định: "Chúc mừng thành công. Chúc mừng bạn đã đạt cột mốc mới! Vạn sự hanh thông, công thành danh toại!".
+
+### 4. Quy trình Nghiệp vụ & Ràng buộc An toàn
+1. **Lấy danh mục**: `GET /gift-cards/templates`.
+2. **Gửi thiệp mừng kèm tiền**: `POST /gift-cards/send`.
+   - Chặn tự gửi cho chính mình (400 Bad Request).
+   - Kiểm tra ngưỡng Step-up QĐ 2345: Nếu số tiền > 10.000.000đ mà chưa có `stepUpConfirmed: true`, trả `428 Precondition Required`.
+   - Trừ tiền ví người gửi (`TRANSFER_OUT`). Nếu thiếu số dư, trả `409 Conflict`.
+   - Cộng tiền ví người nhận (`TRANSFER_IN`). Nếu bước này thất bại, kích hoạt bù trừ `REFUND` hoàn tiền ngay lập tức cho người gửi.
+   - Lưu bản ghi thiệp với trạng thái ban đầu `SENT`.
+3. **Tra cứu danh sách thiệp**:
+   - `GET /gift-cards/received?recipientUserId={id}`: Lấy danh sách thiệp đã nhận.
+   - `GET /gift-cards/sent?senderId={id}`: Lấy danh sách thiệp đã gửi.
+4. **Mở thiệp mừng**: `POST /gift-cards/{id}/open`.
+   - Xác thực quyền sở hữu: Chỉ đúng người nhận mới được mở (người khác truy cập nhận `403 Forbidden`).
+   - Cập nhật trạng thái `OPENED` và ghi nhận `openedAt = Instant.now()`.
+5. **Gửi lời cảm ơn**: `POST /gift-cards/{id}/reply`.
+   - Xác thực quyền sở hữu của người nhận (403 nếu không khớp).
+   - Validate lời cảm ơn không rỗng và <= 255 ký tự.
+   - Ghi nhận `replyMessage` trên thiệp để người gửi có thể xem lại phản hồi.
+
+### 5. Độc lập kiểm thử E2E (scratch/test_verify_issue34.py)
+Đã chạy qua Ingress Nginx thật trên cổng 18080 với 13 bước kiểm thử:
+- Tra cứu danh mục mẫu thiệp đầy đủ 4 chủ đề.
+- Chặn tự gửi cho chính mình (400) và chặn mã thiệp không hợp lệ (400).
+- Chặn giao dịch > 10M chưa xác thực sinh trắc học với HTTP 428 Step-up.
+- Chặn tài khoản không đủ số dư với HTTP 409 Conflict (bảo toàn số dư gốc).
+- Gửi thiệp 50.000đ thành công: Ví A trừ đúng 50.000đ, ví B cộng đúng 50.000đ.
+- Kiểm tra danh sách thiệp đã nhận và đã gửi.
+- Chặn người lạ mở thiệp hoặc phản hồi cảm ơn (403 Forbidden).
+- Người nhận mở thiệp thành công (`OPENED` + `openedAt`).
+- Người nhận gửi lời cảm ơn thành công và người gửi xem lại được lời cảm ơn.
+- Phục vụ bundle `mfe-transfer /remoteEntry.js` đạt HTTP 200 OK.
+
+

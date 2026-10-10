@@ -9,7 +9,7 @@ import { QrScanner } from './QrScanner';
 const OTHER_SERVICES: { key: string; icon: string; label: string; wired?: boolean }[] = [
   { key: 'saved-payees', icon: 'contacts', label: 'Danh bạ', wired: true },
   { key: 'recurring-transfer', icon: 'schedule', label: 'Lịch chuyển', wired: true },
-  { key: 'send-card', icon: 'card_giftcard', label: 'Gửi thiệp' },
+  { key: 'send-card', icon: 'card_giftcard', label: 'Gửi thiệp', wired: true },
   { key: 'split-bill', icon: 'call_split', label: 'Chia tiền', wired: true },
   { key: 'payment-reminder', icon: 'notifications_active', label: 'Nhắc trả tiền', wired: true },
   { key: 'fund', icon: 'groups', label: 'Quỹ', wired: true },

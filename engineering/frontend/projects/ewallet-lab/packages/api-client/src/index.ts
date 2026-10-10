@@ -18,3 +18,4 @@ export * from './voucherPassService';
 export * from './telcoService';
 export * from './travelBookingService';
 export * from './insuranceService';
+export * from './giftCardService';

@@ -957,4 +957,33 @@ Hiển thị thường trực ở đầu giao diện:
 - Rebuild docker image `ewallet-lab/mfe-bill-payment:local` và rollout thành công lên Minikube.
 - Độc lập kiểm thử E2E backend/frontend thông qua Ingress Nginx (18080) đạt 100% 9/9 test suites.
 
+## 28. Thiệp mừng điện tử & Lì xì theo chủ đề (issue #34) — `GiftCards.tsx` trong `mfe-transfer`
+
+Tích hợp sản phẩm Thiệp mừng điện tử & Lì xì theo chủ đề vào `mfe-transfer` với màn hình mới `GiftCards.tsx`, kích hoạt từ nút "Gửi thiệp" trong danh sách dịch vụ khác trên `TransferHome.tsx`.
+
+### 1. Luồng Gửi Thiệp Mừng (Send Flow)
+- Tìm kiếm người nhận theo số điện thoại (tự động tra cứu tên từ `user-service`).
+- Bộ chọn mẫu thiệp gồm 4 chủ đề trang trọng:
+  - `BIRTHDAY_CHEER`: Sinh nhật (Icon bánh kem, tông màu vàng/cam).
+  - `WEDDING_LOVE`: Cưới hỏi (Icon trái tim, tông màu đỏ/hồng).
+  - `THANK_YOU_WARM`: Cảm ơn (Icon bàn tay cái, tông màu xanh lá).
+  - `CONGRATS_SUCCESS`: Chúc mừng thành công (Icon cúp vàng, tông màu tím/vàng).
+- Khung xem trước trực tiếp (Live Preview): Thẻ thiệp hiển thị biểu tượng chủ đề, lời chúc tuỳ biến, người gửi, người nhận và số tiền mừng dự kiến.
+- Ô nhập số tiền mừng (kèm các nút chọn nhanh 50k, 100k, 200k, 500k, 1M, 2M) và ô chỉnh sửa lời chúc cá nhân hoá.
+- Tích hợp `StepUpModal` theo QĐ 2345/QĐ-NHNN khi số tiền gửi > 10.000.000đ.
+
+### 2. Luồng Mở Thiệp & Phản Hồi Cảm Ơn (Receive & Reply Flow)
+- Tab "Thiệp đã nhận": Danh sách các thiệp người dùng nhận được từ bạn bè, phân loại `Thiệp mới` / `Đã mở`.
+- Hiệu ứng bóc phong bì thiệp mừng: Mở modal xem thiệp trang trọng với số tiền mừng lớn và lời chúc ý nghĩa.
+- Gửi lời cảm ơn: Khung phản hồi trực tiếp cho phép người nhận gửi lời cảm ơn nhanh đến người gửi (tối đa 255 ký tự).
+- Tab "Đã gửi": Theo dõi trạng thái thiệp người gửi đã trao (Người nhận đã mở chưa, thời điểm mở) và xem lại lời cảm ơn phản hồi từ người nhận.
+
+### 3. Đã verify
+- Thêm `giftCardService` trong `packages/api-client`.
+- Cập nhật `TransferHome.tsx` và `App.tsx` wire tính năng `send-card`.
+- Build sạch `npm run build -w mfe-transfer` (exit 0, rollup hoàn tất).
+- Rebuild docker image `ewallet-lab/mfe-transfer:local` và rollout thành công lên Minikube.
+- Độc lập kiểm thử E2E backend/frontend thông qua Ingress Nginx (18080) đạt 100% 13/13 test suites.
+
+
 

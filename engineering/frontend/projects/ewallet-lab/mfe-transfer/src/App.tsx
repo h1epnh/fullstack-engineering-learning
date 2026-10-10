@@ -18,6 +18,7 @@ import { BankTransferForm } from './screens/BankTransferForm';
 import { BankTransferOutStatusScreen } from './screens/BankTransferOutStatusScreen';
 import { FundDetail } from './screens/FundDetail';
 import { FundHome } from './screens/FundHome';
+import { GiftCards } from './screens/GiftCards';
 import { LuckyMoneyHome } from './screens/LuckyMoneyHome';
 import { PaymentLinkCreate } from './screens/PaymentLinkCreate';
 import { PaymentLinkCreated } from './screens/PaymentLinkCreated';
@@ -42,6 +43,8 @@ type Step =
   | { name: 'recurring-transfers' }
   // Issue #32 — saved-payees
   | { name: 'saved-payees' }
+  // Issue #34 — gift-cards
+  | { name: 'send-card' }
   // Issue #3 — payment-link
   | { name: 'payment-link-create' }
   | { name: 'payment-link-created'; link: PaymentRequest }
@@ -173,6 +176,10 @@ export default function App({
             setStep({ name: 'recurring-transfers' });
             return;
           }
+          if (feature === 'send-card') {
+            setStep({ name: 'send-card' });
+            return;
+          }
           // issue #3 + #8: these 2 tiles are now real (payment-request-service), not comingSoon.
           if (feature === 'payment-link') {
             setStep({ name: 'payment-link-create' });
@@ -215,6 +222,24 @@ export default function App({
       <RecurringTransfers
         selfUserId={session.id}
         onBack={() => setStep({ name: 'home' })}
+      />
+    );
+  }
+
+  if (step.name === 'send-card') {
+    return (
+      <GiftCards
+        selfUserId={session.id}
+        selfName={session.name}
+        onBack={() => setStep({ name: 'home' })}
+        onStepUpRequest={(message, onConfirm) => {
+          setStep({
+            name: 'step-up',
+            message,
+            onConfirm: () => onConfirm().then(() => undefined),
+            onCancel: () => setStep({ name: 'send-card' }),
+          });
+        }}
       />
     );
   }
