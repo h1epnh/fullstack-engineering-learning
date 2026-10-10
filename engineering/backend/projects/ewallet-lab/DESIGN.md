@@ -293,6 +293,52 @@ Hiển thị thường trực trên UI và biên lai: *"Hệ thống đặt vé 
   4. Huỷ vé: User nhận lại đúng 85% giá vé (1.572.500đ), số ghế trống được cộng trả lại 1. Chặn người khác huỷ vé trái phép (403 Forbidden) và chặn huỷ lần 2 (400 Bad Request).
   5. **Concurrency Race Test**: 10 luồng đồng thời tranh chiếc ghế cuối cùng của chuyến đi -> Đúng 1 luồng thành công (201), 9 luồng bị chặn xung đột (409), số ghế cuối cùng bằng đúng 0 (không âm, không overselling), và 9 người thua giữ nguyên 100% số dư.
 
+### Bảo hiểm vi mô (Micro-insurance: Xe máy TNDS, Tai nạn cá nhân, issue #35)
+
+Tích hợp tính năng mua bảo hiểm vi mô và cấp Giấy chứng nhận bảo hiểm điện tử vào `bill-payment-service` theo phương án kiến trúc (b) được Operator phê duyệt, gắn kết qua Ingress route `/insurance`.
+
+#### 1. Mô hình Dữ liệu (`InsurancePolicy`)
+- Bảng `insurance_policies` trong DB `ewallet_bill_payment`:
+  - `id`: UUID Primary Key
+  - `user_id`: UUID người mua bảo hiểm
+  - `product_code`: Mã sản phẩm (`MOTORCYCLE_TNDS`, `PERSONAL_ACCIDENT_BASIC`)
+  - `insured_name`: Họ và tên người được bảo hiểm
+  - `insured_id_card`: Số CCCD/CMND người được bảo hiểm
+  - `vehicle_plate`: Biển kiểm soát xe máy (bắt buộc đối với gói TNDS xe máy)
+  - `premium_amount`: Phí bảo hiểm thanh toán
+  - `coverage_amount`: Mức trách nhiệm / quyền lợi bảo hiểm tối đa
+  - `effective_date`: Ngày bắt đầu hiệu lực (`LocalDate`)
+  - `expiry_date`: Ngày hết hạn hiệu lực (`LocalDate`)
+  - `certificate_number`: Số giấy chứng nhận bảo hiểm điện tử duy nhất (định dạng `BH-XM-YYYY-XXXXX` hoặc `BH-TN-YYYY-XXXXX`)
+  - `status`: `ACTIVE`, `EXPIRED`, `CANCELLED`
+  - `created_at`, `updated_at`, `version`: `@Version Long version` hỗ trợ kiểm soát khóa lạc quan.
+
+#### 2. Danh mục Sản phẩm Mô phỏng (Catalog)
+1. **`MOTORCYCLE_TNDS`**: Bảo hiểm bắt buộc TNDS xe máy — Phí: 66.000đ/năm, quyền lợi: 150.000.000đ, thời hạn: 12 tháng (365 ngày), bắt buộc có biển số xe (`requiresVehiclePlate: true`).
+2. **`PERSONAL_ACCIDENT_BASIC`**: Bảo hiểm tai nạn cá nhân cơ bản — Phí: 30.000đ/tháng, quyền lợi: 20.000.000đ, thời hạn: 30 ngày (`requiresVehiclePlate: false`).
+
+#### 3. Quy trình Mua Bảo hiểm & Trừ tiền Ví Lõi
+1. Tra cứu danh mục: `GET /insurance/products`.
+2. Mua bảo hiểm: `POST /insurance/policies`.
+   - Validate thông tin: Kiểm tra `productCode` hợp lệ và bắt buộc `vehiclePlate` đối với `MOTORCYCLE_TNDS` (trả `400 Bad Request` nếu thiếu).
+   - Trừ tiền ví chính: Gọi `walletServiceClient.debit()` với loại giao dịch `BILL_PAYMENT`. Nếu số dư không đủ, trả về `409 Conflict` và không tạo hợp đồng.
+   - Cấp số chứng nhận điện tử duy nhất `certificateNumber` và lưu trạng thái `ACTIVE`.
+3. Tra cứu hợp đồng: `GET /insurance/policies?userId={userId}`.
+4. Tra cứu chứng nhận: `GET /insurance/policies/{id}/certificate`.
+
+#### 4. Tuyên bố Miễn trừ Trách nhiệm Bắt buộc (Disclaimer)
+Hiển thị thường trực: *"Sản phẩm bảo hiểm vi mô và Giấy chứng nhận điện tử hoàn toàn là MÔ PHỎNG cho mục đích học tập — KHÔNG có công ty bảo hiểm thật đứng sau và KHÔNG có giá trị pháp lý thay thế bảo hiểm thật khi tham gia giao thông"*.
+
+#### 5. Kiểm thử Độc lập (100% Passed)
+Script kiểm thử `scratch/test_verify_issue35.py` qua Minikube Ingress (cổng 18080):
+- 1. `GET /insurance/products`: Trả về đúng 2 sản phẩm mẫu với mức phí và quyền lợi chuẩn xác.
+- 2. Chặn mua bảo hiểm xe máy khi thiếu biển số (400 Bad Request).
+- 3. Mua bảo hiểm xe máy hợp lệ: Ví trừ đúng 66.000đ, tạo hợp đồng `ACTIVE`, số chứng nhận `BH-XM-*`, thời hạn 365 ngày.
+- 4. Mua bảo hiểm tai nạn cá nhân: Ví trừ đúng 30.000đ, tạo hợp đồng `ACTIVE`, số chứng nhận `BH-TN-*`, thời hạn 30 ngày.
+- 5. Chặn người dùng không đủ tiền: Nhận mã `409 Conflict`, số dư giữ nguyên 10.000đ.
+- 6. Tra cứu danh sách hợp đồng người dùng và tra cứu chi tiết giấy chứng nhận bảo hiểm điện tử khớp 100%.
+- 7. Kiểm tra frontend `mfe-bill-payment /remoteEntry.js` phục vụ 200 OK.
+
 ## Concurrent debit/credit trên cùng ví — optimistic lock, không phải bug về tính toàn vẹn (issue #5)
 
 `Wallet` dùng `@Version` (optimistic locking) — khi 2 request debit/credit cùng ví chạy đồng thời,

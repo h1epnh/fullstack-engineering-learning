@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { BILL_CATEGORIES } from '../categories';
 import { cancelMandate, loadMandates, type AutoBillRegistration } from '../mandates';
 import { DigitalServices } from './DigitalServices';
+import { MicroInsurance } from './MicroInsurance';
 import { TravelTicketing } from './TravelTicketing';
 
 export function BillLookupForm({
@@ -13,7 +14,7 @@ export function BillLookupForm({
   userId?: string;
   onLookup: (category: BillCategory, customerCode: string) => Promise<string | null>;
 }) {
-  const [tab, setTab] = useState<'lookup' | 'digital' | 'travel' | 'mandates'>('lookup');
+  const [tab, setTab] = useState<'lookup' | 'digital' | 'travel' | 'insurance' | 'mandates'>('lookup');
   const [category, setCategory] = useState<BillCategory>('ELECTRICITY');
   const [customerCode, setCustomerCode] = useState('');
   const [error, setError] = useState<string | undefined>();
@@ -119,6 +120,23 @@ export function BillLookupForm({
           Vé xe & Vé bay
         </button>
         <button
+          onClick={() => setTab('insurance')}
+          style={{
+            flex: 1,
+            padding: '7px 0',
+            borderRadius: 8,
+            border: 0,
+            background: tab === 'insurance' ? 'var(--el-surface)' : 'none',
+            color: tab === 'insurance' ? 'var(--el-ink)' : 'var(--el-muted)',
+            fontWeight: tab === 'insurance' ? 700 : 500,
+            fontSize: 12,
+            cursor: 'pointer',
+            boxShadow: tab === 'insurance' ? 'var(--el-shadow)' : 'none',
+          }}
+        >
+          Bảo hiểm
+        </button>
+        <button
           onClick={() => {
             setTab('mandates');
             refreshMandates();
@@ -131,7 +149,7 @@ export function BillLookupForm({
             background: tab === 'mandates' ? 'var(--el-surface)' : 'none',
             color: tab === 'mandates' ? 'var(--el-ink)' : 'var(--el-muted)',
             fontWeight: tab === 'mandates' ? 700 : 500,
-            fontSize: 13,
+            fontSize: 12,
             cursor: 'pointer',
             boxShadow: tab === 'mandates' ? 'var(--el-shadow)' : 'none',
           }}
@@ -284,6 +302,7 @@ export function BillLookupForm({
 
       {tab === 'digital' && userId && <DigitalServices userId={userId} />}
       {tab === 'travel' && userId && <TravelTicketing userId={userId} />}
+      {tab === 'insurance' && userId && <MicroInsurance userId={userId} />}
     </Screen>
   );
 }

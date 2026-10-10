@@ -930,3 +930,31 @@ Mở rộng `mfe-bill-payment` với phân hệ đặt vé du lịch và vận t
 - Rebuild docker image `ewallet-lab/mfe-bill-payment:local` và rollout thành công lên Minikube.
 - Độc lập kiểm thử E2E backend/frontend thông qua Ingress Nginx (18080) đạt 100% 7/7 test suites (bao gồm concurrency race test 10 luồng tranh 1 ghế cuối cùng không overselling).
 
+## 27. Bảo hiểm vi mô (issue #35) — `MicroInsurance.tsx` trong `mfe-bill-payment`
+
+Tích hợp sản phẩm bảo hiểm vi mô (Xe máy bắt buộc TNDS & Tai nạn cá nhân) vào thanh điều hướng tab "Bảo hiểm" trong `BillLookupForm.tsx`.
+
+### 1. Banner Disclaimer Lab Học Tập Bắt Buộc
+Hiển thị thường trực ở đầu giao diện:
+*"Sản phẩm bảo hiểm vi mô và Giấy chứng nhận điện tử hoàn toàn là MÔ PHỎNG cho mục đích học tập — KHÔNG có công ty bảo hiểm thật đứng sau và KHÔNG có giá trị pháp lý thay thế bảo hiểm thật khi tham gia giao thông."*
+
+### 2. Luồng Chọn Sản Phẩm & Mua Bảo Hiểm
+- Danh mục sản phẩm:
+  - **Bảo hiểm bắt buộc TNDS xe máy**: 66.000đ / 12 tháng, quyền lợi tối đa 150.000.000đ. Form yêu cầu bắt buộc: Họ tên, Số CCCD, Biển số xe.
+  - **Bảo hiểm tai nạn cá nhân cơ bản**: 30.000đ / 30 ngày, quyền lợi tối đa 20.000.000đ. Form yêu cầu: Họ tên, Số CCCD.
+- Xác thực số dư ví chính và xử lý lỗi trực quan (ví dụ báo số dư không đủ).
+
+### 3. Giấy Chứng Nhận Điện Tử (E-Certificate)
+- Tab "Hợp đồng của tôi": Danh sách các gói bảo hiểm đã mua kèm `StatusPill` (`ACTIVE`, `EXPIRED`).
+- Màn hình E-Certificate trang trọng:
+  - Khung giấy chứng nhận với huy hiệu bảo vệ mô phỏng, số chứng nhận lớn (`BH-XM-*`, `BH-TN-*`).
+  - Thông tin chủ sở hữu, biển số xe, thời hạn hiệu lực rõ ràng từ ngày cấp đến ngày hết hạn.
+  - Mã QR mô phỏng dùng để quét tra cứu thông tin hợp đồng.
+
+### 4. Đã verify
+- Thêm `insuranceService` trong `packages/api-client`.
+- Build sạch `npm run build -w mfe-bill-payment` (exit 0, rollup hoàn tất).
+- Rebuild docker image `ewallet-lab/mfe-bill-payment:local` và rollout thành công lên Minikube.
+- Độc lập kiểm thử E2E backend/frontend thông qua Ingress Nginx (18080) đạt 100% 9/9 test suites.
+
+

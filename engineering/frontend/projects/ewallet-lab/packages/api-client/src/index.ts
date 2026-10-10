@@ -17,3 +17,4 @@ export * from './savingsGoalService';
 export * from './voucherPassService';
 export * from './telcoService';
 export * from './travelBookingService';
+export * from './insuranceService';
