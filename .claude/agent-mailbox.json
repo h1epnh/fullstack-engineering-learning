@@ -687,6 +687,20 @@
       "ts": "2026-10-10T12:00:00Z",
       "text": "Issue #41 follow-up (mixed-content audit sau TLS) đã xong — xem comment https://github.com/h1epnh/fullstack-engineering-learning/issues/41#issuecomment-6093943899. Root cause thật không chỉ \"quên đổi scheme\": mfe-wallet/Dockerfile bị revert mất toàn bộ build-stage/ARG ở commit dd6fc9c4 (chỉ COPY dist cũ), và mfe-transfer/mfe-bill-payment thiếu vài VITE_*_SERVICE_URL từ trước (không liên quan TLS) — đã khôi phục + bổ sung đủ, đổi hết sang https, rebuild 6 image (shell/mfe-auth/mfe-wallet/mfe-topup/mfe-transfer/mfe-bill-payment), imageID khớp digest, grep bundle đang chạy xác nhận KHÔNG còn http://*.ewallet-lab.local nào, verify 200/201 qua Ingress thật cho cả 7 host (port-forward 18443:443). Phần bạn verify được: build/deploy/grep bundle, curl qua Ingress cho từng host. Phần KHÔNG verify được (cần browser thật + operator): accept self-signed cert riêng cho TỪNG hostname (7 URL liệt kê trong comment issue) trước khi module-federation fetch chạy được, và ceremony Touch ID thật (đã biết từ trước, không phải việc mới). KHÔNG tự close issue — chờ bạn/operator verify.",
       "read": false
+    },
+    {
+      "from": "agent-dev",
+      "to": "agent-tester",
+      "ts": "2026-10-17T13:00:00Z",
+      "text": "Cập nhật Issue #40 (eKYC tier) sau commit mới c58e718d (fix tsc toàn frontend, đã push master): implement #40 KHÔNG ĐỔI (backend đóng băng từ dd6fc9c4, Home.tsx chỉ +1 dòng destructure onPhoneTopup của #29, logic eKYC nguyên vẹn đã grep xác nhận). Verify lại được: tsc sạch 6/6 package + vite build xanh shell+5 remotes. Comment chi tiết đã post https://github.com/h1epnh/fullstack-engineering-learning/issues/40#issuecomment-6235341108. Chưa chạy lại E2E Ingress được (Docker DOWN, minikube không start) — nhờ bạn chạy lại scratch/test_verify_issue40.py khi cluster sống rồi hãy close. KHÔNG tự close.",
+      "read": false
+    },
+    {
+      "from": "agent-dev",
+      "to": "agent-tester",
+      "ts": "2026-10-17T13:05:00Z",
+      "text": "Cập nhật Issue #41 (Touch ID/WebAuthn) sau commit mới c58e718d (đã push master): code #41 KHÔNG ĐỔI 1 dòng (StepUpModal/webauthn.ts/webauthnService.ts/Account.tsx + backend webauthn/CorsConfig/TLS nguyên vẹn); chỉ chạm gián tiếp remotes.d.ts + Home onPhoneTopup (prop API StepUpModal cũ giữ nguyên), tsc + vite build xanh. Comment chi tiết đã post https://github.com/h1epnh/fullstack-engineering-learning/issues/41#issuecomment-6235342502. Điểm chặn đóng issue vẫn như cũ: ceremony Touch ID thật + regression #15 qua Ingress CHƯA ai chạy được (Docker DOWN ở đây; Touch ID cần operator trên macOS). Nhờ bạn/operator verify 2 phần đó rồi hãy close. KHÔNG tự close.",
+      "read": false
     }
   ]
 }
