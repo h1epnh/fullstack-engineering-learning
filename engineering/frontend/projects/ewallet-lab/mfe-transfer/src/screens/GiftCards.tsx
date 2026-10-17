@@ -219,8 +219,8 @@ function SendGiftCardForm({
             <TextField
               label="Số điện thoại người nhận"
               value={phone}
-              onChange={(val) => {
-                setPhone(val);
+              onChange={(e) => {
+                setPhone(e.target.value);
                 if (recipient) setRecipient(null);
                 if (error) setError(undefined);
               }}
@@ -229,7 +229,7 @@ function SendGiftCardForm({
           </div>
           <div style={{ alignSelf: 'flex-end', marginBottom: 2 }}>
             <Button
-              variant="outline"
+              variant="ghost"
               onClick={searchRecipient}
               disabled={!PHONE_RE.test(phone) || loading}
             >
@@ -359,8 +359,8 @@ function SendGiftCardForm({
         <TextField
           label="Số tiền mừng (VND)"
           value={amount === '' ? '' : String(amount)}
-          onChange={(val) => {
-            const num = val.replace(/\D/g, '');
+          onChange={(e) => {
+            const num = e.target.value.replace(/\D/g, '');
             setAmount(num ? Number(num) : '');
           }}
           placeholder="Tối thiểu 1.000đ"
@@ -390,7 +390,7 @@ function SendGiftCardForm({
         <TextField
           label="Lời chúc riêng (tối đa 255 ký tự)"
           value={message}
-          onChange={setMessage}
+          onChange={(e) => setMessage(e.target.value)}
           placeholder="Nhập lời chúc riêng của bạn..."
         />
 
@@ -402,7 +402,7 @@ function SendGiftCardForm({
 
         <div style={{ marginTop: 18 }}>
           <Button
-            variant="solid"
+            variant="primary"
             onClick={() => handleSubmit(false)}
             disabled={!recipient || !amount || Number(amount) < 1000 || submitting}
           >
@@ -594,12 +594,13 @@ function ReceivedGiftCardsList({ selfUserId }: { selfUserId: string }) {
                   <div style={{ flex: 1 }}>
                     <TextField
                       value={replyText}
-                      onChange={setReplyText}
+                      label="Nội dung thư"
+                      onChange={(e) => setReplyText(e.target.value)}
                       placeholder="Cảm ơn bạn rất nhiều!..."
                     />
                   </div>
                   <Button
-                    variant="solid"
+                    variant="primary"
                     onClick={handleSendReply}
                     disabled={!replyText.trim() || submittingReply}
                   >
@@ -639,7 +640,7 @@ function ReceivedGiftCardsList({ selfUserId }: { selfUserId: string }) {
                 {new Date(card.createdAt).toLocaleDateString('vi-VN')}
               </span>
               <Button
-                variant={isOpened ? 'outline' : 'solid'}
+                variant={isOpened ? 'ghost' : 'primary'}
                 onClick={() => handleOpenCard(card)}
               >
                 {isOpened ? 'Xem thiệp & Lời chúc' : 'Bóc mở thiệp'}

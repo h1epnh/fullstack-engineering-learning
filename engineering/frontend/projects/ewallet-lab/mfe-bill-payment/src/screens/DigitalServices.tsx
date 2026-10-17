@@ -252,13 +252,11 @@ export function DigitalServices({
           </div>
 
           <Button
-            tone="primary"
-            fullWidth
-            onClick={() => {
-              setSuccessOrder(null);
-              setAccountIdentifier('');
-            }}
-          >
+onClick={() => {
+  setSuccessOrder(null);
+  setAccountIdentifier('');
+  }}
+>
             Mua thêm gói khác
           </Button>
         </Card>
@@ -334,8 +332,6 @@ export function DigitalServices({
           )}
 
           <Button
-            tone="primary"
-            fullWidth
             loading={loading}
             disabled={!selectedPkg || !accountIdentifier.trim() || loading}
             onClick={() => handleSubscribe(false)}
@@ -356,3 +352,4 @@ export function DigitalServices({
     </div>
   );
 }
+

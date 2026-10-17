@@ -4,19 +4,26 @@ type Variant = 'primary' | 'secondary' | 'ghost';
 
 export function Button({
   variant = 'primary',
+  size = 'md',
+  loading = false,
   style,
   disabled,
   ...rest
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: Variant;
+  size?: 'sm' | 'small' | 'md';
+  loading?: boolean;
+}) {
+  const compact = size === 'sm' || size === 'small';
   const base: React.CSSProperties = {
     fontFamily: 'var(--el-font-display)',
     fontWeight: 700,
-    fontSize: 15,
+    fontSize: compact ? 13.5 : 15,
     borderRadius: 12,
-    padding: '13px 18px',
+    padding: compact ? '8px 12px' : '13px 18px',
     border: '1px solid transparent',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    opacity: disabled ? 0.55 : 1,
+    cursor: disabled || loading ? 'not-allowed' : 'pointer',
+    opacity: disabled || loading ? 0.55 : 1,
     transition: 'transform .08s ease',
     width: '100%',
   };
@@ -34,9 +41,11 @@ export function Button({
   };
   return (
     <button
-      {...rest}
-      disabled={disabled}
+      type="button"
       style={{ ...base, ...variants[variant], ...style }}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      {...rest}
     />
   );
 }

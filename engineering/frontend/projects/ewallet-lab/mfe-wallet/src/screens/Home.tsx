@@ -180,6 +180,7 @@ export default function Home({
   onInvestmentFund,
   onSavingsGoals,
   onVoucherPass,
+  onPhoneTopup,
 }: {
   session: Session;
   onTopup: () => void;

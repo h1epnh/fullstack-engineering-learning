@@ -56,7 +56,7 @@ export function BillConfirm({
       try {
         setLoadingBalances(true);
         const [w, b] = await Promise.allSettled([
-          walletService.get(userId),
+          walletService.getBalance(userId),
           bnplService.get(userId),
         ]);
         if (!cancelled) {
