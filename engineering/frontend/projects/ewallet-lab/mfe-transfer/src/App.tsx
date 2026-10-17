@@ -38,7 +38,7 @@ type Step =
   | { name: 'amount'; recipient: UserResponse }
   | { name: 'bank'; bank: VietQrBank }
   | { name: 'bank-status'; orderId: string }
-  | { name: 'done'; toName: string; toPhone: string; amount: number; newBalance: number }
+  | { name: 'done'; toName: string; toPhone?: string; amount: number; newBalance: number }
   // Issue #31 — recurring-transfer
   | { name: 'recurring-transfers' }
   // Issue #32 — saved-payees

@@ -34,6 +34,10 @@ export const http = {
     request<T>(url, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
   put: <T>(url: string, body?: unknown) =>
     request<T>(url, { method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
+  // transferService.deletePayee (issue #31) calls http.delete — it was written against a helper
+  // that didn't exist yet, so every tsc run failed here and the call would have thrown
+  // "http.delete is not a function" at runtime.
+  delete: <T>(url: string) => request<T>(url, { method: 'DELETE' }),
 };
 
 /**

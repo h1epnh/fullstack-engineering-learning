@@ -1,12 +1,16 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { Icon } from './Icon';
 
 export function Screen({
   title,
+  subtitle,
+  onBack,
   children,
   withNavGutter = true,
 }: {
   title?: string;
+  subtitle?: string;
+  onBack?: () => void;
   children: ReactNode;
   withNavGutter?: boolean;
 }) {
@@ -22,6 +26,28 @@ export function Screen({
         paddingRight: 16,
       }}
     >
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Quay lại"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 36,
+            height: 36,
+            borderRadius: 999,
+            border: '1px solid var(--el-line)',
+            background: 'var(--el-surface)',
+            color: 'var(--el-ink)',
+            cursor: 'pointer',
+            marginBottom: 12,
+          }}
+        >
+          <Icon name="arrow_back" size={20} />
+        </button>
+      )}
       {title && (
         <h1
           style={{
@@ -34,20 +60,44 @@ export function Screen({
           {title}
         </h1>
       )}
+      {subtitle && (
+        <p
+          style={{
+            fontFamily: 'var(--el-font-display)',
+            fontSize: 13,
+            color: 'var(--el-muted)',
+            margin: title ? '-12px 0 16px' : '0 0 16px',
+          }}
+        >
+          {subtitle}
+        </p>
+      )}
       {children}
     </div>
   );
 }
 
-export function Card({ children }: { children: ReactNode }) {
+export function Card({
+  children,
+  style,
+  padding,
+}: {
+  children: ReactNode;
+  /** Callers pass this (e.g. marginBottom between stacked cards) — it was silently
+   * dropped before, because Card only accepted `children` (tsc would fail along with it). */
+  style?: CSSProperties;
+  /** Overrides the default 16px padding. */
+  padding?: string | number;
+}) {
   return (
     <div
       style={{
         background: 'var(--el-surface)',
         border: '1px solid var(--el-line)',
         borderRadius: 14,
-        padding: 16,
+        padding: padding ?? 16,
         boxShadow: 'var(--el-shadow)',
+        ...style,
       }}
     >
       {children}
@@ -55,7 +105,17 @@ export function Card({ children }: { children: ReactNode }) {
   );
 }
 
-export function EmptyState({ icon, text }: { icon: string; text: string }) {
+export function EmptyState({
+  icon,
+  title,
+  description,
+  text,
+}: {
+  icon?: ReactNode | string;
+  title?: string;
+  description?: string;
+  text?: string;
+}) {
   return (
     <div
       style={{
@@ -67,8 +127,15 @@ export function EmptyState({ icon, text }: { icon: string; text: string }) {
         color: 'var(--el-faint)',
       }}
     >
-      <Icon name={icon} size={30} />
-      <p style={{ fontSize: 13, margin: 0, textAlign: 'center' }}>{text}</p>
+      {typeof icon === 'string' ? <Icon name={icon} size={30} /> : icon}
+      {title && (
+        <p style={{ fontSize: 14, fontWeight: 600, margin: 0, textAlign: 'center' }}>
+          {title}
+        </p>
+      )}
+      {(description ?? text) && (
+        <p style={{ fontSize: 13, margin: 0, textAlign: 'center' }}>{description ?? text}</p>
+      )}
     </div>
   );
 }
