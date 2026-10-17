@@ -1035,6 +1035,155 @@ Tích hợp giao diện và mô hình 2-sided platform cho người dùng doanh 
 - Rebuild docker image `ewallet-lab/mfe-topup:local` và deploy lên Minikube.
 - Độc lập kiểm thử E2E qua Ingress Nginx (18080) đạt 100% 11/11 test cases bao gồm concurrency 20 requests.
 
+## 31. Touch ID thật (WebAuthn) cho Step-up — issue #41 — `StepUpModal` (packages/ui) + Account.tsx (shell)
 
+TLS cho Ingress + bảng `webauthn_credentials` mới ở backend `DESIGN.md`'s mục cùng tên — section
+này chỉ nói phần UI. **Yêu cầu cứng của issue #41 đã tuân thủ: KHÔNG đổi public API của
+`StepUpModal`** (`message`/`onConfirm`/`onCancel`) — cả 8 call site thật trong repo hiện tại
+(`mfe-transfer/App.tsx`, `mfe-topup/App.tsx`, `mfe-bill-payment/App.tsx`,
+`mfe-transfer/FundDetail.tsx`, `mfe-wallet/SavingsGoals.tsx`, `mfe-wallet/InvestmentFund.tsx`,
+`mfe-bill-payment/DigitalServices.tsx`) **không bị sửa một dòng nào** — nâng cấp hoàn toàn nằm bên
+trong component.
 
+### 1. Vì sao đọc `loadSession()` thay vì nhận `userId` qua prop mới
+
+Để biết "user hiện tại đã đăng ký Touch ID trên thiết bị này chưa" mà không thêm prop, `StepUpModal`
+tự `import { loadSession } from '@ewallet-lab/session'` và đọc trực tiếp — đây là lý do
+`packages/ui/package.json` giờ có dependency mới `@ewallet-lab/session` (trước đây `packages/ui`
+hoàn toàn không phụ thuộc package nào khác trong monorepo). Đây là đọc `localStorage` trực tiếp
+(đồng bộ, không phải network, không phải React Context) — tránh đúng pitfall Module Federation
+Context đã ghi ở §3 (Context compile vào 2 bundle khác nhau là 2 identity khác nhau).
+
+### 2. `packages/ui/src/webauthn.ts` — helper WebAuthn thuần, không React
+
+Export `isPlatformAuthenticatorAvailable()`, `registerPlatformCredential()`,
+`verifyPlatformCredential()`, `markPlatformCredentialRegistered()`/`hasPlatformCredentialRegisteredLocally()`.
+
+- **`registerPlatformCredential`**: gọi `navigator.credentials.create()` với
+  `authenticatorAttachment: 'platform'`, `userVerification: 'required'`, **`residentKey:
+  'required'`/`requireResidentKey: true`** — yêu cầu discoverable credential để
+  `verifyPlatformCredential()` lúc step-up KHÔNG cần biết trước `credentialId` (không cần
+  `allowCredentials`, platform authenticator tự tìm credential phù hợp với origin hiện tại).
+- **`verifyPlatformCredential`**: gọi `navigator.credentials.get()` KHÔNG kèm `allowCredentials`,
+  trả `true` nếu ceremony thành công, `false` (không throw) nếu huỷ/thất bại — để caller hiện lỗi rõ
+  thay vì unhandled rejection.
+- **Mức độ bảo mật — minh bạch, đúng yêu cầu Constraints của issue #41**: `challenge` sinh bằng
+  `crypto.getRandomValues` ở CLIENT, KHÔNG phải server issue + verify lại (không chống được replay
+  theo đúng chuẩn FIDO2). Điều ceremony THẬT sự đảm bảo (do browser/OS, không phải code lab này):
+  promise chỉ resolve khi Secure Enclave xác nhận user thật đã chạm Touch ID khớp với credential
+  đã bind vào origin này. Điều KHÔNG được đảm bảo: server chưa bao giờ verify signature/challenge —
+  xem backend `DESIGN.md`'s mục cùng tên cho đầy đủ lý do & ranh giới.
+- **`markPlatformCredentialRegistered`/`hasPlatformCredentialRegisteredLocally`**: flag
+  `localStorage` theo key `ewallet-lab-webauthn-registered:<userId>`, viết ngay sau khi đăng ký
+  thành công TRÊN THIẾT BỊ ĐÓ. **Quyết định kiến trúc quan trọng**: `StepUpModal` dùng flag LOCAL
+  này để quyết định hiện UI Touch ID, **KHÔNG gọi `GET /users/{id}/webauthn/credentials`** (server)
+  — lý do: platform authenticator gắn với TỪNG THIẾT BỊ (Secure Enclave riêng từng máy), server chỉ
+  biết "user đã đăng ký ở đâu đó", không biết "đã đăng ký ở ĐÚNG MÁY ĐANG CHẠY ceremony này chưa".
+  Dùng server-check sẽ gây false positive (hiện nút Touch ID trên máy B dù chỉ máy A có credential,
+  ceremony sẽ fail vô lý) — flag local chính xác hơn cho đúng câu hỏi cần trả lời, đồng thời giữ
+  `packages/ui` không có network call nào (đúng convention cũ của package này — mọi HTTP call nằm ở
+  `packages/api-client`, `packages/ui` thuần presentational).
+
+### 3. `StepUpModal.tsx` — logic mới, fallback nguyên vẹn
+
+`useEffect` khi mount: đọc session, nếu có flag local + device hỗ trợ
+(`isPlatformAuthenticatorAvailable()`) → `touchIdReady = true`. Render có 2 nhánh:
+- **`touchIdReady`**: nút "Chạm Touch ID để xác nhận" gọi `verifyPlatformCredential()` → chỉ gọi
+  `onConfirm()` nếu `true`; `false` → hiện lỗi "Xác thực Touch ID thất bại hoặc đã bị huỷ..." ngay
+  trong modal, KHÔNG gọi `onConfirm()`, giao dịch KHÔNG hoàn tất — đúng acceptance criteria "huỷ
+  giữa chừng". Copy phụ mới: nói rõ đây là xác thực ĐÚNG THIẾT BỊ/ĐÚNG NGƯỜI CẦM MÁY (WebAuthn thật),
+  KHÁC cơ chế QĐ 2345 thật (so khớp CCCD gắn chip qua NFC — xem eKYC #40), không ngụ ý tương đương.
+- **else (fallback)**: 100% UI/behavior cũ của issue #15 — nút "Tôi xác nhận đây là tôi" gọi
+  `onConfirm()` trực tiếp. Copy phụ cập nhật nhẹ (không còn khẳng định tuyệt đối "lab này KHÔNG có
+  sinh trắc học/WebAuthn thật" — giờ có, chỉ là thiết bị này chưa đăng ký/không hỗ trợ), nhưng hành
+  vi gọi `onConfirm()` không đổi 1 dòng so với trước #41.
+- Nút "Huỷ giao dịch" giữ nguyên ở cả 2 nhánh.
+
+### 4. Đăng ký Touch ID — `Account.tsx` (shell, tab "Cá nhân")
+
+Không tạo remote mới — đúng lý do `Account.tsx` đã kept-in-shell từ đầu (thin view, không gọi
+backend) — issue #41 là lần ĐẦU TIÊN `Account.tsx`/shell gọi trực tiếp 1 backend service
+(`webauthnService`, `user-service`), nên `shell/package.json` thêm dependency
+`@ewallet-lab/api-client` và `shell/Dockerfile` thêm **build-arg mới
+`VITE_USER_SERVICE_URL`** (trước #41, shell hoàn toàn không có build-arg `VITE_*_SERVICE_URL` nào —
+đúng lớp lỗi tái diễn nhiều nhất của dự án, flagged ở CLAUDE.md, không bỏ sót lần này).
+
+- Card "Bảo mật thiết bị — Touch ID" mới dưới thông tin tài khoản: kiểm tra device capability +
+  flag local trên mount; nếu chưa đăng ký trên thiết bị này → nút "Đăng ký Touch ID cho thiết bị
+  này" → `registerPlatformCredential()` (ceremony tạo credential thật) → `webauthnService.register()`
+  (POST lên `user-service`, lưu `credentialId`/`publicKey`) → `markPlatformCredentialRegistered()`
+  (ghi flag local). Lỗi ở bước ceremony hoặc POST đều hiện thông báo rõ + nút "Thử lại", không rơi
+  vào trạng thái lưng chừng im lặng.
+- Nếu đã đăng ký trên thiết bị này → "✓ Đã đăng ký Touch ID cho thiết bị này". Nếu server báo đã
+  đăng ký ở thiết bị KHÁC (server có nhưng local không) → dòng phụ giải thích vì sao cần đăng ký
+  riêng cho thiết bị này (platform authenticator không dùng chung giữa máy).
+- Nếu device/browser không hỗ trợ platform authenticator → thông báo rõ, không có nút đăng ký.
+
+### 5. Đã verify (frontend) — và phần KHÔNG thể verify trong môi trường agent
+
+- Build sạch: `npm run build -w packages/ui` (qua mỗi remote tiêu thụ nó),
+  `npm run build -w shell`/`-w mfe-wallet`/`-w mfe-transfer`/`-w mfe-topup`/`-w mfe-bill-payment`
+  — cả 5 exit 0. `npx tsc --noEmit` sạch cho tất cả (1 lỗi TS kiểu `Uint8Array<ArrayBufferLike>` vs
+  `BufferSource` tự giới thiệu trong `webauthn.ts` do lib.dom.d.ts generic hoá — đã fix bằng ép kiểu
+  rõ ràng tại đúng điểm tạo buffer, không `as any` tràn lan).
+- 6 image rebuild đúng tag (`ewallet-lab/{shell,mfe-wallet,mfe-transfer,mfe-topup,mfe-bill-payment,
+  user-service}:local`), redeploy thật lên minikube, `imageID` của pod đối chiếu khớp đúng digest
+  vừa build (không chỉ tin `kubectl rollout status`).
+- Grep bundle đang chạy thật trong pod xác nhận code mới có mặt: `shell` có "Đăng ký Touch ID", cả 4
+  remote còn lại (qua `packages/ui`) có "Chạm Touch ID".
+- **Backend round-trip thật qua Ingress** (`http://api.ewallet-lab.local`): register user mới →
+  `POST .../webauthn/credentials` → `GET` trả `registered:true` → `SELECT` trực tiếp Postgres khớp
+  đúng row. Đăng ký trùng `credentialId` → 409.
+- **Regression #15 thật qua Ingress**: luồng cũ 428 (thiếu `stepUpConfirmed`) → retry kèm
+  `stepUpConfirmed:true` → 200 vẫn đúng y hệt trước #41 (backend logic KHÔNG đổi, chỉ đổi message
+  tĩnh — xem backend DESIGN.md) — xác nhận fallback path (user chưa đăng ký Touch ID) không
+  regression.
+- **TLS cluster-internal**: xem backend DESIGN.md's mục cùng tên.
+- **KHÔNG thể verify trong phiên agent này (không có hardware, ghi rõ theo đúng yêu cầu issue #41,
+  KHÔNG tự nhận đã test)**:
+  1. Ceremony Touch ID thật (`navigator.credentials.create()`/`.get()` với Touch ID prompt thật
+     xuất hiện trên macOS) — cần hardware Touch ID, chỉ operator tự làm được.
+  2. Truy cập `https://shell.ewallet-lab.local/` từ browser thật trên host (cổng 443 chưa được
+     port-forward ra host trong môi trường agent — xem backend DESIGN.md's mục TLS, phần "Chưa
+     verify được").
+  3. `isUserVerifyingPlatformAuthenticatorAvailable()` trả `true` thật trên 1 máy có Touch ID — chỉ
+     xác nhận được code gọi đúng API, không chạy được trong headless/no-hardware environment.
+
+  **Checklist operator cần tự chạy để đóng issue #41** (đã có đủ hạ tầng, chỉ thiếu bước tay):
+  1. Đảm bảo port 443 được forward ra host (`minikube tunnel` hoặc tương đương cho NodePort 31783 —
+     xem backend DESIGN.md's mục TLS cho chi tiết cổng).
+  2. Mở `https://shell.ewallet-lab.local/` trên Safari/Chrome, accept cảnh báo self-signed cert.
+  3. Đăng nhập, vào tab "Cá nhân" → "Đăng ký Touch ID cho thiết bị này" → xác nhận Touch ID prompt
+     thật xuất hiện → thành công.
+  4. Thực hiện 1 giao dịch >10.000.000đ (transfer/BNPL/bất kỳ luồng dùng `StepUpModal`) → xác nhận
+     modal hiện "Chạm Touch ID để xác nhận" (không phải nút cũ) → chạm Touch ID → giao dịch hoàn
+     tất.
+  5. Thử lại, lần này nhấn Esc/rút tay giữa ceremony → xác nhận giao dịch KHÔNG hoàn tất, lỗi hiện
+     rõ, modal vẫn mở (có thể bấm lại hoặc Huỷ giao dịch).
+
+### 6. Mixed-content audit sau TLS — follow-up, phát hiện sau khi operator tự test (#41)
+
+Sau khi thêm TLS (mục 1), operator tự test thật và báo `shell` qua `https://` trắng trang vì nhiều
+remote vẫn gọi `http://` thuần (bị browser chặn mixed-content). Rà soát lại toàn bộ Dockerfile của
+mọi remote (không chỉ tin danh sách đã biết) lộ ra 2 lớp bug khác nhau, không chỉ "quên đổi scheme":
+
+- **`mfe-wallet/Dockerfile` bị revert mất toàn bộ build-stage** ở chính commit eKYC #40
+  (`dd6fc9c4`) — đổi thành `COPY dist` thuần (không `ARG` nào), nên image chỉ đóng gói lại
+  `dist/` cũ đã build sẵn trên đĩa, không hề áp bất kỳ build-arg nào kể cả khi operator "fix" lại
+  build-arg — vì Docker build không rebuild từ source nữa. Khôi phục về multi-stage build.
+- **Build-arg thiếu từ trước, không liên quan TLS**: `mfe-transfer` thiếu `VITE_WALLET_SERVICE_URL`
+  (App.tsx gọi `walletService.getBalance()`); `mfe-bill-payment` thiếu `VITE_BNPL_SERVICE_URL` +
+  `VITE_WALLET_SERVICE_URL`; `mfe-wallet` (cả bản trước khi bị revert) thiếu
+  `VITE_USER_SERVICE_URL`/`VITE_TOPUP_SERVICE_URL`/`VITE_INVESTMENT_FUND_SERVICE_URL` — chỉ có 4/7
+  biến source thật cần. Tất cả đã bổ sung đủ, cùng lúc đổi hết comment ví dụ `docker build` từ
+  `http://` sang `https://` trong 6 Dockerfile (`shell`, `mfe-auth`, `mfe-wallet`, `mfe-topup`,
+  `mfe-transfer`, `mfe-bill-payment`).
+- Rebuild + redeploy cả 6 image, `imageID` khớp digest, grep bundle đang chạy trên cả 6 pod xác
+  nhận **không còn `http://*.ewallet-lab.local` nào sót lại**; verify qua Ingress thật (port-forward
+  `18443:443`) 200/201 cho cả 7 host (`shell`, 5 `mfe-*`, `api`). Chi tiết đầy đủ trong comment
+  GitHub issue #41.
+- **Hạn chế cố hữu KHÔNG tự fix được**: cert self-signed → mỗi hostname là 1 origin riêng trong
+  browser, accept warning ở 1 host không tự trust các host khác. Operator phải tự mở từng URL
+  (`shell` + 5 `remoteEntry.js` của mfe-* + `api`) 1 lần trên address bar, bấm "Proceed anyway" cho
+  TỪNG host, trước khi module-federation fetch ngầm từ `shell` tới các host đó chạy được.
 

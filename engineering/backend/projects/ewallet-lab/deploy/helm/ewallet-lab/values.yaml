@@ -12,7 +12,15 @@ image:
 
 ingress:
   className: nginx
-  annotations: {}
+  # Issue #41: TLS added alongside plain HTTP (WebAuthn/`navigator.credentials` only exists in a
+  # "secure context" — HTTPS or `localhost` — so Touch ID step-up needs *.ewallet-lab.local served
+  # over HTTPS too). `ssl-redirect: "false"` is REQUIRED here, not optional: ingress-nginx defaults
+  # to force-redirecting HTTP->HTTPS as soon as any `tls:` block exists on an Ingress, which would
+  # break every existing `http://*.ewallet-lab.local` caller (curl scripts, prior tickets' verify
+  # commands, anything not expecting a 308). The issue explicitly requires HTTP to keep working
+  # unredirected alongside the new HTTPS.
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
   hosts:
     shell: shell.ewallet-lab.local
     mfeAuth: mfe-auth.ewallet-lab.local
@@ -21,10 +29,26 @@ ingress:
     mfeTransfer: mfe-transfer.ewallet-lab.local
     mfeBillPayment: mfe-bill-payment.ewallet-lab.local
     api: api.ewallet-lab.local
+  # Issue #41 — self-signed cert covering every host above, created OUT-OF-BAND (not by Helm/this
+  # chart) via `kubectl create secret tls`, see deploy README's "TLS (issue #41)" section for the
+  # exact `openssl req` + `kubectl create secret` commands to (re)generate it. Not templated as a
+  # Helm-managed Secret on purpose: Helm has no built-in way to persist a stable keypair across
+  # `helm upgrade` runs without either committing the private key to git (rejected — even a
+  # self-signed key shouldn't sit in a public repo) or fighting Helm's own diffing with `lookup`
+  # tricks; a plain `kubectl create secret` the operator/agent re-runs when the cert expires or the
+  # host list changes is simpler and matches how `minikube tunnel` is already handled (documented
+  # command, not automated).
+  tlsSecretName: ewallet-lab-tls
 
 # Same permissive-lab-CORS pattern as docker-compose (see each service's CorsConfig.java),
 # just widened from localhost to the Ingress hostnames.
-corsAllowedOriginPattern: "http://*.ewallet-lab.local"
+# Issue #41 (3rd layer): comma-separated list, each service's CorsConfig.java now does
+# allowedOriginPattern.split(",") before passing to Spring's allowedOriginPatterns(String...)
+# varargs — a single comma-joined string was being treated as ONE literal pattern (never
+# matching), which is why adding TLS/https origins here previously still 403'd. Keep BOTH
+# schemes: https for the new WebAuthn-required secure context, http so any caller still on the
+# plain link (older bookmarks, prior tickets' curl scripts) keeps working.
+corsAllowedOriginPattern: "http://*.ewallet-lab.local,https://*.ewallet-lab.local"
 
 postgres:
   image: postgres:16

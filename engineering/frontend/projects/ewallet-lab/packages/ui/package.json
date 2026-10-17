@@ -5,6 +5,9 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "dependencies": {
+    "@ewallet-lab/session": "*"
+  },
   "peerDependencies": {
     "react": "^19.0.0"
   }

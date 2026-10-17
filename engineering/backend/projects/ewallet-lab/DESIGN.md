@@ -2356,6 +2356,116 @@ Tích hợp tính năng gửi Thiệp mừng điện tử kèm tiền (E-Gift Ca
   * Tổng phí thu được trên 20 thread đạt chính xác tuyệt đối **50.000đ** (0,5% của đúng 10.000.000đ vượt).
   * Số dư ví sau khi chạy 20 thread khớp chính xác, sai lệch sổ cái tuyệt đối bằng 0 (Zero ledger discrepancy).
 
+## TLS cho Ingress + WebAuthn (Touch ID thật) cho Step-up — issue #41
+
+Operator (macOS, có Touch ID thật) yêu cầu nâng `StepUpModal` (mô phỏng thuần UI từ issue #15, xem
+mục "Step-up xác thực..." phía trên) lên dùng WebAuthn platform authenticator thật, thay nút xác
+nhận giả lập. 2 phần: (1) hạ tầng TLS (blocker bắt buộc — `navigator.credentials` không tồn tại
+ngoài secure context) và (2) đăng ký/xác thực credential phía `user-service`. Phần UI (frontend) ở
+frontend `DESIGN.md`'s mục Touch ID (#41).
+
+### 1. TLS cho `*.ewallet-lab.local` — song song với HTTP, không ép redirect
+
+- **Cert**: self-signed, tạo bằng `openssl req -x509` (KHÔNG cần CA thật/Let's Encrypt — lab local,
+  browser accept-warning là đủ, đúng gợi ý của issue #41), SAN phủ đủ 7 host hiện có
+  (`shell`/`mfe-auth`/`mfe-wallet`/`mfe-topup`/`mfe-transfer`/`mfe-bill-payment`/`api`
+  `.ewallet-lab.local`) + wildcard `*.ewallet-lab.local` cho host tương lai:
+  ```
+  openssl req -x509 -nodes -newkey rsa:2048 \
+    -keyout ewallet-lab.key -out ewallet-lab.crt -days 1825 \
+    -subj "/CN=ewallet-lab.local" \
+    -addext "subjectAltName=DNS:shell.ewallet-lab.local,DNS:mfe-auth.ewallet-lab.local,DNS:mfe-wallet.ewallet-lab.local,DNS:mfe-topup.ewallet-lab.local,DNS:mfe-transfer.ewallet-lab.local,DNS:mfe-bill-payment.ewallet-lab.local,DNS:api.ewallet-lab.local,DNS:*.ewallet-lab.local"
+  kubectl -n ewallet-lab create secret tls ewallet-lab-tls --cert=ewallet-lab.crt --key=ewallet-lab.key
+  ```
+  **Không commit cert/key vào git** (dù self-signed, private key không nên nằm trong repo public) —
+  tạo ngoài Helm (`kubectl create secret` thủ công), Helm chỉ tham chiếu `secretName` qua
+  `values.yaml`'s `ingress.tlsSecretName`. Cần tạo lại khi cert hết hạn (5 năm, ít gấp) hoặc khi
+  thêm host mới vào `ingress.hosts`.
+- **Helm templates** (`deploy/helm/ewallet-lab/templates/ingress.yaml`): mỗi Ingress resource
+  (`ewallet-lab-frontend`, `ewallet-lab-api`) thêm `spec.tls` block trỏ tới secret trên, **giữ
+  nguyên 100% `spec.rules` HTTP cũ** — không xoá/thay path nào.
+- **Annotation bắt buộc** `nginx.ingress.kubernetes.io/ssl-redirect: "false"` (thêm vào
+  `values.yaml`'s `ingress.annotations`): ingress-nginx mặc định force-redirect HTTP→HTTPS (308)
+  ngay khi 1 Ingress có `tls:` block — nếu không tắt, MỌI caller `http://` hiện có (toàn bộ lệnh
+  verify của #1 đến #40, mọi script/test cũ) sẽ vỡ. Issue #41 yêu cầu rõ "HTTP vẫn giữ nguyên hoạt
+  động song song, không ép redirect" — annotation này chính là cách thực hiện yêu cầu đó, không
+  phải optional.
+- **Deploy**: ingress hiện bị helm's server-side-apply field-manager conflict với 1 số
+  Deployment khác (gap hạ tầng có từ trước, không do #41 gây ra — `helm history` cho thấy revision
+  20-22 đều `failed` vì conflict trên `bnpl-service`/`bill-payment-service`, có vẻ do 1 agent trước
+  từng `kubectl patch`/`kubectl set env` trực tiếp để hạ TTL test nhanh, làm field-manager lệch khỏi
+  Helm). Vì thay đổi của #41 chỉ động tới `templates/ingress.yaml` (không đụng Deployment nào), dùng
+  `helm template ewallet-lab . -f values.yaml -f values-local.yaml --show-only templates/ingress.yaml
+  | kubectl apply -f -` để áp đúng 2 Ingress resource mà không chạm vào các Deployment đang conflict
+  — không chạy `helm upgrade` toàn bộ release (sẽ fail vì gap có trước, không liên quan #41).
+- **Verify thật đã làm**: `kubectl -n ewallet-lab get ingress -o yaml` xác nhận cả 2 Ingress có
+  đúng `tls:` block trỏ `ewallet-lab-tls`. TLS handshake xác nhận bằng pod tạm
+  (`curlimages/curl`, `--resolve <host>:443:<ingress-nginx-controller ClusterIP>` để set đúng SNI —
+  dùng `-H "Host:"` KHÔNG đủ, SNI được chọn ở tầng TLS trước khi Host header tới, lần đầu test sai
+  cách này trả về default "Kubernetes Ingress Controller Fake Certificate" của nginx, không phải
+  cert vừa tạo) cho cả `shell.ewallet-lab.local` (200, `subject: CN=ewallet-lab.local`) và
+  `api.ewallet-lab.local` (404 đúng route-not-found, vẫn là cert đúng). HTTP qua cùng Ingress xác
+  nhận KHÔNG bị 308 redirect (vẫn 200 trực tiếp) — đúng yêu cầu "song song, không ép".
+  **Chưa verify được**: truy cập thật từ browser host (`https://shell.ewallet-lab.local/`) qua cổng
+  443 trên máy host — môi trường chạy agent này không có `minikube tunnel`/port-forward nào đang
+  forward cổng 443 ra host (cổng 80 đang được 1 tiến trình có sẵn forward sẵn, không rõ cơ chế, có
+  thể do operator chạy ngoài tầm nhìn của agent — xem CLAUDE.md's ghi chú `minikube tunnel` cần
+  sudo). Agent không có quyền sudo để tự mở port-forward 443 mới. Cluster-internal test ở trên đã
+  xác nhận TLS termination/cert đúng 100% — phần còn thiếu là thuần hạ tầng port-forward trên máy
+  operator, không phải bug code.
+
+### 2. WebAuthn credential registration — `user-service`, bảng mới `webauthn_credentials`
+
+- **Entity `WebauthnCredential`** (`user-service/domain`): `id`, `userId`, `credentialId` (unique),
+  `publicKey` (base64url, optional, lưu nhưng KHÔNG verify — xem dưới), `deviceLabel`, `createdAt`.
+  1 user có thể có N row (N thiết bị), KHÔNG có unique constraint trên `userId`.
+- **Endpoints mới trên `UserController`**:
+  * `POST /users/{id}/webauthn/credentials` — body `{credentialId, publicKey?, deviceLabel?}`, 404
+    nếu user không tồn tại, 409 nếu `credentialId` đã được đăng ký bởi bất kỳ ai trước đó
+    (credential id do browser/OS sinh ra, không trùng tự nhiên — 409 ở đây chỉ bắt lỗi double-submit
+    hoặc bug client, không phải case nghiệp vụ thường gặp), 201 khi thành công.
+  * `GET /users/{id}/webauthn/credentials` → `{registered: boolean, deviceCount: int}` — số lượng
+    thiết bị đã đăng ký cho user này (không phân biệt thiết bị nào, chỉ đếm).
+- **Mức độ verify — minh bạch, KHÔNG tự nhận đã làm nhiều hơn thực tế**: service này
+  **KHÔNG implement FIDO2 server-side verification đầy đủ** (không issue/check challenge server-
+  side, không verify signature/attestation bằng `publicKey` đã lưu). `publicKey` được lưu thuần để
+  làm audit trail, chưa dùng cho bất kỳ logic nào. Lý do (ghi theo đúng yêu cầu issue #41's
+  Constraints — "tự quyết mức độ, miễn không tự nhận đã verify đầy đủ FIDO2"): triển khai 1 thư viện
+  FIDO2 server đầy đủ (challenge store, attestation verification, signature check theo COSE key)
+  là nhiều hơn 1 bậc so với scope của lab này — bảo đảm an ninh thật trong ticket này đến từ chính
+  browser/OS (Secure Enclave) khi chạy `navigator.credentials.get()`/`.create()`, không phải từ
+  server kiểm tra lại. Điều server CÓ đảm bảo đúng: "user này đã đăng ký ít nhất 1 credential" — đủ
+  cho quyết định UX hiển thị Touch ID ở `StepUpModal` (frontend tự quyết theo flag local, xem
+  frontend DESIGN.md — endpoint `GET` này chỉ dùng cho màn đăng ký hiển thị trạng thái, không dùng
+  để gate `StepUpModal`).
+- **DB migration**: bảng mới hoàn toàn (không đụng cột/CHECK constraint nào đã có) — `ddl-auto:
+  update` tự tạo bảng khi `user-service` khởi động lại với image mới, KHÔNG cần `ALTER TABLE` thủ
+  công (khác lớp lỗi enum/CHECK constraint đã ghi ở CLAUDE.md — lỗi đó chỉ xảy ra khi sửa 1 cột đã
+  tồn tại, không áp dụng cho bảng hoàn toàn mới). Đã xác nhận qua `\d+ webauthn_credentials` trên
+  Postgres thật sau khi deploy: đúng cột, đúng unique constraint trên `credential_id`.
+- **`StepUpPolicy`/`TopupService`/`FundService`'s message tĩnh** ("Giao dịch trên X/lần... cần xác
+  thực bổ sung theo QĐ 2345/QĐ-NHNN") — issue #41 bỏ câu phụ "(mô phỏng — lab này không có sinh
+  trắc học thật, chỉ yêu cầu 1 bước xác nhận bổ sung)" vì từ giờ KHÔNG còn đúng tuyệt đối (khi user
+  đã đăng ký Touch ID, bước xác nhận đó LÀ sinh trắc học thật ở tầng frontend). Message giữ trung
+  lập — server không biết (và không cần biết) `stepUpConfirmed: true` tới từ Touch ID thật hay nút
+  mô phỏng, cả 2 case server xử lý giống nhau (đúng đúng bản chất: server chỉ tin field boolean này,
+  chưa bao giờ tự verify gì — xem `StepUpPolicy`'s class comment đã cập nhật).
+
+### 3. Đã verify thật (phần backend)
+
+- `POST /users/register` → `POST /users/{id}/webauthn/credentials` (credential giả lập qua curl,
+  không phải browser thật) → `GET /users/{id}/webauthn/credentials` trả `{registered:true,
+  deviceCount:1}` → DB `SELECT * FROM webauthn_credentials` khớp đúng row — qua Ingress thật
+  (`http://api.ewallet-lab.local`).
+- Đăng ký trùng `credentialId` → 409, không tạo row mới.
+- Toàn bộ 3 service có message step-up (`wallet-service`, `topup-service`, `fund-service`) build +
+  test sạch (`./gradlew build`, không skip test) sau khi sửa message; flow 428→(retry kèm
+  `stepUpConfirmed:true`)→200 re-verify qua Ingress thật, không regression.
+- **Chưa/không thể verify trong phiên agent này**: ceremony Touch ID thật (`navigator.credentials
+  .create()`/`.get()` với prompt Touch ID thật xuất hiện trên màn hình) — không có hardware Touch
+  ID trong môi trường chạy agent. Phần này CHỈ operator tự test được trên máy họ (macOS, Safari/
+  Chrome) — xem frontend DESIGN.md's mục Touch ID cho checklist cụ thể operator cần tự chạy.
+
 
 
 

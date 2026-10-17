@@ -20,3 +20,4 @@ export * from './travelBookingService';
 export * from './insuranceService';
 export * from './giftCardService';
 export * from './merchantService';
+export * from './webauthnService';

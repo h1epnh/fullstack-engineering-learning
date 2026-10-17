@@ -9,6 +9,7 @@
     "preview": "vite preview --port 5173 --strictPort"
   },
   "dependencies": {
+    "@ewallet-lab/api-client": "*",
     "@ewallet-lab/session": "*",
     "@ewallet-lab/ui": "*",
     "react": "^19.0.0",

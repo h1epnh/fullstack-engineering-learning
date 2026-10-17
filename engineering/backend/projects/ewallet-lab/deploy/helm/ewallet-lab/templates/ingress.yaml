@@ -11,6 +11,18 @@ metadata:
     {{- toYaml .Values.ingress.annotations | nindent 4 }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
+  # Issue #41 — TLS alongside the existing HTTP rules below (not replacing them). See
+  # values.yaml's `ingress.annotations`' `ssl-redirect: "false"` note for why this doesn't break
+  # any `http://` caller.
+  tls:
+    - hosts:
+        - {{ .Values.ingress.hosts.shell }}
+        - {{ .Values.ingress.hosts.mfeAuth }}
+        - {{ .Values.ingress.hosts.mfeWallet }}
+        - {{ .Values.ingress.hosts.mfeTopup }}
+        - {{ .Values.ingress.hosts.mfeTransfer }}
+        - {{ .Values.ingress.hosts.mfeBillPayment }}
+      secretName: {{ .Values.ingress.tlsSecretName }}
   rules:
     - host: {{ .Values.ingress.hosts.shell }}
       http:
@@ -64,6 +76,10 @@ metadata:
     {{- toYaml .Values.ingress.annotations | nindent 4 }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.hosts.api }}
+      secretName: {{ .Values.ingress.tlsSecretName }}
   rules:
     - host: {{ .Values.ingress.hosts.api }}
       http:

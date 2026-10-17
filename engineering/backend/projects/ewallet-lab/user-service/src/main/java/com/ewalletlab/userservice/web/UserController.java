@@ -1,9 +1,13 @@
 package com.ewalletlab.userservice.web;
 
 import com.ewalletlab.userservice.domain.User;
+import com.ewalletlab.userservice.domain.WebauthnCredential;
 import com.ewalletlab.userservice.repository.UserRepository;
+import com.ewalletlab.userservice.repository.WebauthnCredentialRepository;
 import com.ewalletlab.userservice.web.dto.RegisterRequest;
+import com.ewalletlab.userservice.web.dto.RegisterWebauthnCredentialRequest;
 import com.ewalletlab.userservice.web.dto.UserResponse;
+import com.ewalletlab.userservice.web.dto.WebauthnStatusResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,9 +26,11 @@ import java.util.UUID;
 public class UserController {
 
     private final UserRepository userRepository;
+    private final WebauthnCredentialRepository webauthnCredentialRepository;
 
-    public UserController(UserRepository userRepository) {
+    public UserController(UserRepository userRepository, WebauthnCredentialRepository webauthnCredentialRepository) {
         this.userRepository = userRepository;
+        this.webauthnCredentialRepository = webauthnCredentialRepository;
     }
 
     @PostMapping("/register")
@@ -69,5 +75,33 @@ public class UserController {
         user.verifyKyc(request.idCardNumber());
         User saved = userRepository.save(user);
         return ResponseEntity.ok(UserResponse.from(saved));
+    }
+
+    /**
+     * Issue #41 — register a platform authenticator (Touch ID/Face ID) credential id for this
+     * user, 1 row per device. NOT a full FIDO2 server-side verification — see
+     * {@code WebauthnCredential}'s class comment for exactly what is/isn't checked here.
+     */
+    @PostMapping("/{id}/webauthn/credentials")
+    public ResponseEntity<Void> registerWebauthnCredential(
+        @PathVariable UUID id,
+        @Valid @RequestBody RegisterWebauthnCredentialRequest request
+    ) {
+        userRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found: " + id));
+        if (webauthnCredentialRepository.findByCredentialId(request.credentialId()).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Credential này đã được đăng ký trước đó");
+        }
+        webauthnCredentialRepository.save(
+            new WebauthnCredential(id, request.credentialId(), request.publicKey(), request.deviceLabel())
+        );
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
+
+    /** Issue #41 — whether this user has registered a platform authenticator on any device. */
+    @GetMapping("/{id}/webauthn/credentials")
+    public WebauthnStatusResponse webauthnStatus(@PathVariable UUID id) {
+        long count = webauthnCredentialRepository.countByUserId(id);
+        return new WebauthnStatusResponse(count > 0, (int) count);
     }
 }

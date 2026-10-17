@@ -11,13 +11,13 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 public class CorsConfig implements WebMvcConfigurer {
 
-    @Value("${ALLOWED_ORIGIN_PATTERN:http://localhost:*}")
+    @Value("${ALLOWED_ORIGIN_PATTERN:http://localhost:*,https://localhost:*}")
     private String allowedOriginPattern;
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-            .allowedOriginPatterns(allowedOriginPattern)
+            .allowedOriginPatterns(allowedOriginPattern.split(","))
             .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
             .allowedHeaders("*");
     }

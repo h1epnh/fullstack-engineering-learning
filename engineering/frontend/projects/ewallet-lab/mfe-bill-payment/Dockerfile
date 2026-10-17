@@ -1,8 +1,10 @@
 # Build context is the monorepo root (engineering/frontend/projects/ewallet-lab/), not this
 # directory — npm workspaces needs the whole tree to resolve @ewallet-lab/* deps.
 # docker build -f mfe-bill-payment/Dockerfile \
-#   --build-arg VITE_BILL_PAYMENT_SERVICE_URL=http://api.ewallet-lab.local \
-#   --build-arg VITE_LOYALTY_SERVICE_URL=http://api.ewallet-lab.local \
+#   --build-arg VITE_BILL_PAYMENT_SERVICE_URL=https://api.ewallet-lab.local \
+#   --build-arg VITE_LOYALTY_SERVICE_URL=https://api.ewallet-lab.local \
+#   --build-arg VITE_BNPL_SERVICE_URL=https://api.ewallet-lab.local \
+#   --build-arg VITE_WALLET_SERVICE_URL=https://api.ewallet-lab.local \
 #   -t ewallet-lab/mfe-bill-payment:local .
 FROM node:22-alpine AS build
 WORKDIR /repo
@@ -16,6 +18,13 @@ ENV VITE_BILL_PAYMENT_SERVICE_URL=${VITE_BILL_PAYMENT_SERVICE_URL}
 # class of bug called out in frontend CLAUDE.md, add it here too.
 ARG VITE_LOYALTY_SERVICE_URL
 ENV VITE_LOYALTY_SERVICE_URL=${VITE_LOYALTY_SERVICE_URL}
+# bnpl-service (BNPL top-up-and-pay path calls bnplService) and wallet-service (wallet balance
+# preview calls walletService) — both were missing here too, found during the issue #41
+# mixed-content audit; same recurring bug class, not scheme-specific.
+ARG VITE_BNPL_SERVICE_URL
+ENV VITE_BNPL_SERVICE_URL=${VITE_BNPL_SERVICE_URL}
+ARG VITE_WALLET_SERVICE_URL
+ENV VITE_WALLET_SERVICE_URL=${VITE_WALLET_SERVICE_URL}
 RUN npm run build -w mfe-bill-payment
 
 FROM nginx:1.27-alpine
