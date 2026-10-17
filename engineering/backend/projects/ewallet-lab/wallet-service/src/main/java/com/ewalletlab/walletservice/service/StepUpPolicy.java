@@ -15,8 +15,13 @@ import java.util.Set;
  * Issue #15 — mô phỏng khái niệm step-up authentication của QĐ 2345/QĐ-NHNN (18/12/2023, hiệu lực
  * 01/07/2024): 1 giao dịch chuyển tiền/thanh toán/nạp ví điện tử vượt 10.000.000đ, HOẶC tổng các
  * giao dịch đó trong 1 ngày đạt/vượt 20.000.000đ, bắt buộc xác thực sinh trắc học — dưới ngưỡng đó
- * OTP là đủ. Đây chỉ là MÔ PHỎNG khái niệm: không có sinh trắc học/WebAuthn thật ở đâu trong lab
- * này, "xác thực bổ sung" chỉ là 1 bước xác nhận UI (xem backend DESIGN.md).
+ * OTP là đủ. Server-side, "xác thực bổ sung" vẫn chỉ là 1 field {@code stepUpConfirmed} trên
+ * request — server KHÔNG tự xác minh sinh trắc học gì cả, chỉ tin field này. Issue #41 nâng cấp
+ * PHÍA FRONTEND để field đó chỉ được set `true` sau một ceremony WebAuthn/Touch ID thật (khi thiết
+ * bị hỗ trợ và user đã đăng ký) — xem {@code packages/ui/src/StepUpModal.tsx}/`webauthn.ts` và
+ * backend/frontend DESIGN.md's mục Touch ID cho ranh giới chính xác (KHÔNG so khớp CCCD như QĐ
+ * 2345 thật yêu cầu). Trước #41 (và vẫn còn đúng khi Touch ID không khả dụng/chưa đăng ký), đây là
+ * mô phỏng thuần UI (xem backend DESIGN.md).
  *
  * <p>Số liệu 10.000.000đ/20.000.000đ đã xác minh trực tiếp (agent-designer, nguồn
  * thitruongtaichinhtiente.vn) — không tự bịa, không làm tròn khác.
@@ -74,9 +79,12 @@ public class StepUpPolicy {
     }
 
     public String describeRequirement() {
+        // Issue #41: không còn khẳng định tuyệt đối "lab này không có sinh trắc học thật" — kể từ
+        // #41, nếu thiết bị hỗ trợ và user đã đăng ký, StepUpModal dùng Touch ID/WebAuthn thật để
+        // tạo ra chính field stepUpConfirmed này (xem class comment). Message giữ trung lập, không
+        // tự nhận biết phía server việc xác nhận có đến từ Touch ID thật hay nút mô phỏng.
         return ("Giao dịch trên %s/lần hoặc tổng giao dịch chuyển tiền/thanh toán/nạp ví trong ngày "
-            + "đạt %s cần xác thực bổ sung theo QĐ 2345/QĐ-NHNN (mô phỏng — lab này không có sinh "
-            + "trắc học thật, chỉ yêu cầu 1 bước xác nhận bổ sung)")
+            + "đạt %s cần xác thực bổ sung theo QĐ 2345/QĐ-NHNN")
             .formatted(formatVnd(singleTransactionThreshold), formatVnd(dailyCumulativeThreshold));
     }
 

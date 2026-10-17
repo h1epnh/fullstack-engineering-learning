@@ -1,8 +1,8 @@
 # Build context is the monorepo root (engineering/frontend/projects/ewallet-lab/), not this
 # directory — npm workspaces needs the whole tree to resolve @ewallet-lab/* deps.
 # docker build -f mfe-topup/Dockerfile \
-#   --build-arg VITE_TOPUP_SERVICE_URL=http://api.ewallet-lab.local \
-#   --build-arg VITE_WALLET_SERVICE_URL=http://api.ewallet-lab.local \
+#   --build-arg VITE_TOPUP_SERVICE_URL=https://api.ewallet-lab.local \
+#   --build-arg VITE_WALLET_SERVICE_URL=https://api.ewallet-lab.local \
 #   -t ewallet-lab/mfe-topup:local .
 FROM node:22-alpine AS build
 WORKDIR /repo

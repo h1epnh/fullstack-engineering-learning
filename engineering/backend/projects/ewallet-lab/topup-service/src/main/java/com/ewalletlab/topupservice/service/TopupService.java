@@ -59,10 +59,12 @@ public class TopupService {
     /** Same Vietnamese copy as StepUpPolicy.describeRequirement() on wallet-service, built from the
      * thresholds the check response actually returned rather than a second hardcoded copy of the
      * numbers, so the 2 services can't drift out of sync. */
+    // Issue #41: message giữ trung lập — không còn khẳng định "lab này không có sinh trắc học
+    // thật", vì StepUpModal (frontend) giờ có thể dùng Touch ID/WebAuthn thật để set field này
+    // khi thiết bị hỗ trợ và user đã đăng ký (xem wallet-service's StepUpPolicy class comment).
     private static String describeStepUpRequirement(WalletServiceClient.StepUpCheckResult check) {
         return ("Giao dịch trên %s/lần hoặc tổng giao dịch chuyển tiền/thanh toán/nạp ví trong ngày "
-            + "đạt %s cần xác thực bổ sung theo QĐ 2345/QĐ-NHNN (mô phỏng — lab này không có sinh "
-            + "trắc học thật, chỉ yêu cầu 1 bước xác nhận bổ sung)")
+            + "đạt %s cần xác thực bổ sung theo QĐ 2345/QĐ-NHNN")
             .formatted(formatVnd(check.singleThreshold()), formatVnd(check.dailyThreshold()));
     }
 

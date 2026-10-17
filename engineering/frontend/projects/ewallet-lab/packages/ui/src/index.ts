@@ -11,4 +11,5 @@ export * from './Layout';
 export * from './TransactionRow';
 export * from './StepUpModal';
 export * from './formErrors';
+export * from './webauthn';
 import './tokens.css';

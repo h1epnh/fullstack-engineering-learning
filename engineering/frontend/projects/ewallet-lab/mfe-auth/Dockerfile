@@ -1,7 +1,7 @@
 # Build context is the monorepo root (engineering/frontend/projects/ewallet-lab/), not this
 # directory — npm workspaces needs the whole tree to resolve @ewallet-lab/* deps.
 # docker build -f mfe-auth/Dockerfile \
-#   --build-arg VITE_USER_SERVICE_URL=http://api.ewallet-lab.local \
+#   --build-arg VITE_USER_SERVICE_URL=https://api.ewallet-lab.local \
 #   -t ewallet-lab/mfe-auth:local .
 FROM node:22-alpine AS build
 WORKDIR /repo
