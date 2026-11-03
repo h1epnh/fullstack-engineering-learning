@@ -4,7 +4,7 @@ metadata:
   name: mfe-transfer
   namespace: {{ .Values.namespace }}
 spec:
-  replicas: {{ .Values.frontend.replicas }}
+  replicas: {{ include "ewallet-lab.replicas" (dict "root" $ "name" "mfe-transfer" "default" .Values.frontend.replicas) }}
   selector:
     matchLabels: { app: mfe-transfer }
   template:
@@ -16,6 +16,7 @@ spec:
         - name: mfe-transfer
           image: {{ include "ewallet-lab.image" (dict "root" $ "name" "mfe-transfer") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "ewallet-lab.resources" (dict "root" $ "name" "mfe-transfer") | nindent 10 }}
           ports:
             - containerPort: {{ .Values.frontend.port }}
           readinessProbe:

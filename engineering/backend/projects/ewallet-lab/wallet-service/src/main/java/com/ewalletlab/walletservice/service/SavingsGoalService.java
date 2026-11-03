@@ -7,6 +7,7 @@ import com.ewalletlab.walletservice.domain.SavingsGoalTransactionType;
 import com.ewalletlab.walletservice.domain.TransactionType;
 import com.ewalletlab.walletservice.repository.SavingsGoalRepository;
 import com.ewalletlab.walletservice.repository.SavingsGoalTransactionRepository;
+import com.ewalletlab.walletservice.repository.WalletRepository;
 import com.ewalletlab.walletservice.web.dto.CreateSavingsGoalRequestDto;
 import com.ewalletlab.walletservice.web.dto.DepositSavingsGoalRequestDto;
 import com.ewalletlab.walletservice.web.dto.SavingsGoalDetailDto;
@@ -32,29 +33,55 @@ public class SavingsGoalService {
     private static final Logger log = LoggerFactory.getLogger(SavingsGoalService.class);
     private static final int MAX_ATTEMPTS = 5;
     private static final long RETRY_BACKOFF_MILLIS = 20;
+    private static final BigDecimal MAX_TARGET_AMOUNT = new BigDecimal("200000000");
 
     private final SavingsGoalRepository savingsGoalRepository;
     private final SavingsGoalTransactionRepository savingsGoalTransactionRepository;
     private final SavingsGoalMutationExecutor mutationExecutor;
     private final WalletService walletService;
+    private final WalletRepository walletRepository;
+    private final UserServiceClient userServiceClient;
 
     public SavingsGoalService(SavingsGoalRepository savingsGoalRepository,
                               SavingsGoalTransactionRepository savingsGoalTransactionRepository,
                               SavingsGoalMutationExecutor mutationExecutor,
-                              WalletService walletService) {
+                              WalletService walletService,
+                              WalletRepository walletRepository,
+                              UserServiceClient userServiceClient) {
         this.savingsGoalRepository = savingsGoalRepository;
         this.savingsGoalTransactionRepository = savingsGoalTransactionRepository;
         this.mutationExecutor = mutationExecutor;
         this.walletService = walletService;
+        this.walletRepository = walletRepository;
+        this.userServiceClient = userServiceClient;
     }
 
     @Transactional
     public SavingsGoalDto createGoal(CreateSavingsGoalRequestDto request) {
+        if (request.name() != null && request.name().trim().length() > 100) {
+            throw new IllegalArgumentException("Tên mục tiêu không được vượt quá 100 ký tự");
+        }
         if (request.targetAmount() == null || request.targetAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Số tiền mục tiêu phải lớn hơn 0");
         }
+        if (request.targetAmount().compareTo(MAX_TARGET_AMOUNT) > 0) {
+            throw new IllegalArgumentException("Số tiền mục tiêu tối đa là 200.000.000đ");
+        }
         if (request.targetDate() == null || request.targetDate().isBefore(LocalDate.now())) {
             throw new IllegalArgumentException("Ngày kết thúc không được ở quá khứ");
+        }
+
+        // Issue #62: Kiểm tra người dùng hoặc ví có tồn tại trước khi tạo mục tiêu (chống mục tiêu mồ côi)
+        boolean exists = walletRepository.findByUserId(request.userId()).isPresent();
+        if (!exists) {
+            exists = userServiceClient.findUser(request.userId()).isPresent();
+            if (exists) {
+                // Tạo ví lazily cho người dùng nếu hợp lệ
+                walletService.getOrCreateWallet(request.userId());
+            }
+        }
+        if (!exists) {
+            throw new NoSuchElementException("Không tìm thấy người dùng hoặc ví cho userId: " + request.userId());
         }
 
         SavingsGoal goal = new SavingsGoal(
@@ -64,6 +91,7 @@ public class SavingsGoalService {
             request.targetDate()
         );
         goal = savingsGoalRepository.save(goal);
+
 
         if (request.initialDepositAmount() != null && request.initialDepositAmount().compareTo(BigDecimal.ZERO) > 0) {
             walletService.debit(

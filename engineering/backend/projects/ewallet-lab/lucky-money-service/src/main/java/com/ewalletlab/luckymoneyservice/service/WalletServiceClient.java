@@ -28,19 +28,33 @@ public class WalletServiceClient {
     public record WalletResult(UUID userId, BigDecimal balance) {
     }
 
-    private record AdjustBalanceRequest(BigDecimal amount, String type, String reference, String note) {
+    private record AdjustBalanceRequest(BigDecimal amount, String type, String reference, String note,
+                                         String idempotencyKey) {
     }
 
     public WalletResult debit(UUID userId, BigDecimal amount, String type, String reference, String note) {
-        return adjust(userId, "debit", amount, type, reference, note);
+        return adjust(userId, "debit", amount, type, reference, note, null);
+    }
+
+    /** Issue #56 — {@code idempotencyKey} (null = old behaviour): a repeated call with the same key is a
+     * no-op on wallet-service (Transaction.idempotencyKey UNIQUE), so relay retries never double-apply. */
+    public WalletResult debit(UUID userId, BigDecimal amount, String type, String reference, String note,
+                               String idempotencyKey) {
+        return adjust(userId, "debit", amount, type, reference, note, idempotencyKey);
     }
 
     public WalletResult credit(UUID userId, BigDecimal amount, String type, String reference, String note) {
-        return adjust(userId, "credit", amount, type, reference, note);
+        return adjust(userId, "credit", amount, type, reference, note, null);
     }
 
-    private WalletResult adjust(UUID userId, String action, BigDecimal amount, String type, String reference, String note) {
-        AdjustBalanceRequest request = new AdjustBalanceRequest(amount, type, reference, note);
+    public WalletResult credit(UUID userId, BigDecimal amount, String type, String reference, String note,
+                                String idempotencyKey) {
+        return adjust(userId, "credit", amount, type, reference, note, idempotencyKey);
+    }
+
+    private WalletResult adjust(UUID userId, String action, BigDecimal amount, String type, String reference,
+                                 String note, String idempotencyKey) {
+        AdjustBalanceRequest request = new AdjustBalanceRequest(amount, type, reference, note, idempotencyKey);
         return restClient.post()
             .uri("/wallets/{userId}/{action}", userId, action)
             .body(request)

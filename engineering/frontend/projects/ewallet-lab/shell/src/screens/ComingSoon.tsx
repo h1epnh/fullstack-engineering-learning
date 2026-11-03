@@ -81,12 +81,8 @@ const COPY: Record<string, { icon: string; title: string; body: string }> = {
     title: 'Chuyển khoản ngân hàng',
     body: 'Chuyển tiền ra ngoài hệ thống (NAPAS/liên ngân hàng) cần một rail thanh toán thật — payment-hub (dự án song song) có mô phỏng NAPAS, nhưng chưa nối 2 project lại. Trong lab này, "Chuyển tiền" chỉ hỗ trợ chuyển giữa 2 user Ewallet Lab.',
   },
-  'send-card': {
-    icon: 'card_giftcard',
-    title: 'Gửi thiệp',
-    body: 'Tính năng xã hội (thiệp kèm tiền mừng) — ngoài phạm vi lab tập trung vào giao dịch tài chính cốt lõi.',
-  },
 };
+
 
 export function ComingSoon({ feature, onBack }: { feature: string; onBack: () => void }) {
   const copy = COPY[feature] ?? { icon: 'construction', title: feature, body: 'Tính năng đang được lên kế hoạch.' };

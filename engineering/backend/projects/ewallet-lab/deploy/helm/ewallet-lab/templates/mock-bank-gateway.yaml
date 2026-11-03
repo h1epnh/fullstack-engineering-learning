@@ -4,7 +4,7 @@ metadata:
   name: mock-bank-gateway
   namespace: {{ .Values.namespace }}
 spec:
-  replicas: {{ .Values.mockBankGateway.replicas }}
+  replicas: {{ include "ewallet-lab.replicas" (dict "root" $ "name" "mock-bank-gateway" "default" .Values.mockBankGateway.replicas) }}
   selector:
     matchLabels: { app: mock-bank-gateway }
   template:
@@ -21,11 +21,19 @@ spec:
         - name: mock-bank-gateway
           image: {{ include "ewallet-lab.image" (dict "root" $ "name" "mock-bank-gateway") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "ewallet-lab.resources" (dict "root" $ "name" "mock-bank-gateway") | nindent 10 }}
           ports:
             - containerPort: {{ .Values.mockBankGateway.port }}
           env:
             - name: HTTP_PORT
               value: {{ .Values.mockBankGateway.port | quote }}
+            # Issue #52: same credential pair topup-service uses, from the same Secret — the gateway
+            # signs the IPN with it and topup-service re-computes the signature with it, so the two
+            # MUST get identical values. The gateway refuses to start without them.
+            - name: BANK_GATEWAY_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: bank-gateway-credentials, key: BANK_GATEWAY_ACCESS_KEY } }
+            - name: BANK_GATEWAY_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: bank-gateway-credentials, key: BANK_GATEWAY_SECRET_KEY } }
           readinessProbe:
             httpGet: { path: /healthz, port: {{ .Values.mockBankGateway.port }} }
             initialDelaySeconds: 5

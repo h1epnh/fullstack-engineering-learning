@@ -26,6 +26,9 @@ public class WalletServiceClient {
 
     /** Subset of wallet-service's Transaction entity — field names match it exactly. */
     public record WalletTransaction(UUID id, String type, BigDecimal amount, Instant createdAt) {
+        public Long amountVnd() {
+            return amount != null ? amount.longValue() : null;
+        }
     }
 
     public record WalletResult(UUID userId, BigDecimal balance) {

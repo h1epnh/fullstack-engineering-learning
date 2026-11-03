@@ -41,6 +41,12 @@ ewallet-lab:
     topup-confirmed: wallet.topup.confirmed
   bank-gateway:
     base-url: ${BANK_GATEWAY_URL:http://localhost:8093}
+    # Issue #52: no defaults on purpose — fail at startup rather than fall back to a known secret.
+    access-key: ${BANK_GATEWAY_ACCESS_KEY}
+    secret-key: ${BANK_GATEWAY_SECRET_KEY}
+  ipn:
+    # Replay window for IPN responseTime (lab-defined control, see IpnSignatureVerifier).
+    replay-window-seconds: ${IPN_REPLAY_WINDOW_SECONDS:300}
   wallet-service:
     base-url: ${WALLET_SERVICE_URL:http://localhost:8091}
   user-service:

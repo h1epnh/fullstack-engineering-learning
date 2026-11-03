@@ -109,6 +109,12 @@ services:
       DB_PASSWORD: postgres
       KAFKA_BOOTSTRAP: kafka:9092
       BANK_GATEWAY_URL: http://mock-bank-gateway:8093
+      # Issue #52: shared accessKey/secretKey pair — must be IDENTICAL in topup-service and
+      # mock-bank-gateway, since one signs the IPN and the other verifies it. The defaults are the
+      # values come from a gitignored .env (copy .env.example, fill with random values); no default
+      # on purpose so compose refuses to start rather than use a known secret.
+      BANK_GATEWAY_ACCESS_KEY: ${BANK_GATEWAY_ACCESS_KEY:?set in .env, see .env.example}
+      BANK_GATEWAY_SECRET_KEY: ${BANK_GATEWAY_SECRET_KEY:?set in .env, see .env.example}
       WALLET_SERVICE_URL: http://wallet-service:8091
       SELF_BASE_URL: http://topup-service:8092
 
@@ -118,6 +124,9 @@ services:
       - "8093:8093"
     environment:
       HTTP_PORT: "8093"
+      # Issue #52: the SAME pair topup-service gets above — this side signs the IPN.
+      BANK_GATEWAY_ACCESS_KEY: ${BANK_GATEWAY_ACCESS_KEY:?set in .env, see .env.example}
+      BANK_GATEWAY_SECRET_KEY: ${BANK_GATEWAY_SECRET_KEY:?set in .env, see .env.example}
 
   transfer-service:
     build: ./transfer-service

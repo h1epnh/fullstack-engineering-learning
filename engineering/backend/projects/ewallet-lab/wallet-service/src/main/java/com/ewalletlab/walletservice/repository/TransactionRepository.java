@@ -80,4 +80,10 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
 
         BigDecimal getTotal();
     }
+
+    List<Transaction> findByWalletIdAndTypeInAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(
+        UUID walletId, Collection<TransactionType> types, Instant since);
+
+    List<Transaction> findByWalletIdAndTypeInAndCreatedAtBetweenOrderByCreatedAtDesc(
+        UUID walletId, Collection<TransactionType> types, Instant fromInclusive, Instant toExclusive);
 }

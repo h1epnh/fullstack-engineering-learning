@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
@@ -46,10 +47,19 @@ public class TransferService {
 
         WalletServiceClient.WalletResult senderAfterDebit = debitSender(request, recipient);
 
+        String recipientNote = "Nhận tiền chuyển khoản";
+        if (request.greetingCardTheme() != null && !request.greetingCardTheme().isBlank()) {
+            String theme = request.greetingCardTheme().trim();
+            String msg = request.greetingMessage() != null ? request.greetingMessage().trim() : "";
+            recipientNote = msg.isEmpty()
+                ? "Nhận tiền kèm thiệp [" + theme + "]"
+                : "Nhận tiền kèm thiệp [" + theme + "]: " + msg;
+        }
+
         try {
             walletServiceClient.credit(
                 recipient.id(), request.amount(), "TRANSFER_IN", request.fromUserId().toString(),
-                "Nhận tiền chuyển khoản");
+                recipientNote);
         } catch (Exception creditFailure) {
             log.error("Credit to recipient {} failed after debiting sender {} — compensating",
                 recipient.id(), request.fromUserId(), creditFailure);
@@ -67,7 +77,14 @@ public class TransferService {
                 request.fromUserId(), request.toPhone(), e.getMessage());
         }
 
-        return new TransferResponseDto(request.fromUserId(), recipient.id(), recipient.name(), senderAfterDebit.balance());
+        return new TransferResponseDto(
+            request.fromUserId(),
+            recipient.id(),
+            recipient.name(),
+            senderAfterDebit.balance(),
+            request.greetingCardTheme(),
+            request.greetingMessage()
+        );
     }
 
     private UserServiceClient.UserResponse lookupRecipient(String phone) {
@@ -79,10 +96,24 @@ public class TransferService {
     }
 
     private WalletServiceClient.WalletResult debitSender(TransferRequestDto request, UserServiceClient.UserResponse recipient) {
+        String senderNote = "Chuyển tiền cho " + recipient.name();
+        if (request.greetingCardTheme() != null && !request.greetingCardTheme().isBlank()) {
+            String theme = request.greetingCardTheme().trim();
+            String msg = request.greetingMessage() != null ? request.greetingMessage().trim() : "";
+            senderNote = msg.isEmpty()
+                ? senderNote + " (Thiệp " + theme + ")"
+                : senderNote + " (Thiệp " + theme + ": " + msg + ")";
+        }
         try {
-            return walletServiceClient.debit(
-                request.fromUserId(), request.amount(), recipient.id().toString(),
-                "Chuyển tiền cho " + recipient.name(), request.isStepUpConfirmed());
+            if (request.idempotencyKey() != null && !request.idempotencyKey().isBlank()) {
+                return walletServiceClient.debit(
+                    request.fromUserId(), request.amount(), recipient.id().toString(),
+                    senderNote, request.isStepUpConfirmed(), request.idempotencyKey());
+            } else {
+                return walletServiceClient.debit(
+                    request.fromUserId(), request.amount(), recipient.id().toString(),
+                    senderNote, request.isStepUpConfirmed());
+            }
         } catch (HttpClientErrorException.Conflict e) {
             String msg = e.getResponseBodyAsString();
             if (msg != null && !msg.isBlank()) {
@@ -99,6 +130,13 @@ public class TransferService {
                 throw new ResponseStatusException(HttpStatus.valueOf(428), e.getResponseBodyAsString());
             }
             throw e;
+        } catch (HttpServerErrorException.ServiceUnavailable e) {
+            // Issue #85: wallet-service 503 = debit rejected BEFORE execution (eKYC unverifiable, ADR-02).
+            // The debit is the FIRST saga step, so nothing needs undoing; retryable; no credit/refund call.
+            // Other 5xx / I/O errors are ambiguous (debit may have applied) and are intentionally not mapped.
+            String body = e.getResponseBodyAsString();
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, body != null && !body.isBlank() ? body
+                : "Hệ thống chưa thể xác minh định danh hoặc xử lý giao dịch lúc này, vui lòng thử lại sau");
         }
     }
 }

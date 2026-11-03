@@ -12,3 +12,5 @@ CREATE DATABASE ewallet_loyalty;
 CREATE DATABASE ewallet_family_wallet;
 CREATE DATABASE ewallet_fund;
 CREATE DATABASE ewallet_investment;
+-- Issue #54 / TD-13: idempotent form (psql \gexec); the DB already exists on the live cluster.
+SELECT 'CREATE DATABASE ewallet_transfer' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'ewallet_transfer')\gexec

@@ -31,6 +31,12 @@ public class FundTransaction {
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal amount;
 
+    /** Issue #60 — set only on CONTRIBUTION rows (unique, nullable): the namespaced idempotency key
+     * of the contribute request that produced this row, so a client retry with the same key finds
+     * the existing row instead of crediting {@code Fund.balance} a second time. */
+    @Column(name = "idempotency_key", unique = true)
+    private String idempotencyKey;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 
@@ -43,6 +49,16 @@ public class FundTransaction {
         this.actorUserId = actorUserId;
         this.type = type;
         this.amount = amount;
+    }
+
+    public FundTransaction(UUID fundId, UUID actorUserId, FundTransactionType type, BigDecimal amount,
+                            String idempotencyKey) {
+        this(fundId, actorUserId, type, amount);
+        this.idempotencyKey = idempotencyKey;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
     }
 
     public UUID getId() {

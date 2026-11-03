@@ -4,7 +4,7 @@ metadata:
   name: bill-payment-service
   namespace: {{ .Values.namespace }}
 spec:
-  replicas: {{ .Values.billPaymentService.replicas }}
+  replicas: {{ include "ewallet-lab.replicas" (dict "root" $ "name" "bill-payment-service" "default" .Values.billPaymentService.replicas) }}
   selector:
     matchLabels: { app: bill-payment-service }
   template:
@@ -21,9 +21,12 @@ spec:
         - name: bill-payment-service
           image: {{ include "ewallet-lab.image" (dict "root" $ "name" "bill-payment-service") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "ewallet-lab.resources" (dict "root" $ "name" "bill-payment-service") | nindent 10 }}
           ports:
             - containerPort: {{ .Values.billPaymentService.port }}
           env:
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ include "ewallet-lab.javaToolOptions" . | quote }}
             - name: DB_HOST
               value: postgres
             - name: DB_PORT

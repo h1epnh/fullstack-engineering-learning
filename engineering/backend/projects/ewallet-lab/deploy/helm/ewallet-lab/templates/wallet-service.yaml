@@ -4,7 +4,7 @@ metadata:
   name: wallet-service
   namespace: {{ .Values.namespace }}
 spec:
-  replicas: {{ .Values.walletService.replicas }}
+  replicas: {{ include "ewallet-lab.replicas" (dict "root" $ "name" "wallet-service" "default" .Values.walletService.replicas) }}
   selector:
     matchLabels: { app: wallet-service }
   template:
@@ -21,9 +21,24 @@ spec:
         - name: wallet-service
           image: {{ include "ewallet-lab.image" (dict "root" $ "name" "wallet-service") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "ewallet-lab.resources" (dict "root" $ "name" "wallet-service") | nindent 10 }}
           ports:
             - containerPort: {{ .Values.walletService.port }}
+          # ADR-06 (DESIGN.md) — SNS publish-after-commit (PaymentNotificationPublisher): best-effort,
+          # fire-and-forget, never blocks/fails a debit/credit response. AWS_ACCESS_KEY_ID/
+          # AWS_SECRET_ACCESS_KEY/AWS_DEFAULT_REGION come from this Secret (same scoped-down IAM user
+          # notification-service also uses), created out-of-band by the operator via
+          # scripts/init-aws-infra.sh — NOT a new container, so no new `resources:` entry needed
+          # here, just this one network dependency out to AWS (SNS publish; errors/timeouts never
+          # block the response, only logged at WARN — see "Ngân sách RAM" table's note on this).
+          envFrom:
+            - secretRef:
+                name: ewallet-lab-aws-notify
           env:
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ include "ewallet-lab.javaToolOptions" . | quote }}
+            - name: SNS_TOPIC_ARN
+              value: {{ .Values.aws.snsTopicArn | quote }}
             - name: DB_HOST
               value: postgres
             - name: DB_PORT

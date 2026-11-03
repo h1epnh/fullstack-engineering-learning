@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -117,9 +118,11 @@ public class DigitalSubscriptionService {
             if (status == 428) {
                 throw new ResponseStatusException(HttpStatus.valueOf(428), "Giao dịch cần xác thực bổ sung theo QĐ 2345/QĐ-NHNN");
             } else if (status == 409) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Số dư không đủ để thanh toán gói dịch vụ số");
+                throw new ResponseStatusException(HttpStatus.CONFLICT, WalletErrors.conflictMessage(e, "Số dư không đủ để thanh toán gói dịch vụ số"));
             }
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Lỗi khi trích nợ ví: " + e.getMessage());
+        } catch (HttpServerErrorException.ServiceUnavailable e) {
+            throw WalletErrors.unavailable(e); // Issue #85: rejected before execution, retryable, no refund
         }
 
         // 2. Generate unique period for ledger

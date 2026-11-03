@@ -1,0 +1,15 @@
+[Unit]
+Description=Alexa Motion Announcer
+After=network-online.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/alexa-motion-announcer
+ExecStart=/usr/bin/node /opt/alexa-motion-announcer/motion-announcer.js
+Restart=on-failure
+RestartSec=10
+User=root
+
+[Install]
+WantedBy=multi-user.target

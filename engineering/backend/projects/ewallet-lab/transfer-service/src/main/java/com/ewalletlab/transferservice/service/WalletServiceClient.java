@@ -22,22 +22,27 @@ public class WalletServiceClient {
     }
 
     private record AdjustBalanceRequest(BigDecimal amount, String type, String reference, String note,
-                                         Boolean stepUpConfirmed) {
+                                         Boolean stepUpConfirmed, String idempotencyKey) {
     }
 
     /** Issue #15 — stepUpConfirmed only matters for debit (see wallet-service's AdjustBalanceRequest
      * javadoc for why credit doesn't need it). */
+    public WalletResult debit(UUID userId, BigDecimal amount, String reference, String note, boolean stepUpConfirmed,
+                              String idempotencyKey) {
+        return adjust(userId, "debit", amount, "TRANSFER_OUT", reference, note, stepUpConfirmed, idempotencyKey);
+    }
+
     public WalletResult debit(UUID userId, BigDecimal amount, String reference, String note, boolean stepUpConfirmed) {
-        return adjust(userId, "debit", amount, "TRANSFER_OUT", reference, note, stepUpConfirmed);
+        return debit(userId, amount, reference, note, stepUpConfirmed, null);
     }
 
     public WalletResult credit(UUID userId, BigDecimal amount, String type, String reference, String note) {
-        return adjust(userId, "credit", amount, type, reference, note, false);
+        return adjust(userId, "credit", amount, type, reference, note, false, null);
     }
 
     private WalletResult adjust(UUID userId, String action, BigDecimal amount, String type, String reference,
-                                 String note, boolean stepUpConfirmed) {
-        AdjustBalanceRequest request = new AdjustBalanceRequest(amount, type, reference, note, stepUpConfirmed);
+                                 String note, boolean stepUpConfirmed, String idempotencyKey) {
+        AdjustBalanceRequest request = new AdjustBalanceRequest(amount, type, reference, note, stepUpConfirmed, idempotencyKey);
         return restClient.post()
             .uri("/wallets/{userId}/{action}", userId, action)
             .body(request)

@@ -36,8 +36,12 @@ ewallet-lab:
     base-url: ${USER_SERVICE_URL:http://localhost:8090}
   transfer-service:
     base-url: ${TRANSFER_SERVICE_URL:http://localhost:8094}
+  wallet-service:
+    base-url: ${WALLET_SERVICE_URL:http://localhost:8091}
   # Issue #3 Task step 2: "Requests should expire (define a TTL, e.g. 24h)". Only applies to
   # kind=LINK — PaymentReminder (issue #8) has no TTL in its Acceptance criteria, so its
   # expiresAt is always left null (see PaymentRequestService.createReminder).
   payment-link:
     ttl-hours: ${PAYMENT_LINK_TTL_HOURS:24}
+  # Issue #126: TTL for requests in PAYING state before automated reconciliation
+  paying-ttl-seconds: ${PAYMENT_REQUEST_PAYING_TTL_SECONDS:60}

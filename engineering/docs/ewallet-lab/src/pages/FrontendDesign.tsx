@@ -93,6 +93,20 @@ export default function FrontendDesign() {
         cùng nguyên tắc "best-effort, per-viewer" như <code>packages/session</code>, không đồng bộ qua backend.
       </p>
 
+      <h2>Nhận tiền — QR nội bộ và VietQR chuẩn NAPAS (issue #44)</h2>
+      <p>
+        Màn "Nhận tiền" có 2 chế độ. <strong>QR nội bộ</strong> (giữ nguyên, payload tự chế{' '}
+        <code>ewalletlab://pay?phone=…</code>, chỉ app lab đọc được). <strong>QR ngân hàng (VietQR)</strong>: người dùng
+        chọn một tài khoản liên kết của chính mình, nhập số tiền và nội dung (tuỳ chọn), app dựng ảnh QR chuẩn
+        EMVCo/NAPAS từ <code>img.vietqr.io</code> (BIN lấy từ <code>api.vietqr.io/v2/banks</code>) nên app ngân hàng
+        thật quét được. Có debounce, cache theo tham số và thông báo rõ khi bị giới hạn 10 mã / 10 giây / IP.
+      </p>
+      <p>
+        <strong>Phần tiền chuyển về là giả lập:</strong> tài khoản liên kết trong lab chỉ là dữ liệu mô phỏng, quét
+        VietQR bằng app ngân hàng thật không làm tiền vào ví Ewallet Lab. Chi tiết kiểm thử và giới hạn: xem DESIGN.md
+        frontend mục 8b.
+      </p>
+
       <h2>Bảng tổng hợp thay đổi</h2>
       <FieldsTable
         head={['Khu vực', 'Trước', 'Sau (dựa trên ảnh chụp thật)']}

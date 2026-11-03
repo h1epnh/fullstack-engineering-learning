@@ -4,13 +4,21 @@ import com.ewalletlab.walletservice.domain.Transaction;
 import com.ewalletlab.walletservice.domain.TransactionDirection;
 import com.ewalletlab.walletservice.domain.TransactionType;
 import com.ewalletlab.walletservice.domain.Wallet;
+import com.ewalletlab.walletservice.service.SpendingService;
 import com.ewalletlab.walletservice.service.StepUpRequiredException;
 import com.ewalletlab.walletservice.service.WalletService;
 import com.ewalletlab.walletservice.web.dto.AccountStatementDto;
 import com.ewalletlab.walletservice.web.dto.AdjustBalanceRequest;
+import com.ewalletlab.walletservice.web.dto.CreateCustomCategoryRequestDto;
+import com.ewalletlab.walletservice.web.dto.CreateExternalExpenseRequestDto;
+import com.ewalletlab.walletservice.web.dto.ExternalExpenseDto;
+import com.ewalletlab.walletservice.web.dto.MonthlyBudgetDto;
+import com.ewalletlab.walletservice.web.dto.SetMonthlyBudgetRequestDto;
+import com.ewalletlab.walletservice.web.dto.SpendingCategoryDto;
 import com.ewalletlab.walletservice.web.dto.SpendingReportResponse;
 import com.ewalletlab.walletservice.web.dto.StepUpCheckResponse;
 import com.ewalletlab.walletservice.web.dto.TransactionPageDto;
+import com.ewalletlab.walletservice.web.dto.UpdateTransactionCategoryRequestDto;
 import com.ewalletlab.walletservice.web.dto.WalletResponse;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
@@ -39,9 +47,15 @@ import java.util.UUID;
 public class WalletController {
 
     private final WalletService walletService;
+    private final SpendingService spendingService;
 
     public WalletController(WalletService walletService) {
+        this(walletService, null);
+    }
+
+    public WalletController(WalletService walletService, SpendingService spendingService) {
         this.walletService = walletService;
+        this.spendingService = spendingService;
     }
 
     @GetMapping("/{userId}/balance")
@@ -101,13 +115,87 @@ public class WalletController {
     }
 
     /**
-     * Issue #16 — "Quản lý chi tiêu" MVP báo cáo tự động, read-only trên ledger có sẵn (không bảng
-     * mới, không service mới). {@code period} bắt buộc, chỉ nhận {@code week}/{@code month} — xem
-     * {@link WalletService#spendingReport}'s javadoc cho định nghĩa "chi tiêu" và cách reset kỳ.
+     * Issue #16 & Issue #88 — "Quản lý chi tiêu" PFM 2.0: Phân loại danh mục tự động, chi tiêu ngoài ví,
+     * ngân sách tháng và cảnh báo 80/100%. Tương thích ngược hoàn toàn với format cũ.
      */
     @GetMapping("/{userId}/spending-report")
     public SpendingReportResponse spendingReport(@PathVariable UUID userId, @RequestParam String period) {
+        if (spendingService != null) {
+            return spendingService.getSpendingReport(userId, period);
+        }
         return walletService.spendingReport(userId, period);
+    }
+
+    // --- Issue #88: PFM 2.0 Endpoints ---
+
+    @PutMapping("/{userId}/transactions/{txId}/category")
+    public ResponseEntity<Void> setTransactionCategory(@PathVariable UUID userId,
+                                                       @PathVariable UUID txId,
+                                                       @Valid @RequestBody UpdateTransactionCategoryRequestDto request) {
+        if (spendingService != null) {
+            spendingService.setTransactionCategory(userId, txId, request.categoryCode());
+        }
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/{userId}/spending/categories")
+    public List<SpendingCategoryDto> getCategories(@PathVariable UUID userId) {
+        if (spendingService != null) {
+            return spendingService.getAvailableCategories(userId);
+        }
+        return List.of();
+    }
+
+    @PostMapping("/{userId}/spending/categories")
+    public SpendingCategoryDto createCategory(@PathVariable UUID userId,
+                                              @Valid @RequestBody CreateCustomCategoryRequestDto request) {
+        if (spendingService != null) {
+            return spendingService.createCustomCategory(userId, request);
+        }
+        throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED);
+    }
+
+    @PostMapping("/{userId}/spending/external-expenses")
+    public ExternalExpenseDto createExternalExpense(@PathVariable UUID userId,
+                                                    @Valid @RequestBody CreateExternalExpenseRequestDto request) {
+        if (spendingService != null) {
+            return spendingService.createExternalExpense(userId, request);
+        }
+        throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED);
+    }
+
+    @GetMapping("/{userId}/spending/external-expenses")
+    public List<ExternalExpenseDto> getExternalExpenses(@PathVariable UUID userId) {
+        if (spendingService != null) {
+            return spendingService.getExternalExpenses(userId);
+        }
+        return List.of();
+    }
+
+    @DeleteMapping("/{userId}/spending/external-expenses/{id}")
+    public ResponseEntity<Void> deleteExternalExpense(@PathVariable UUID userId, @PathVariable UUID id) {
+        if (spendingService != null) {
+            spendingService.deleteExternalExpense(userId, id);
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{userId}/spending/budgets")
+    public List<MonthlyBudgetDto> getBudgets(@PathVariable UUID userId,
+                                            @RequestParam(required = false) String month) {
+        if (spendingService != null) {
+            return spendingService.getBudgets(userId, month);
+        }
+        return List.of();
+    }
+
+    @PutMapping("/{userId}/spending/budgets")
+    public MonthlyBudgetDto setBudget(@PathVariable UUID userId,
+                                      @Valid @RequestBody SetMonthlyBudgetRequestDto request) {
+        if (spendingService != null) {
+            return spendingService.setBudget(userId, request);
+        }
+        throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED);
     }
 
     /** Internal — called by transfer-service (credit receiver), indirectly via Kafka by
@@ -145,6 +233,12 @@ public class WalletController {
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<String> handleInsufficientBalance(IllegalStateException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+    }
+
+    /** Issue #55 — eKYC tier could not be checked: fail-closed 503, debit rejected before any change. */
+    @ExceptionHandler(com.ewalletlab.walletservice.service.KycUnavailableException.class)
+    public ResponseEntity<String> handleKycUnavailable(com.ewalletlab.walletservice.service.KycUnavailableException e) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(e.getMessage());
     }
 
     /** Issue #15 — see StepUpRequiredException's javadoc for why this is 428, not 409. */

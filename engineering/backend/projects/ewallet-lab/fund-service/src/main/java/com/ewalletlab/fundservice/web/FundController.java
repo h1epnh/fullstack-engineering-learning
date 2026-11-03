@@ -54,7 +54,8 @@ public class FundController {
 
     @PostMapping("/{fundId}/contributions")
     public FundDto contribute(@PathVariable UUID fundId, @Valid @RequestBody ContributeRequestDto request) {
-        return FundDto.from(fundService.contribute(fundId, request.memberUserId(), request.amount(), request.isStepUpConfirmed()));
+        return FundDto.from(fundService.contribute(fundId, request.memberUserId(), request.amount(),
+            request.isStepUpConfirmed(), request.idempotencyKey()));
     }
 
     @PostMapping("/{fundId}/withdrawals")

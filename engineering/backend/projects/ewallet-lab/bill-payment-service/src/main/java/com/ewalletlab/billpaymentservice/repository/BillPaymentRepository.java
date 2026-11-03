@@ -15,4 +15,7 @@ public interface BillPaymentRepository extends JpaRepository<BillPayment, UUID> 
 
     boolean existsByCategoryAndCustomerCodeAndCreatedAtGreaterThanEqual(
         BillCategory category, String customerCode, Instant createdAt);
+
+    List<BillPayment> findByUserIdAndCategoryAndCustomerCodeOrderByCreatedAtDesc(
+        UUID userId, BillCategory category, String customerCode);
 }

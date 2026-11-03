@@ -4,7 +4,7 @@ metadata:
   name: mfe-auth
   namespace: {{ .Values.namespace }}
 spec:
-  replicas: {{ .Values.frontend.replicas }}
+  replicas: {{ include "ewallet-lab.replicas" (dict "root" $ "name" "mfe-auth" "default" .Values.frontend.replicas) }}
   selector:
     matchLabels: { app: mfe-auth }
   template:
@@ -21,6 +21,7 @@ spec:
         - name: mfe-auth
           image: {{ include "ewallet-lab.image" (dict "root" $ "name" "mfe-auth") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "ewallet-lab.resources" (dict "root" $ "name" "mfe-auth") | nindent 10 }}
           ports:
             - containerPort: {{ .Values.frontend.port }}
           readinessProbe:

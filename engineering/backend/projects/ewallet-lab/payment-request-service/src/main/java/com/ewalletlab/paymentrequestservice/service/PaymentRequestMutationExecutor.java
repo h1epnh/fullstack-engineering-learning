@@ -17,15 +17,13 @@ import java.util.UUID;
  * optimistic-lock race needs each attempt to run in a brand-new transaction that re-reads the row
  * (and its {@code @Version}) from scratch, which only works across a proxy boundary.
  *
- * <p><b>Fix for the critical race bug found by agent-tester on issues #3/#8</b>: the original
- * {@code pay()} read {@code status == PENDING}, called transfer-service's real {@code /transfers}
- * (moving real money), and only THEN wrote {@code PAID} — with no lock between the read and the
- * write, every concurrent caller's read saw {@code PENDING} and every one of them called
- * transfer-service, multiplying real money movement; the {@code @Version} write at the end only
- * decided who got the final row, not who got to move money. {@link #claimPendingOnce} inverts the
- * order: it atomically claims {@code PENDING -> PAID} FIRST, protected by optimistic locking, and
- * only the winner of that claim is allowed to call transfer-service at all (see
- * {@code PaymentRequestService.pay}).
+ * <p><b>Issue #67 (TD-04c) Honest State Machine</b>: The status transition PENDING -> PAYING is
+ * claimed atomically FIRST, protected by optimistic locking. Only the winner of that claim is
+ * allowed to call transfer-service. When transfer-service succeeds, {@link #markPaid} moves the row
+ * to {@code PAID}. If transfer-service fails with a deterministic client error (4xx: insufficient
+ * balance, step-up needed, not found), {@link #releaseClaim} rolls it back to {@code PENDING}.
+ * If the process is killed mid-flight, the record stays {@code PAYING} (an honest representation of
+ * in-flight work) and never gets stuck "PAID" before money moved.
  */
 @Component
 class PaymentRequestMutationExecutor {
@@ -37,38 +35,41 @@ class PaymentRequestMutationExecutor {
     }
 
     @Transactional
-    PaymentRequest claimPendingOnce(UUID id, UUID payerUserId) {
+    PaymentRequest claimPayingOnce(UUID id, UUID payerUserId) {
         PaymentRequest r = repository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy yêu cầu thanh toán này"));
         if (r.getStatus() != PaymentRequestStatus.PENDING) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, switch (r.getStatus()) {
                 case PAID -> "Yêu cầu này đã được thanh toán rồi";
+                case PAYING -> "Yêu cầu này đang được xử lý thanh toán";
                 case CANCELLED -> "Yêu cầu này đã bị huỷ";
                 case EXPIRED -> "Yêu cầu này đã hết hạn";
                 case PENDING -> "Không thể thanh toán yêu cầu này";
             });
         }
-        r.markPaidPending(payerUserId);
+        r.markPaying(payerUserId);
         return repository.save(r);
     }
 
     @Transactional
-    PaymentRequest attachTransferReference(UUID id, String transferReference) {
+    PaymentRequest markPaid(UUID id, String transferReference) {
         PaymentRequest r = repository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy yêu cầu thanh toán này"));
-        r.attachTransferReference(transferReference);
+        r.markPaid(transferReference);
         return repository.save(r);
     }
 
-    /** Compensates a claim whose transfer-service call failed afterwards (insufficient balance,
-     * creator not found, network error, ...) — reverts back to PENDING so the request isn't stuck
-     * "PAID" with no money having actually moved. Only the claim's winner ever calls this for a
-     * given row, so there's no concurrent writer to race against here. */
+    /**
+     * Compensates a claim whose transfer-service call failed with a deterministic client error
+     * (insufficient balance, step-up needed, recipient not found). Reverts PAYING -> PENDING so it can be retried.
+     */
     @Transactional
     void releaseClaim(UUID id) {
         repository.findById(id).ifPresent(r -> {
-            r.revertToPending();
-            repository.save(r);
+            if (r.getStatus() == PaymentRequestStatus.PAYING) {
+                r.revertToPending();
+                repository.save(r);
+            }
         });
     }
 }

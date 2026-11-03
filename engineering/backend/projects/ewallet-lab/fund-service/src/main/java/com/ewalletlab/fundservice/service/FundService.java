@@ -2,7 +2,9 @@ package com.ewalletlab.fundservice.service;
 
 import com.ewalletlab.fundservice.domain.Fund;
 import com.ewalletlab.fundservice.domain.FundMember;
+import com.ewalletlab.fundservice.domain.FundStatus;
 import com.ewalletlab.fundservice.domain.FundTransaction;
+import com.ewalletlab.fundservice.repository.RefundedContributionRepository;
 import com.ewalletlab.fundservice.repository.FundMemberRepository;
 import com.ewalletlab.fundservice.repository.FundRepository;
 import com.ewalletlab.fundservice.repository.FundTransactionRepository;
@@ -16,6 +18,7 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -27,6 +30,13 @@ import java.util.function.Supplier;
  * isn't a wallet at all — it's this service's own {@link Fund#getBalance()} — so this service calls
  * wallet-service's {@code /credit}/{@code /debit} directly, same pattern as lucky-money-service
  * (issue #10).
+ *
+ * <p><b>Issue #60 supersedes the paragraphs below FOR CONTRIBUTE ONLY.</b> The claim-first outbox
+ * shape let {@code Fund.balance} hold money no wallet had been debited for yet, so the creator could
+ * withdraw it ("tạo tiền từ hư không"). {@link #contribute} now debits the member's wallet
+ * synchronously FIRST and only then credits the fund; it no longer writes an outbox event. Withdraw
+ * and dissolve keep the outbox exactly as described next. {@code FUND_CONTRIBUTE_DEBIT} stays in the
+ * enum/relay only to drain events written before #60.
  *
  * <p><b>Issue #22 — Outbox pattern.</b> This class no longer calls {@code WalletServiceClient}'s
  * {@code credit}/{@code debit} at all (see backend DESIGN.md's "Outbox pattern" section for the
@@ -57,6 +67,9 @@ public class FundService {
 
     private static final Logger log = LoggerFactory.getLogger(FundService.class);
     private static final int MAX_ATTEMPTS = 4;
+    /** Contribute has already debited the wallet, so ride out optimistic-lock contention longer
+     * before falling back to the refund path (issue #60 QA round 2). */
+    private static final int CONTRIBUTE_MAX_ATTEMPTS = 12;
     private static final long RETRY_BACKOFF_MILLIS = 25;
 
     private final FundRepository fundRepository;
@@ -65,11 +78,14 @@ public class FundService {
     private final UserServiceClient userServiceClient;
     private final WalletServiceClient walletServiceClient;
     private final FundMutationExecutor mutationExecutor;
+    private final RefundedContributionRepository refundedRepository;
 
     public FundService(FundRepository fundRepository, FundMemberRepository fundMemberRepository,
                         FundTransactionRepository fundTransactionRepository,
                         UserServiceClient userServiceClient,
-                        WalletServiceClient walletServiceClient, FundMutationExecutor mutationExecutor) {
+                        WalletServiceClient walletServiceClient, FundMutationExecutor mutationExecutor,
+                        RefundedContributionRepository refundedRepository) {
+        this.refundedRepository = refundedRepository;
         this.fundRepository = fundRepository;
         this.fundMemberRepository = fundMemberRepository;
         this.fundTransactionRepository = fundTransactionRepository;
@@ -134,19 +150,106 @@ public class FundService {
             () -> mutationExecutor.addMemberOnce(fundId, requesterUserId, member.id(), member.phone(), member.name()));
     }
 
-    /** See this class's javadoc for why the step-up gate runs HERE, synchronously, before any local
-     * state is claimed — the actual wallet-service debit happens later, via the outbox relay. */
-    public Fund contribute(UUID fundId, UUID memberUserId, BigDecimal amount, boolean stepUpConfirmed) {
+    /**
+     * Issue #60 — "trừ ví trước, đồng bộ". Order of operations:
+     * <ol>
+     *   <li>read-only checks (fund exists + ACTIVE, caller is a member, step-up gate);</li>
+     *   <li>idempotency fast path: a CONTRIBUTION row with this key already exists -> return it, no
+     *       second debit;</li>
+     *   <li>{@code wallet-service /debit} with the namespaced idempotency key — a 409 (insufficient
+     *       balance) / 428 / 4xx aborts here and the fund is untouched;</li>
+     *   <li>only then {@code Fund.balance += amount} + CONTRIBUTION row in one transaction;</li>
+     *   <li>if step 4 throws a caught exception, refund the wallet ({@code /credit}, key
+     *       {@code refund:<debitKey>}). If the process dies between 3 and 4, or the refund itself
+     *       fails, money is stuck: logged at ERROR with {@code CONTRIBUTE_MONEY_STUCK} + reference
+     *       code (accepted trade-off, operator decision on issue #60).</li>
+     * </ol>
+     * Retry rule: reuse the same {@code idempotencyKey} only after a 502 (ambiguous outcome); use a
+     * new key after any other error (a refunded attempt must not be replayed with the same key).
+     */
+    public Fund contribute(UUID fundId, UUID memberUserId, BigDecimal amount, boolean stepUpConfirmed,
+                            String clientIdempotencyKey) {
         Fund fund = requireFund(fundId);
         if (!fundMemberRepository.existsByFundIdAndMemberUserId(fundId, memberUserId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Bạn không phải thành viên của quỹ nhóm này");
+        }
+        String rawKey = (clientIdempotencyKey == null || clientIdempotencyKey.isBlank())
+            ? UUID.randomUUID().toString() : clientIdempotencyKey.trim();
+        String debitKey = "fund-contribute:" + fundId + ":" + memberUserId + ":" + rawKey;
+        String ref = "FC-" + UUID.nameUUIDFromBytes(debitKey.getBytes(StandardCharsets.UTF_8)).toString().substring(0, 8);
+
+        if (fundTransactionRepository.findByIdempotencyKey(debitKey).isPresent()) {
+            log.info("contribute ref={} fund={} idempotent replay — already applied, no second debit", ref, fundId);
+            return fund;
+        }
+        if (refundedRepository.existsById(debitKey)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "idempotencyKey này đã được hoàn tiền, dùng key mới (mã " + ref + ")");
+        }
+        if (fund.getStatus() != FundStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Quỹ nhóm này đã được giải thể");
         }
         WalletServiceClient.StepUpCheckResult check = walletServiceClient.stepUpCheck(memberUserId, amount);
         if (check.required() && !stepUpConfirmed) {
             throw new ResponseStatusException(HttpStatus.valueOf(428), describeStepUpRequirement(check));
         }
-        return withRetry("contribute", fundId,
-            () -> mutationExecutor.contributeOnce(fundId, memberUserId, amount, stepUpConfirmed).fund());
+
+        try {
+            walletServiceClient.debit(memberUserId, amount, "TRANSFER_OUT", fundId.toString(),
+                "Góp vào quỹ nhóm", stepUpConfirmed, debitKey);
+        } catch (HttpClientErrorException e) {
+            throw new ResponseStatusException(e.getStatusCode(), e.getResponseBodyAsString());
+        } catch (RuntimeException e) {
+            log.error("CONTRIBUTE_DEBIT_UNKNOWN ref={} fund={} member={} amount={} debitKey={} — wallet-service " +
+                "debit outcome unknown ({}); wallet may have been debited. Client may retry with the SAME key.",
+                ref, fundId, memberUserId, amount, debitKey, e.toString());
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                "Không xác định được kết quả trừ ví, vui lòng thử lại với cùng idempotencyKey (mã " + ref + ")");
+        }
+
+        try {
+            return withRetry("contribute", fundId, CONTRIBUTE_MAX_ATTEMPTS,
+                () -> mutationExecutor.contributeOnce(fundId, memberUserId, amount, debitKey).fund());
+        } catch (RuntimeException e) {
+            if (refundAfterFailedCredit(ref, fundId, memberUserId, amount, debitKey, e)) {
+                // The credit had in fact committed (concurrent same-key request, or lost ack): no refund, success.
+                return requireFund(fundId);
+            }
+            throw e;
+        }
+    }
+
+    /** @return true if the fund credit turned out to be committed already (nothing refunded). */
+    private boolean refundAfterFailedCredit(String ref, UUID fundId, UUID memberUserId, BigDecimal amount,
+                                             String debitKey, RuntimeException cause) {
+        boolean mayRefund;
+        try {
+            // Decision + marker in a short transaction under the per-key advisory lock, committed BEFORE
+            // the wallet credit below (see FundMutationExecutor#markRefundedUnlessCredited).
+            mayRefund = mutationExecutor.markRefundedUnlessCredited(debitKey);
+        } catch (RuntimeException decisionEx) {
+            log.error("CONTRIBUTE_MONEY_STUCK ref={} fund={} member={} amount={} debitKey={} — wallet DEBITED, " +
+                "fund credit failed ({}) and the refund decision itself failed ({}); NOT refunding without a marker. " +
+                "Needs manual reconciliation.", ref, fundId, memberUserId, amount, debitKey, cause.toString(),
+                decisionEx.toString());
+            return false;
+        }
+        if (!mayRefund) {
+            log.warn("contribute ref={} fund={} — exception after the fund credit already committed ({}); " +
+                "no refund, treating as success", ref, fundId, cause.toString());
+            return true;
+        }
+        try {
+            walletServiceClient.credit(memberUserId, amount, "TRANSFER_IN", fundId.toString(),
+                "Hoàn tiền góp quỹ nhóm thất bại (mã " + ref + ")", "refund:" + debitKey);
+            log.warn("contribute ref={} fund={} member={} amount={} — wallet debited but fund credit failed ({}); " +
+                "wallet refunded", ref, fundId, memberUserId, amount, cause.toString());
+        } catch (RuntimeException refundEx) {
+            log.error("CONTRIBUTE_MONEY_STUCK ref={} fund={} member={} amount={} debitKey={} — wallet DEBITED, " +
+                "fund NOT credited, refund FAILED ({}); original error: {}. Needs manual reconciliation.",
+                ref, fundId, memberUserId, amount, debitKey, refundEx.toString(), cause.toString());
+        }
+        return false;
     }
 
     /** Issue #22 — claims the withdrawal locally (optimistic lock + balance/status validation,
@@ -202,26 +305,30 @@ public class FundService {
      * {@code addMemberOnce} (retried so the next attempt observes the winner's now-committed
      * membership row and returns it instead of surfacing a raw 500). */
     private <T> T withRetry(String op, UUID fundId, Supplier<T> attempt) {
-        for (int i = 1; i <= MAX_ATTEMPTS; i++) {
+        return withRetry(op, fundId, MAX_ATTEMPTS, attempt);
+    }
+
+    private <T> T withRetry(String op, UUID fundId, int maxAttempts, Supplier<T> attempt) {
+        for (int i = 1; i <= maxAttempts; i++) {
             try {
                 return attempt.get();
             } catch (ObjectOptimisticLockingFailureException e) {
-                if (i == MAX_ATTEMPTS) {
+                if (i == maxAttempts) {
                     log.warn("{} on fund={} lost the optimistic-lock race {} times in a row, giving up — 409",
-                        op, fundId, MAX_ATTEMPTS);
+                        op, fundId, maxAttempts);
                     throw e;
                 }
-                log.debug("{} on fund={} lost optimistic-lock race, retrying (attempt {}/{})", op, fundId, i, MAX_ATTEMPTS);
-                sleep(RETRY_BACKOFF_MILLIS * i);
+                log.debug("{} on fund={} lost optimistic-lock race, retrying (attempt {}/{})", op, fundId, i, maxAttempts);
+                sleep(Math.min(RETRY_BACKOFF_MILLIS * i, 200));
             } catch (DataIntegrityViolationException e) {
-                if (i == MAX_ATTEMPTS) {
+                if (i == maxAttempts) {
                     log.warn("{} on fund={} lost a unique-constraint race {} times in a row, giving up — 409",
-                        op, fundId, MAX_ATTEMPTS);
+                        op, fundId, maxAttempts);
                     throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Xung đột khi thao tác trên quỹ nhóm (trùng thời điểm), vui lòng thử lại");
                 }
                 log.debug("{} on fund={} lost a unique-constraint race (likely concurrent invite), retrying ({}/{})",
-                    op, fundId, i, MAX_ATTEMPTS);
+                    op, fundId, i, maxAttempts);
             }
         }
         throw new IllegalStateException("unreachable");

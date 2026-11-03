@@ -14,6 +14,7 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -96,9 +97,11 @@ public class TravelBookingService {
             );
         } catch (HttpClientErrorException e) {
             if (e.getStatusCode().value() == 409) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Số dư ví không đủ để thanh toán vé");
+                throw new ResponseStatusException(HttpStatus.CONFLICT, WalletErrors.conflictMessage(e, "Số dư ví không đủ để thanh toán vé"));
             }
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Lỗi khi trừ tiền ví: " + e.getMessage());
+        } catch (HttpServerErrorException.ServiceUnavailable e) {
+            throw WalletErrors.unavailable(e); // Issue #85: rejected before execution, retryable, no refund
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Không thể kết nối wallet-service: " + e.getMessage());
         }

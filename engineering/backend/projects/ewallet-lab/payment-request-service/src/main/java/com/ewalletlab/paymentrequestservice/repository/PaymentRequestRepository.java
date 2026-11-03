@@ -2,8 +2,10 @@ package com.ewalletlab.paymentrequestservice.repository;
 
 import com.ewalletlab.paymentrequestservice.domain.PaymentRequest;
 import com.ewalletlab.paymentrequestservice.domain.PaymentRequestKind;
+import com.ewalletlab.paymentrequestservice.domain.PaymentRequestStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -15,4 +17,7 @@ public interface PaymentRequestRepository extends JpaRepository<PaymentRequest, 
     /** Issue #11 — all shares of one split-bill group, in the order they were created (stable
      * display order for the "Danh sách đã thu" screen). */
     List<PaymentRequest> findByGroupIdOrderByCreatedAtAsc(UUID groupId);
+
+    /** Issue #126: Find requests stuck in PAYING state longer than configured TTL cutoff */
+    List<PaymentRequest> findByStatusAndPayingStartedAtBefore(PaymentRequestStatus status, Instant cutoff);
 }

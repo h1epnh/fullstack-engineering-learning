@@ -4,7 +4,7 @@ metadata:
   name: loyalty-service
   namespace: {{ .Values.namespace }}
 spec:
-  replicas: {{ .Values.loyaltyService.replicas }}
+  replicas: {{ include "ewallet-lab.replicas" (dict "root" $ "name" "loyalty-service" "default" .Values.loyaltyService.replicas) }}
   selector:
     matchLabels: { app: loyalty-service }
   template:
@@ -21,9 +21,12 @@ spec:
         - name: loyalty-service
           image: {{ include "ewallet-lab.image" (dict "root" $ "name" "loyalty-service") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "ewallet-lab.resources" (dict "root" $ "name" "loyalty-service") | nindent 10 }}
           ports:
             - containerPort: {{ .Values.loyaltyService.port }}
           env:
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ include "ewallet-lab.javaToolOptions" . | quote }}
             - name: DB_HOST
               value: postgres
             - name: DB_PORT
@@ -42,10 +45,12 @@ spec:
             httpGet: { path: /actuator/health/readiness, port: {{ .Values.loyaltyService.port }} }
             initialDelaySeconds: 15
             periodSeconds: 5
+            {{- include "ewallet-lab.probeExtras" (dict "root" $ "name" "loyalty-service") | nindent 12 }}
           livenessProbe:
             httpGet: { path: /actuator/health/liveness, port: {{ .Values.loyaltyService.port }} }
             initialDelaySeconds: 20
             periodSeconds: 10
+            {{- include "ewallet-lab.probeExtras" (dict "root" $ "name" "loyalty-service") | nindent 12 }}
 ---
 apiVersion: v1
 kind: Service

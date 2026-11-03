@@ -28,6 +28,16 @@ public class WalletServiceClient {
     public record CreditResult(UUID userId, BigDecimal balance) {
     }
 
+    public record WalletBalanceResponse(UUID userId, BigDecimal balance) {
+    }
+
+    public WalletBalanceResponse getBalance(UUID userId) {
+        return restClient.get()
+            .uri("/wallets/{userId}/balance", userId)
+            .retrieve()
+            .body(WalletBalanceResponse.class);
+    }
+
     public DebitResult debit(UUID userId, BigDecimal amount, String note, boolean stepUpConfirmed) {
         return debit(userId, amount, null, note, stepUpConfirmed);
     }

@@ -35,15 +35,23 @@ import { TransferHome } from './screens/TransferHome';
 
 type Step =
   | { name: 'home' }
-  | { name: 'amount'; recipient: UserResponse }
+  | { name: 'amount'; recipient: UserResponse; withCard?: boolean }
   | { name: 'bank'; bank: VietQrBank }
   | { name: 'bank-status'; orderId: string }
-  | { name: 'done'; toName: string; toPhone?: string; amount: number; newBalance: number }
+  | {
+      name: 'done';
+      toName: string;
+      toPhone?: string;
+      amount: number;
+      newBalance: number;
+      greetingCardTheme?: string;
+      greetingMessage?: string;
+    }
   // Issue #31 — recurring-transfer
   | { name: 'recurring-transfers' }
   // Issue #32 — saved-payees
   | { name: 'saved-payees' }
-  // Issue #34 — gift-cards
+  // Issue #34 & #92 — gift-cards / send-card
   | { name: 'send-card' }
   // Issue #3 — payment-link
   | { name: 'payment-link-create' }
@@ -88,41 +96,73 @@ function describeSplitError(e: unknown): string {
 export default function App({
   session,
   initialPayToken,
+  initialStep,
   onDone,
   onComingSoon,
 }: {
   session: Session;
   initialPayToken?: string;
+  initialStep?: string;
   onDone: () => void;
   onComingSoon: (feature: string) => void;
 }) {
-  const [step, setStep] = useState<Step>(
-    initialPayToken ? { name: 'pay-link', token: initialPayToken } : { name: 'home' },
-  );
+  const [step, setStep] = useState<Step>(() => {
+    if (initialPayToken) return { name: 'pay-link', token: initialPayToken };
+    if (initialStep === 'send-card') return { name: 'send-card' };
+    if (initialStep === 'lucky-money') return { name: 'lucky-money' };
+    if (initialStep === 'payment-reminder') return { name: 'payment-reminder' };
+    return { name: 'home' };
+  });
 
   /**
    * Issue #15 — on a 428 response, park the UI on a `step-up` screen (a full "screen" like the
    * rest of this state machine, not a modal layered over the previous one) instead of showing an
    * inline error, so `onConfirm` can re-run the exact same request with `stepUpConfirmed: true`.
    */
-  async function submitTransfer(recipient: UserResponse, amount: number, stepUpConfirmed: boolean): Promise<string | null> {
+  async function submitTransfer(
+    recipient: UserResponse,
+    amount: number,
+    stepUpConfirmed: boolean,
+    greetingCardTheme?: string,
+    greetingMessage?: string,
+  ): Promise<string | null> {
     try {
-      const res = await transferService.transfer(session.id, recipient.phone, amount, stepUpConfirmed);
-      setStep({ name: 'done', toName: res.toName, toPhone: recipient.phone, amount, newBalance: res.newBalance });
+      const res = await transferService.transfer(
+        session.id,
+        recipient.phone,
+        amount,
+        stepUpConfirmed,
+        greetingCardTheme,
+        greetingMessage,
+      );
+      setStep({
+        name: 'done',
+        toName: res.toName,
+        toPhone: recipient.phone,
+        amount,
+        newBalance: res.newBalance,
+        greetingCardTheme: res.greetingCardTheme,
+        greetingMessage: res.greetingMessage,
+      });
       return null;
     } catch (e) {
       if (e instanceof ApiError && e.status === STEP_UP_REQUIRED_STATUS) {
         setStep({
           name: 'step-up',
           message: e.message,
-          onConfirm: () => submitTransfer(recipient, amount, true).then(() => undefined),
-          onCancel: () => setStep({ name: 'amount', recipient }),
+          onConfirm: () =>
+            submitTransfer(recipient, amount, true, greetingCardTheme, greetingMessage).then(
+              () => undefined,
+            ),
+          onCancel: () =>
+            setStep({ name: 'amount', recipient, withCard: Boolean(greetingCardTheme) }),
         });
         return null;
       }
       return describeApiError(e instanceof ApiError ? e.status : undefined, 'transfer');
     }
   }
+
 
   async function submitBankTransferOut(
     bank: VietQrBank,
@@ -374,8 +414,11 @@ export default function App({
     return (
       <TransferAmount
         recipient={step.recipient}
+        initialWithCard={step.withCard}
         onBack={() => setStep({ name: 'home' })}
-        onSubmit={(amount) => submitTransfer(step.recipient, amount, false)}
+        onSubmit={(amount, cardTheme, cardMsg) =>
+          submitTransfer(step.recipient, amount, false, cardTheme, cardMsg)
+        }
       />
     );
   }
@@ -391,7 +434,10 @@ export default function App({
       selfUserId={session.id}
       amount={step.amount}
       newBalance={step.newBalance}
+      greetingCardTheme={step.greetingCardTheme}
+      greetingMessage={step.greetingMessage}
       onDone={onDone}
     />
   );
 }
+

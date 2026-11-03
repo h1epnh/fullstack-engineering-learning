@@ -27,7 +27,12 @@ public record RegisterAutoBillRequestDto(
     @NotNull(message = "autoPayDay không được để trống")
     @Min(value = 1, message = "Ngày thanh toán tự động phải từ ngày 1 đến 28")
     @Max(value = 28, message = "Ngày thanh toán tự động phải từ ngày 1 đến 28")
-    Integer autoPayDay
+    Integer autoPayDay,
+
+    Double spikeAlertThresholdPercent
 ) {
+    public RegisterAutoBillRequestDto(UUID userId, BillCategory category, String customerCode, BigDecimal maxAmount, Integer autoPayDay) {
+        this(userId, category, customerCode, maxAmount, autoPayDay, 30.0);
+    }
 }
 

@@ -3,6 +3,7 @@ package com.ewalletlab.billpaymentservice.domain;
 public enum AutoBillStatus {
     ACTIVE,
     PAUSED,
-    CANCELLED
+    CANCELLED,
+    HELD_FOR_SPIKE_REVIEW
 }
 

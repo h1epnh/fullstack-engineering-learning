@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="ui.css" />
+    <style>
+      body { padding: 12px 4px; max-width: 560px; }
+      .card { padding: 4px 14px; margin-bottom: 14px; }
+      .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 10px 0 4px; }
+
+      .setting { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
+      .card h2 + .setting { border-top: none; }
+      .setting .text { flex: 1; }
+      .setting .text span { display: block; font-weight: 600; }
+
+      .field { display: block; padding: 10px 0; border-top: 1px solid var(--border); }
+      .card h2 + .field { border-top: none; }
+      .field > span { display: block; font-weight: 600; margin-bottom: 4px; }
+      .row { display: flex; gap: 10px; border-top: 1px solid var(--border); }
+      .row .field { border-top: none; }
+      .row .field:first-child { flex: 1; }
+      .row .field:last-child { width: 110px; }
+
+      input[type="text"], input[type="number"], textarea {
+        width: 100%;
+        font: inherit;
+        color: var(--fg);
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px 8px;
+      }
+      input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+      textarea { height: 84px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+      .helper-status { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--border); }
+      .helper-status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--off); }
+      .helper-status[data-up="true"] .dot { background: var(--ok); }
+      .helper-status[data-up="false"] .dot { background: var(--bad); }
+      .helper-status small { flex: 1; }
+
+      .actions { display: flex; align-items: center; gap: 10px; }
+      #saved { color: var(--ok); }
+    </style>
+  </head>
+  <body>
+    <section class="card">
+      <h2>General</h2>
+      <label class="setting">
+        <div class="text">
+          <span>Enabled</span>
+          <small>Send matching domains through the RJ45 adapter.</small>
+        </div>
+        <span class="switch"><input type="checkbox" id="enabled" /><span class="track"></span></span>
+      </label>
+      <label class="setting">
+        <div class="text">
+          <span>Fall back to Wi-Fi when the cable is unplugged</span>
+          <small>Off: HDBank pages fail while the LAN is down, so bank traffic never leaves over Wi-Fi.</small>
+        </div>
+        <span class="switch"><input type="checkbox" id="fallbackToWifi" /><span class="track"></span></span>
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>Domains</h2>
+      <label class="field">
+        <span>Routed over RJ45 (one per line)</span>
+        <textarea id="patterns" spellcheck="false"></textarea>
+        <small><code>*.hdbank.com.vn</code> covers hdbank.com.vn and every subdomain.</small>
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>Local helper</h2>
+      <div class="row">
+        <label class="field"><span>SOCKS5 host</span><input type="text" id="proxyHost" /></label>
+        <label class="field"><span>Port</span><input type="number" id="proxyPort" min="1" max="65535" /></label>
+      </div>
+      <label class="field"><span>Status URL</span><input type="text" id="statusUrl" /></label>
+      <div class="helper-status" id="helperStatus">
+        <span class="dot"></span>
+        <small id="helperText">Checking helper…</small>
+        <button id="test">Test</button>
+      </div>
+    </section>
+
+    <div class="actions">
+      <button id="save" class="primary">Save</button>
+      <span id="saved" hidden>Saved ✓</span>
+    </div>
+
+    <script src="defaults.js"></script>
+    <script src="matcher.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

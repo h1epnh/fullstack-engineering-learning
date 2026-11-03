@@ -32,5 +32,9 @@
 #   # values.yaml's plaintext postgres.password becomes an External Secrets Operator
 #   # ExternalSecret pulling from AWS Secrets Manager, not a Helm value at all.
 #
+# bankGateway credentials: the chart only references the Secret `bank-gateway-credentials`
+#   # (secretKeyRef in topup-service.yaml / mock-bank-gateway.yaml). On EKS populate it from an
+#   # ExternalSecret / Secrets Manager; the chart needs no change.
+#
 # corsAllowedOriginPattern: "https://app.example.com"   # narrow this for real traffic — the
 #   # local "http://*.ewallet-lab.local" wildcard is lab-only permissiveness.
