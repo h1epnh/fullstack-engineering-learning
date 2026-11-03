@@ -104,9 +104,11 @@ export default function MomoSpec() {
       </Note>
       <Note kind="gap" icon="!">
         <p>
-          <strong>Gap chưa đóng:</strong> công thức chữ ký riêng cho IPN (khác request tạo giao dịch) chưa xác nhận
-          được từ trang đã fetch. <code>IpnController</code> cố tình không verify bằng công thức chưa xác nhận —
-          ghi rõ trong code, không bỏ sót âm thầm.
+          <strong>Đã đóng (issue #52):</strong> công thức chữ ký riêng cho IPN đã được xác nhận từ trang
+          chính thức của MoMo (mục &quot;Processing payment result&quot; — 13 trường, HMAC-SHA256 trên chuỗi
+          <code>key=value</code> sắp xếp a-z nối bằng <code>&amp;</code>). <code>IpnController</code> verify
+          chữ ký này cùng cửa sổ replay theo <code>responseTime</code> trước khi chạm vào bất kỳ state nào;
+          shared secret nằm trong K8s Secret, không hardcode trong image.
         </p>
       </Note>
       <Note icon="i">

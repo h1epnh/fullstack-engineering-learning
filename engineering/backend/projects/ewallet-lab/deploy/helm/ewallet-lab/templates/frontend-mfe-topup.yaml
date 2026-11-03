@@ -4,7 +4,7 @@ metadata:
   name: mfe-topup
   namespace: {{ .Values.namespace }}
 spec:
-  replicas: {{ .Values.frontend.replicas }}
+  replicas: {{ include "ewallet-lab.replicas" (dict "root" $ "name" "mfe-topup" "default" .Values.frontend.replicas) }}
   selector:
     matchLabels: { app: mfe-topup }
   template:
@@ -21,6 +21,7 @@ spec:
         - name: mfe-topup
           image: {{ include "ewallet-lab.image" (dict "root" $ "name" "mfe-topup") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "ewallet-lab.resources" (dict "root" $ "name" "mfe-topup") | nindent 10 }}
           ports:
             - containerPort: {{ .Values.frontend.port }}
           readinessProbe:

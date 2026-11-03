@@ -67,3 +67,43 @@ export const vietQrService = {
     return banks;
   },
 };
+
+/** Issue #44 — VietQR "QR động" image URL, pattern verified live 2026-10-18 (see DESIGN.md §8b). */
+export const VIETQR_IMG_BASE = 'https://img.vietqr.io/image';
+export const VIETQR_ADDINFO_MAX = 50;
+export const VIETQR_ACCOUNT_MAX = 19;
+
+/** Strip Vietnamese diacritics and anything except [A-Za-z0-9 ]; collapse spaces; cap at 50 chars
+ * (source rule: addInfo <= 50 chars, no special characters). */
+export function sanitizeVietQrText(input: string, max = VIETQR_ADDINFO_MAX): string {
+  return input
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^A-Za-z0-9 ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max);
+}
+
+export type VietQrImageParams = {
+  bin: string;
+  accountNumber: string;
+  /** whole VND; omit/0 for an amount-less QR */
+  amount?: number;
+  addInfo?: string;
+  accountName?: string;
+};
+
+export function buildVietQrImageUrl(p: VietQrImageParams): string {
+  const account = p.accountNumber.replace(/[^0-9A-Za-z]/g, '').slice(0, VIETQR_ACCOUNT_MAX);
+  const q = new URLSearchParams();
+  if (p.amount && p.amount > 0) q.set('amount', String(Math.floor(p.amount)));
+  const info = p.addInfo ? sanitizeVietQrText(p.addInfo) : '';
+  if (info) q.set('addInfo', info);
+  const name = p.accountName ? sanitizeVietQrText(p.accountName, 50).toUpperCase() : '';
+  if (name) q.set('accountName', name);
+  const qs = q.toString();
+  return `${VIETQR_IMG_BASE}/${p.bin}-${account}-compact2.svg${qs ? `?${qs}` : ''}`;
+}

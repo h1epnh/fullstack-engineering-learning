@@ -240,6 +240,66 @@ manual-phone-entry P2P transfer).
     a real `BarcodeDetector` decode a synthetic video of a generated QR end-to-end) was attempted
     in this pass — flagged here as a gap for whoever verifies this next, not hidden.
 
+## 8b. VietQR chuẩn NAPAS cho màn "Nhận tiền" (issue #44) — `ReceiveQr.tsx` + `vietQrService.ts`
+
+Màn "Nhận tiền" có 2 tab: **QR nội bộ** (§8, không đổi: `ewalletlab://pay?phone=…`, #4/#39 không bị
+đụng) và **QR ngân hàng (VietQR)**. Thuần frontend, không endpoint/entity backend mới, không build-arg
+mới (browser gọi thẳng `img.vietqr.io`; `LinkedBankAccount` lấy qua `topupService.getLinkedAccounts`
+mà `mfe-wallet` vốn đã có `VITE_TOPUP_SERVICE_URL`).
+
+- **Luồng**: chọn 1 `LinkedBankAccount` của chính session user (lọc `a.userId === session.id`, không
+  sinh QR cho tài khoản người khác) → map `bankCode` → `bin` bằng `vietQrService.listBanks()` (so
+  khớp `code` không phân biệt hoa thường; không có trong danh sách thì báo rõ, không đoán BIN) → dựng
+  URL bằng `buildVietQrImageUrl`: `https://img.vietqr.io/image/<BIN>-<SỐ_TK>-compact2.svg?amount=&addInfo=&accountName=`.
+  `addInfo` đi qua `sanitizeVietQrText` (bỏ dấu tiếng Việt, đ->d, chỉ giữ `[A-Za-z0-9 ]`, tối đa 50 ký
+  tự — đúng quy tắc nguồn). Số tiền để trống = QR không nhúng số tiền (người quét tự nhập).
+- **Rate limit / lỗi**: debounce 700ms khi gõ số tiền/nội dung; set URL đã tải thành công (cộng
+  `cache-control: public, max-age=86400` của server) nên chọn lại cùng tham số không gọi lại; tải bằng
+  `Image()` preload, lỗi -> thông báo rõ + nút "Thử lại". Không dùng `fetch()` vì (xem bên dưới) phản
+  hồi 429 không có header CORS nên `fetch` không đọc được status.
+- **"Giả lập" nói thẳng trên UI** (`data-testid="vietqr-mock-notice"`): QR đúng chuẩn nên app ngân hàng
+  thật đọc được, nhưng tài khoản liên kết là dữ liệu giả lập; tiền chuyển vào từ ngân hàng ngoài
+  KHÔNG tự cộng vào ví lab. Không có luồng "đã nhận tiền" giả nào được thêm trong ticket này.
+- Logo ngân hàng chỉ lấy từ `bank.logo` của VietQR API (đã lọc `momo` như cũ). Không dùng logo MoMo.
+
+### Spike `img.vietqr.io` — thử thật ngày 2026-10-18 (đã xác minh bằng `curl`, không suy đoán)
+
+| Câu hỏi | Kết quả |
+|---|---|
+| Cần API key? | **Không.** `GET https://img.vietqr.io/image/970415-113366668888-qr_only.png` -> 200 `image/png` không header xác thực nào. |
+| URL pattern còn đúng sau đợt đổi API tháng 10/2026? | **Còn đúng** tại thời điểm thử (hôm nay 2026-10-18): `<BIN>-<STK>-<template>.png` + `?amount=&addInfo=&accountName=`. Chưa thấy dấu hiệu đổi; vẫn là rủi ro bên thứ ba. |
+| **Thay đổi giữa 2 lần thử** | 2026-10-18: `.png` trả 200 `image/png` trực tiếp. **2026-10-22: `.png` trả `301` -> cùng URL đuôi `.svg`** (200 `image/svg+xml`, `access-control-allow-origin: *`; SVG gồm `<image>` PNG base64 cho logo/khung + `<path>` vector cho chính mã QR). Đây là dấu hiệu đợt đổi API tháng 10/2026 đang triển khai. App dùng thẳng `.svg` (tránh 1 redirect/lượt đếm). Mọi tool giải mã phải rasterize SVG (đã làm bằng Chrome) — trích PNG base64 bên trong KHÔNG chứa mã QR. |
+| Header khi 200 | `access-control-allow-origin: *`, `cache-control: public, max-age=86400`, `cross-origin-resource-policy: cross-origin`, `vary: User-Agent, Sec-Fetch-Dest`, CSP `img-src data:` (CSP áp lên chính ảnh, không ảnh hưởng trang nhúng). Dùng được bằng thẻ `<img>`. |
+| Rate limit | **Có, và thực thi thật**: bắn 100 request song song (50 đồng thời) -> 72x 200, 28x 429. Body 429: `{"code":"429","desc":"Truy vấn vượt quá mức thông thường. Vui lòng liên hệ quản trị viên để nâng cấp hạn mức sử dụng","data":null}` (`content-type: application/json`). |
+| 429 có CORS header? | **Không** (không có `access-control-allow-origin`). Trong Chrome, `fetch()` cross-origin tới URL đang bị 429 bị chặn CORS và JS không đọc được status. Vì vậy UI dùng `<img>` + thông báo chung "có thể bị giới hạn". |
+| Thời gian bị chặn | Sau 100 request dồn dập (+ vòng poll mỗi 5s của tôi), IP dev bị 429 liên tục ~**35 phút** (hết lúc ~17:47 cùng ngày, khớp header `retry-after: 2026` giây trong phản hồi 429), dài hơn nhiều so với cửa sổ "10 giây" ghi trên trang. Poll liên tục có thể tự kéo dài lệnh chặn. Đừng test tải bằng vòng lặp tới `img.vietqr.io`. |
+| `accountName` | Truyền được nhưng **không** thấy trong chuỗi EMVCo (không có tag 59) — chỉ dùng để vẽ tên lên ảnh template `compact2`. |
+| Điều khoản sử dụng / phí | **CHƯA ĐỌC.** Chưa xác minh điều khoản thương mại, SLA hay cam kết ổn định. |
+
+### Giải mã QR để đối chiếu EMVCo (zxing-cpp, trên ảnh tải thật từ `img.vietqr.io`)
+
+- Không số tiền (BIN 970415, STK 113366668888):
+  `00020101021138560010A0000007270126000697041501121133666688880208QRIBFTTA53037045802VN6304F443`
+  — tag 38 -> GUID `A000000727` (NAPAS), BIN `970415`, STK `113366668888`, dịch vụ `QRIBFTTA` (chuyển nhanh
+  tới tài khoản), tag 53=`704` (VND), tag 58=`VN`, tag 01=`11` (QR tĩnh, không số tiền).
+- Có số tiền 79000 + nội dung "Thanh toan don hang":
+  `00020101021238560010A0000007270126000697041501121133666688880208QRIBFTTA53037045405790005802VN62230819Thanh toan don hang6304EAC8`
+  — tag 01=`12` (QR động), tag 54=`79000`, tag 62/08=`Thanh toan don hang`.
+- **Luồng UI thật qua Ingress (Chrome, tài khoản liên kết MB / 0123456789, URL `.svg` do chính UI dựng)**:
+  - Không số tiền: `00020101021138540010A00000072701240006970422011001234567890208QRIBFTTA53037045802VN6304B1A7`
+    -> BIN `970422` (MB), STK `0123456789`.
+  - Số tiền 79000 + nội dung gõ "Thanh toán đơn hàng #12!": `00020101021238540010A00000072701240006970422011001234567890208QRIBFTTA53037045405790005802VN62260822Thanh toan don hang 1263042D73`
+    -> tag 54 = `79000`, tag 62/08 = `Thanh toan don hang 12` (UI đã bỏ dấu và ký tự `#!`).
+- `Lưu ảnh` (VietQR): `fetch()` cross-origin bị CORS chặn trong trình duyệt nên fallback mở ảnh ở tab mới; mặc định thử `fetch` -> blob.
+- Kiểm thử trình duyệt: Chrome headless (playwright-core) qua `kubectl port-forward` tới ingress-nginx + `--host-resolver-rules`, vì `minikube tunnel` không sống. Đã xác nhận: bật 429 giả (route) -> hiện thông báo + Thử lại; chặn mạng -> cùng thông báo; tab QR nội bộ vẫn hiển thị.
+
+### Ranh giới đã biết
+
+- Đây KHÔNG phải thanh toán thật: không có webhook/IPN nào xác nhận tiền về, không có `mock-bank-gateway`
+  cho chiều nhận tiền. Muốn minh hoạ "đã nhận tiền" phải làm ticket riêng và vẫn dán nhãn giả lập.
+- Phụ thuộc bên thứ ba không SLA: nếu `img.vietqr.io` đổi URL/thêm API key (đợt thay đổi tháng
+  10/2026), tính năng này hỏng ở UI với thông báo lỗi chung; QR nội bộ vẫn chạy.
+
 ## 9. Lucky money (issue #10) — `LuckyMoneyHome.tsx`, calls lucky-money-service directly
 
 Wired inside `mfe-transfer` (no new remote, same reasoning as §7 — the Task scoped this to an
@@ -1186,4 +1246,1167 @@ mọi remote (không chỉ tin danh sách đã biết) lộ ra 2 lớp bug khác
   browser, accept warning ở 1 host không tự trust các host khác. Operator phải tự mở từng URL
   (`shell` + 5 `remoteEntry.js` của mfe-* + `api`) 1 lần trên address bar, bấm "Proceed anyway" cho
   TỪNG host, trước khi module-federation fetch ngầm từ `shell` tới các host đó chạy được.
+
+
+## 32. Danh mục "Tất cả dịch vụ" Zero-ComingSoon, Tìm kiếm Nhanh & Ghim Tiện ích Yêu thích (Issue #93) — `AllServices.tsx` & `Home.tsx`
+
+### 1. Bối cảnh & Khảo sát MoMo thực tế
+- **Nguồn thực tế đã đối chiếu**: `momo.vn` và `momo.vn/quan-ly-chi-tieu` (mục "Hướng dẫn Thêm dịch vụ yêu thích").
+- **Vấn đề trước đây**: `AllServices.tsx` có 10 ô dịch vụ bị gán cứng `comingSoon: true`, người dùng không có cách nào truy cập trực tiếp các tính năng đã hoàn thiện ở backend/MFE (Bảo hiểm, Đặt vé, Dịch vụ số, Heo tiết kiệm...).
+- **Giải pháp thiết kế**:
+  1. Phân nhóm 100% dịch vụ hiện có thành 6 danh mục lớn trực quan (Zero-"Coming Soon").
+  2. Bổ sung **Thanh tìm kiếm tức thì (Instant Search)** có hỗ trợ gõ không dấu tiếng Việt chuẩn.
+  3. Tính năng **Ghim dịch vụ yêu thích (Pinned Favorites)** cho phép tuỳ biến tối đa 7 ô dịch vụ trên lưới `MAIN_GRID` tại `Home.tsx` (ô thứ 8 cố định là nút "Xem thêm" / "Tất cả dịch vụ" điều hướng sang `AllServices.tsx`).
+
+### 2. Cấu trúc Phân nhóm 6 Danh mục Dịch vụ
+| Nhóm Dịch Vụ | Icon / Token Màu | Danh sách dịch vụ con & Điểm điều hướng |
+| :--- | :--- | :--- |
+| **1. Chuyển & Nhận tiền** | `payments` (`--el-accent`) | Chuyển tiền ví-ví (`transfer`), Chuyển VietQR 24/7 (`bank-transfer`), Nhận tiền QR (`receive`), Chuyển định kỳ (`scheduled-transfer` #31), Chia tiền nhóm (`split-bill` #116), Chuyển kèm thiệp (`send-card` #92) |
+| **2. Hoá đơn & Viễn thông** | `receipt_long` (`#1a73e8`) | Hoá đơn & Auto-debit (`bill-payment` #26), Nạp tiền ĐT & Mã thẻ (`phone-topup` #29), Data 4G/5G (`phone-data`), Mua eSIM du lịch (`esim` #96), Hoá đơn điện tử (`e-invoice` #119), Phí chung cư & Khoản vay (`loan-bill` #112) |
+| **3. Tài chính & Đầu tư** | `trending_up` (`--el-amber`) | Túi Thần Tài & Auto-sweep (`savings-pocket` #13/#86), Ví Trả Sau & Trả góp (`bnpl` #18/#91), Sàn Đầu Tư CCQ & SIP (`investment-fund` #25/#95), Heo Tiết Kiệm (`savings-goals` #27), Điểm tin cậy (`trust-score` #94), Vàng 999.9 (`gold` #115) |
+| **4. Bảo hiểm & Sức khoẻ** | `health_and_safety` (`#0f9d58`) | Bảo hiểm vi mô xe máy/tai nạn (`micro-insurance` #35), BHXH tự nguyện & BHYT gia đình (`social-insurance` #113), Đặt khám & Viện phí online (`medical-fee` #97) |
+| **5. Du lịch & Giải trí** | `flight_takeoff` (`#8e24aa`) | Vé xe khách / máy bay (`travel-ticketing` #33), Vé xem phim & Dịch vụ số (`digital-services` #30), Nạp thẻ Game (`games` #99), Gói Voucher Pass (`voucher-pass` #28) |
+| **6. Gia đình & Cộng đồng** | `groups` (`#e65100`) | Ví Gia Đình (`family-wallet` #12), Quỹ nhóm bạn bè (`fund` #14), Lì xì nhóm & Vua may mắn (`lucky-money` #100), Sổ vay mượn 2 chiều (`p2p-loan` #123), Giao hàng COD (`delivery-cod` #124) |
+
+### 3. Đặc tả UI & Wireframe ASCII
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ ← Tất cả dịch vụ                   [Sửa ghim Trang chủ] │
+├─────────────────────────────────────────────────────────┤
+│ 🔍 [ Tìm dịch vụ, tiện ích (vd: điện, vé xe, vàng...) ]│
+├─────────────────────────────────────────────────────────┤
+│ Gợi ý tìm kiếm: [Tiền điện] [Vé xe] [Nạp thẻ] [Vàng]    │
+├─────────────────────────────────────────────────────────┤
+│ 📌 DỊCH VỤ ĐÃ GHIM TRANG CHỦ (6/8)                      │
+│ ┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐                 │
+│ │ ↗️    │ │ 🏦    │ │ 🧾    │ │ 📱    │                 │
+│ │Chuyển │ │VietQR │ │Hoá đơn│ │Nạp ĐT │                 │
+│ └───────┘ └───────┘ └───────┘ └───────┘                 │
+├─────────────────────────────────────────────────────────┤
+│ 1. CHUYỂN & NHẬN TIỀN                                   │
+│ ┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐                 │
+│ │ ↗️    │ │ 🏦    │ │ 📥    │ │ 💌    │                 │
+│ │Ví-Ví  │ │VietQR │ │Nhận QR│ │Thiệp  │                 │
+│ └───────┘ └───────┘ └───────┘ └───────┘                 │
+│ ┌───────┐ ┌───────┐                                     │
+│ │ ⏱️    │ │ 👥    │                                     │
+│ │Định kỳ│ │Chia t.│                                     │
+│ └───────┘ └───────┘                                     │
+│                                                         │
+│ 2. HOÁ ĐƠN & VIỄN THÔNG                                 │
+│ ┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐                 │
+│ │ 🧾    │ │ 📱    │ │ 📶    │ │ 🌐    │                 │
+│ │Hoá đơn│ │Nạp ĐT │ │Data 4G│ │eSIM   │                 │
+│ └───────┘ └───────┘ └───────┘ └───────┘                 │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 4. Thuật toán Tìm kiếm & Cơ chế Ghim Trang chủ
+- **Bỏ dấu tiếng Việt**: Chuẩn hoá chuỗi đầu vào bằng regex loại bỏ dấu diacritics:
+  `const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();`
+- **Tìm kiếm đa trường**: Khớp với `title`, `description`, và mảng `keywords` (ví dụ từ khoá "evn", "tiền điện" đều dẫn tới Hoá đơn Điện).
+- **Cơ chế lưu Pinned Favorites**:
+  - Key: `localStorage.getItem('ewallet_pinned_favorites_' + userId)`.
+  - Mặc định: 7 tính năng đầu tiên + ô số 8 là nút "Xem thêm" (`more-services`).
+  - Khi bật chế độ "Sửa ghim", mỗi icon có badge dấu trừ đỏ `-` để xoá hoặc dấu cộng xanh `+` để thêm vào danh sách ghim (tối đa 7 dịch vụ tuỳ chỉnh, ô thứ 8 luôn cố định là nút "Xem thêm" / "Tất cả dịch vụ"). Rung nhẹ (haptic shake) hoặc hiện toast thông báo khi người dùng cố tình ghim quá 7 mục.
+
+---
+
+## 33. Chuyển tiền kèm Thiệp mừng, Số tiền Phong thuỷ & Lì xì nhóm Vua May Mắn (Issues #92, #100) — `SendCardModal.tsx` & `GroupLuckyMoney.tsx`
+
+### 1. Bối cảnh & Khảo sát MoMo thực tế
+- **Nguồn khảo sát**: MoMo "Chuyển tiền mừng" và "Lì xì nhóm giật bao may mắn" (chiến dịch Tết & sự kiện quanh năm).
+- **Mục tiêu**: Gia tăng tính kết nối xã hội (Social Payments), biến giao dịch chuyển tiền khô khan thành hành động chúc mừng giàu cảm xúc.
+
+### 2. Chuyển tiền kèm Thiệp mừng & Số tiền Phong thuỷ (Issue #92)
+- **4 Chủ đề thiệp tiêu chuẩn**:
+  1. `BIRTHDAY` (Sinh nhật): Nền pastel cam/hồng, pháo giấy, bánh kem, icon `cake`.
+  2. `THANK_YOU` (Tri ân & Cảm ơn): Nền xanh ngọc nhẹ, đoá hoa, icon `volunteer_activism`.
+  3. `CELEBRATION` (Chúc mừng / Hỷ sự): Nền đỏ son may mắn, phong bao đỏ, hoa mai, icon `celebration`.
+  4. `CHEER_UP` (Động viên / Cổ vũ): Nền vàng năng lượng, ánh mặt trời, tách cà phê, icon `emoji_events`.
+- **Lưới gợi ý Số tiền Phong thuỷ May mắn (Auspicious Amounts)**:
+  - `68.000đ` (Lộc Phát) · `88.000đ` (Phát Phát) · `99.000đ` (Trường Cửu Vĩnh Cửu)
+  - `168.000đ` (Nhất Lộc Phát) · `686.868đ` (Đại Lộc Đại Phát) · `999.999đ` (Tam Cửu Đại Cát)
+  - Bấm chọn số tiền sẽ tự động điền vào ô `amount` kèm ghi chú chúc mừng ý nghĩa.
+- **Trải nghiệm Mở Thiệp của Người Nhận**:
+  - Dialog toàn màn hình với hoạt ảnh phong bì thư rung nhẹ -> trượt mở nắp bao -> bung thiệp thiệp động kèm lời chúc cá nhân hoá.
+  - Nút CTA: "Cảm ơn người gửi 💌" (tự động gửi notification cảm kích về người chuyển) hoặc "Nhận vào ví ngay".
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Gửi kèm thiệp mừng & Tiền may mắn                       │
+├─────────────────────────────────────────────────────────┤
+│ Chọn chủ đề thiệp:                                      │
+│ [🎂 Sinh nhật]  [💐 Cảm ơn]  [🎊 Chúc mừng]  [🌟 Cổ vũ] │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │  🎉 Chúc Mừng Sinh Nhật Tuổi Mới!                   │ │
+│ │  "Chúc bạn tuổi mới rực rỡ, thành công và luôn      │ │
+│ │   hạnh phúc ngập tràn nhé!"                         │ │
+│ └─────────────────────────────────────────────────────┘ │
+│ Chọn số tiền phong thuỷ:                                │
+│ [ 68.000đ - Lộc Phát ]      [ 88.000đ - Phát Tài ]      │
+│ [ 168.000đ - Nhất Lộc Phát] [ 99.000đ - Trường Cửu ]    │
+│ Lời nhắn gửi kèm (tối đa 150 ký tự):                    │
+│ [ Sinh nhật vui vẻ nha bạn thân ơi! 🎂                ] │
+├─────────────────────────────────────────────────────────┤
+│ [ Huỷ ]                           [ Tiếp tục chuyển tiền ]│
+└─────────────────────────────────────────────────────────┘
+```
+
+### 3. Lì xì nhóm & Bảng xếp hạng "Vua May Mắn" (Issue #100)
+- **2 Chế độ chia bao lì xì**:
+  - `RANDOM_LUCK` (Chia ngẫu nhiên): Thuật toán chia ngẫu nhiên đảm bảo mỗi bao tối thiểu 1.000đ, người có số tiền lớn nhất đăng quang "Vua May Mắn".
+  - `EQUAL` (Chia đều): Chia chính xác `totalAmount / totalEnvelopes`.
+- **Escrow trừ tiền trước**: Ví người tạo bị trừ tiền ngay khi khởi tạo phòng; nếu sau 24h còn bao chưa mở, hệ thống tự động hoàn tiền thừa về ví qua Outbox worker.
+- **Trải nghiệm Giật Lì Xì (Interactive Grab)**:
+  - Bao lì xì đỏ lắc nhẹ (shake animation) kèm nút "Giật ngay".
+  - Hiệu ứng bung pháo hoa chúc mừng (Confetti animation).
+  - **Bảng xếp hạng (King of Luck Leaderboard)**:
+    - Người nhận tiền cao nhất có vương miện vàng 👑 và badge "Vua May Mắn".
+    - Người nhận ít nhất có badge "Bình An".
+    - Hiển thị danh sách avatar, thời gian mở đến từng giây, tổng số bao đã mở (vd: 5/5 bao).
+
+---
+
+## 34. Quản lý chi tiêu PFM 2.0 & Trung tâm Dự báo Hoá đơn Bills Radar 30 ngày (Issues #88, #89) — `SpendingReport.tsx` & `BillsRadar.tsx`
+
+### 1. Bối cảnh & Khảo sát MoMo thực tế
+- **Nguồn khảo sát**: MoMo "Quản lý chi tiêu" (`momo.vn/quan-ly-chi-tieu`) và "Lịch thanh toán hoá đơn".
+- **Vấn đề**: Người dùng cần kiểm soát ngân sách tháng theo từng nhóm danh mục và chủ động chuẩn bị tiền trước khi các hoá đơn định kỳ đến hạn trừ nợ.
+
+### 2. Quản lý Chi tiêu PFM 2.0 (Issue #88)
+- **8 Danh mục chi tiêu chuẩn hoá**:
+  1. Ăn uống (`FOOD_DRINK` - `#f57c00`)
+  2. Mua sắm (`SHOPPING` - `#7b1fa2`)
+  3. Hoá đơn nhà ở (`BILLS` - `#1976d2`)
+  4. Di chuyển (`TRANSPORT` - `#388e3c`)
+  5. Giải trí (`ENTERTAINMENT` - `--el-accent`)
+  6. Y tế & Giáo dục (`HEALTH_EDU` - `#d32f2f`)
+  7. Đầu tư (`INVESTMENT` - `#fbc02d`)
+  8. Khác (`OTHER` - `#757575`)
+- **Ngân sách tháng & 3 Ngưỡng màu trực quan**:
+  - `< 80%`: Thanh xanh an toàn.
+  - `80% – 99%`: Thanh vàng hổ phách (`--el-amber`), badge cảnh báo "Sắp chạm ngân sách!".
+  - `>= 100%`: Thanh đỏ báo động (`--el-danger`), badge "Đã vượt ngân sách!".
+- **Ghi chép chi tiêu ngoài ví (Offline Cash Expense)**:
+  - Nút "+ Ghi chi tiêu tiền mặt" mở Bottom Sheet nhập nhanh: Số tiền, danh mục, thời gian, ghi chú. Tích hợp trực tiếp vào báo cáo tổng quan.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Quản lý chi tiêu PFM 2.0             [+ Ghi tiền mặt]   │
+├─────────────────────────────────────────────────────────┤
+│ Tháng 10/2026                 Tổng chi: 12.450.000 đ    │
+│ Ngân sách tháng: 15.000.000 đ (Đã dùng 83% - Sắp chạm)  │
+│ [████████████████████████████░░░░░░] 83% (Vàng cảnh báo)│
+├─────────────────────────────────────────────────────────┤
+│ CHI TIẾT THEO DANH MỤC                                  │
+│ 🍔 Ăn uống (5.200.000 đ / 6.000.000 đ)                  │
+│    [████████████████████░░░░░] 86%  ⚠️ Sắp hết          │
+│ 🛍️ Mua sắm (4.100.000 đ / 3.500.000 đ)                  │
+│    [█████████████████████████] 117% 🚨 Vượt 600.000đ    │
+│ 🧾 Hoá đơn (2.150.000 đ / 3.000.000 đ)                  │
+│    [███████████████░░░░░░░░░░] 71%  ✅ An toàn          │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 3. Trung tâm Dự báo Hoá đơn Bills Radar 30 Ngày (Issue #89)
+- **Lịch hoá đơn 30 ngày (Bills Radar Calendar)**:
+  - Quét toàn bộ hoá đơn đến hạn trong 7 ngày tới (Gấp) và 30 ngày tới.
+  - So sánh: `Tổng hoá đơn 7 ngày tới` vs `Số dư ví chính khả dụng`.
+  - Nếu `Tổng hoá đơn > Số dư ví`: Hiển thị thanh cảnh báo thiếu tiền kèm nút 1 chạm "Nạp tiền ngay".
+- **Cảnh báo Hoá đơn Tăng Đột Biến (`SpikeWarningBadge`)**:
+  - Tiêu chí kích hoạt: Số tiền cước kỳ này tăng `>= 30%` so với mức trung bình 3 kỳ trước.
+  - Trạng thái: `HELD_FOR_SPIKE_REVIEW` (tạm dừng trừ tiền Auto-debit để bảo vệ người dùng).
+  - Khung cảnh báo màu vàng viền nổi bật:
+    - Cảnh báo: *"Hoá đơn Tiền điện kỳ này là 1.450.000đ (tăng 52% so với trung bình 3 tháng gần nhất 950.000đ)."*
+    - Hành động xử lý:
+      * Nút `Duyệt thanh toán` (`POST /bills/auto-pay/{id}/approve-spike`): Cho phép trừ tiền và gạch nợ.
+      * Nút `Bỏ qua kỳ này` (`POST /bills/auto-pay/{id}/skip-cycle`): Bỏ qua chu kỳ này để khách hàng đối soát với nhà đèn, không huỷ uỷ quyền các tháng sau.
+
+---
+
+## 35. Trung tâm Thông báo Tài chính & Hộp thư Nhắc việc 1 chạm (Issue #117) — `NotificationCenter.tsx` & `Home.tsx`
+
+### 1. Bối cảnh & Khảo sát MoMo thực tế
+- **Nguồn khảo sát**: Hộp thư thông báo MoMo (chuông trên Header trang chủ phân tách rõ: Giao dịch, Nhắc việc, Ưu đãi).
+- **Vấn đề**: Người dùng nhận Lì xì, Thiệp mừng, Lời nhắc nợ hoặc Hoá đơn mới nhưng không hề có chấm đỏ thông báo trên `Home.tsx`, dễ bị trôi giao dịch.
+
+### 2. Thiết kế Chuông Thông Báo & Badge Đỏ trên `Home.tsx`
+- Biểu tượng `NotificationBell` góc trên phải màn hình chính hiển thị `badge` số lượng tin chưa đọc.
+- Hiệu ứng lắc chuông nhẹ (Subtle Bell Swing) khi có sự kiện cần xử lý ngay.
+
+### 3. Cấu trúc Màn hình Trung Tâm Thông Báo (4 Tab Phân Loại)
+```
+┌─────────────────────────────────────────────────────────┐
+│ ← Thông báo                 [Đánh dấu đã đọc tất cả]    │
+├─────────────────────────────────────────────────────────┤
+│ [Tất cả (5)]  [Cần xử lý (2)]  [Biến động (3)]  [Lịch (0)]│
+├─────────────────────────────────────────────────────────┤
+│ 🔥 CẦN XỬ LÝ NGAY                                       │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 🧧 Lì xì Tết từ Nam Nguyễn                          │ │
+│ │ Bạn nhận được 1 phong bao lì xì may mắn!           │ │
+│ │ 10 phút trước                       [Mở lì xì ngay] │ │
+│ └─────────────────────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 💸 Lời nhắc trả tiền từ Minh Trần                    │ │
+│ │ Tiền ăn trưa nhóm phở bò: 65.000 đ                  │ │
+│ │ 1 giờ trước                         [Thanh toán ngay]│ │
+│ └─────────────────────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ ⚠️ Cảnh báo tiền điện tăng đột biến (+52%)          │ │
+│ │ Tiền điện T10: 1.450.000đ (bình thường 950.000đ)    │ │
+│ │ Hôm qua                             [Xem & Duyệt]   │ │
+│ └─────────────────────────────────────────────────────┘ │
+│                                                         │
+│ 📊 BIẾN ĐỘNG SỐ DƯ                                      │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ ↗️ Chuyển tiền thành công                           │ │
+│ │ Chuyển 200.000 đ tới Lê Hoàng. Số dư: 4.820.000 đ    │ │
+│ │ 14:30 28/10/2026                    [Xem biên lai]  │ │
+│ └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 4. Nút Hành Động 1 Chạm (1-Tap Action CTA)
+- Mỗi thẻ thông báo thuộc nhóm `ACTION_REQUIRED` đều đính kèm Deep-link dẫn thẳng tới modal thao tác:
+  - Sự kiện Lì xì -> Mở thẳng popup giật bao lì xì.
+  - Lời nhắc nợ -> Mở thẳng màn hình xác nhận chuyển trả đúng số tiền yêu cầu.
+  - Thiệp mừng -> Mở thiệp động chúc mừng.
+  - Cảnh báo Spike cước -> Mở hộp thoại duyệt hoặc bỏ qua cước kỳ này.
+- Bấm "Đánh dấu đã đọc tất cả" sẽ xóa bộ đếm badge chưa đọc trên `Home.tsx` và chuyển trạng thái tin sang màu nền trung tính.
+
+---
+
+## 36. Cửa Hàng eSIM Du Lịch Quốc Tế & Nhận Mã QR Kích Hoạt Tức Thì (Issue #96) — `TelcoTopup.tsx` & `TravelBooking.tsx`
+
+### 1. Bối cảnh & Khảo sát Thực tế
+- **Tham chiếu**: MoMo eSIM Du lịch Quốc tế (`momo.vn/esim-du-lich`) & Revolut eSIM (`revolut.com/esim`).
+- **Nghiệp vụ**: Người dùng đi du lịch/công tác nước ngoài có thể đặt mua gói dữ liệu di động eSIM mà không cần tháo lắp SIM vật lý hay chờ nhận hàng. Hệ thống cấp tức thì Mã QR chuẩn GSMA (`LPA:1$...`) và thông số cài đặt thủ công (`SM-DP+ Address` & `Activation Code`) ngay sau khi thanh toán.
+
+### 2. Sơ đồ Wireframe ASCII — Tab eSIM Quốc Tế & Chi Tiết Đơn Hàng
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ ← eSIM Du Lịch Quốc Tế              [eSIM Của Tôi (1)]  │
+├─────────────────────────────────────────────────────────┤
+│ 🔍 Tìm kiếm quốc gia / vùng lãnh thổ...                 │
+├─────────────────────────────────────────────────────────┤
+│ ĐIỂM ĐẾN PHỔ BIẾN                                       │
+│ [🇹🇭 Thái Lan] [🇸🇬🇲🇾 Sing-Mã] [🇯🇵 Nhật Bản] [🇰🇷 Hàn Quốc]│
+├─────────────────────────────────────────────────────────┤
+│ GÓI CƯỚC THÁI LAN (TRUE/DTAC 5G ROAMING)                │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 🇹🇭 1GB / ngày - 5 Ngày                    95.000 đ │ │
+│ │ • Hết tốc độ cao về 128kbps không ngắt mạng         │ │
+│ │ • Nhận mã kích hoạt QR tức thì                      │ │
+│ │                                         [Chọn Mua]  │ │
+│ └─────────────────────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 🇹🇭 2GB / ngày - 7 Ngày (Phổ biến)        145.000 đ │ │
+│ │ • Tốc độ cao 5G không giới hạn gọi nội địa Thái     │ │
+│ │ • Hoàn tiền nếu không kích hoạt được                │ │
+│ │                                         [Chọn Mua]  │ │
+│ └─────────────────────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 🇹🇭 Không giới hạn 5G - 7 Ngày            210.000 đ │ │
+│ │                                         [Chọn Mua]  │ │
+│ └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ ← Chi Tiết Cài Đặt eSIM             [Chia sẻ] [Lưu ảnh] │
+├─────────────────────────────────────────────────────────┤
+│            🎉 ĐẶT MUA THÀNH CÔNG!                       │
+│     Gói cước: Thái Lan 2GB/ngày - 7 ngày                │
+├─────────────────────────────────────────────────────────┤
+│      ┌───────────────────────────────────────────┐      │
+│      │               █████████████               │      │
+│      │               ██  █████  ██               │      │
+│      │               ██  MÃ QR  ██   (GSMA LPA)  │      │
+│      │               █████████████               │      │
+│      └───────────────────────────────────────────┘      │
+│        Quét mã QR bằng Camera máy phụ hoặc cài đặt      │
+├─────────────────────────────────────────────────────────┤
+│ CÀI ĐẶT THỦ CÔNG                                        │
+│ • Địa chỉ SM-DP+:                                       │
+│   rsp.esim.ewallet-lab.local             [Sao chép]     │
+│ • Mã kích hoạt (Activation Code):                       │
+│   MATCH-9812-7410                        [Sao chép]     │
+│ • Chuỗi GSMA LPA:                                       │
+│   LPA:1$rsp.esim.ewallet-lab.local$MATCH-9812-7410      │
+├─────────────────────────────────────────────────────────┤
+│ HƯỚNG DẪN CÀI ĐẶT NHANH (iOS / Android)                │
+│ 1. Mở Cài đặt > Di động (Cellular) > Thêm eSIM.         │
+│ 2. Quét mã QR ở trên hoặc Dán mã SM-DP+ và Kích hoạt.   │
+│ 3. Chỉ Bật chuyển vùng dữ liệu (Data Roaming) khi đến!  │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 3. Quy chuẩn Thiết kế Token & Trạng Thái eSIM
+- **Token bảng màu**:
+  - Mã QR viền card nổi bật: `--el-surface-2`, bo góc `12px`, padding `16px`.
+  - Nút sao chép 1 chạm: Nút phụ `--el-surface`, border `--el-line`, font `--el-font-code` cho chuỗi kích hoạt.
+  - Huy hiệu trạng thái gói (`EsimOrderStatus`):
+    - `READY_TO_INSTALL`: Xanh dương nhạt `--el-info` ("Sẵn sàng cài đặt").
+    - `INSTALLED_ACTIVE`: Xanh lá `--el-success` ("Đang hoạt động").
+    - `EXPIRED`: Xám mờ `--el-muted` ("Đã hết hạn").
+- **Tích hợp liên kết chéo (Cross-Selling)**:
+  - Trên màn hình hoàn tất đặt vé máy bay quốc tế (`TravelBooking.tsx`), hiển thị card gợi ý: *"Chuẩn bị bay tới Thái Lan? Mua eSIM 5G chỉ từ 95.000đ để có mạng ngay khi hạ cánh"*.
+
+---
+
+## 37. Cửa Hàng Thẻ Game Giải Trí & Trung Tâm Săn Ưu Đãi Thương Hiệu (Issue #99) — Mở Khóa Tile `games` & `deals`
+
+### 1. Bối cảnh & Khảo sát Thực tế
+- **Tham chiếu**: MoMo Nạp thẻ game chiết khấu 3-5% & Cửa hàng Ưu đãi / Deals Hub.
+- **Mục tiêu**: Thay thế toàn bộ dead-end `ComingSoon.tsx` của 2 tile `games` ("Game - Ứng dụng") và `deals` ("Săn ưu đãi") trên `AllServices.tsx` bằng 2 màn hình hoạt động thực tế 100%: `GameCardStore.tsx` và `DealsHub.tsx`.
+
+### 2. Sơ đồ Wireframe ASCII — Cửa Hàng Thẻ Game (`GameCardStore.tsx`)
+```
+┌─────────────────────────────────────────────────────────┐
+│ ← Mua Thẻ Game & Giải Trí           [Lịch sử thẻ đã mua]│
+├─────────────────────────────────────────────────────────┤
+│ NHÀ PHÁT HÀNH                                           │
+│ [🟢 GARENA]  [🔵 ZING CARD]  [🟠 VCOIN]  [🔴 GATE]      │
+│ [🟣 FUNCARD] [🟡 APPOTA]    [⚪ GOOGLE PLAY]            │
+├─────────────────────────────────────────────────────────┤
+│ CHỌN MỆNH GIÁ                                           │
+│ ┌───────────────────────┐   ┌───────────────────────┐   │
+│ │ 20.000 đ              │   │ 50.000 đ              │   │
+│ │ Giá: 19.400 đ (-3%)   │   │ Giá: 48.500 đ (-3%)   │   │
+│ └───────────────────────┘   └───────────────────────┘   │
+│ ┌───────────────────────┐   ┌───────────────────────┐   │
+│ │ 100.000 đ  [Phổ biến] │   │ 200.000 đ             │   │
+│ │ Giá: 97.000 đ (-3%)   │   │ Giá: 194.000 đ (-3%)  │   │
+│ └───────────────────────┘   └───────────────────────┘   │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 500.000 đ   Giá: 485.000 đ (-3% Tiết kiệm 15.000đ)  │ │
+│ └─────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────┤
+│ THANH TOÁN & NHẬN MÃ THẺ                                │
+│ Nguồn tiền: Ví chính (Số dư: 1.250.000 đ)               │
+│ Tổng thanh toán: 97.000 đ (Tiết kiệm 3.000 đ)           │
+│ [             MUA NGAY (CHIẾT KHẤU 3%)                ] │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ 🎟️ THẺ GAME ĐÃ MUA THÀNH CÔNG                          │
+│ Nhà phát hành: Garena 100.000 đ                         │
+├─────────────────────────────────────────────────────────┤
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ Mã PIN (Mã Nạp Thẻ):                                │ │
+│ │ 8492 1048 2910 4721                      [Sao chép] │ │
+│ │                                                     │ │
+│ │ Số Serial:                                          │ │
+│ │ 1000 4829 1048                           [Sao chép] │ │
+│ │                                                     │ │
+│ │ Hạn sử dụng: 31/12/2027                             │ │
+│ └─────────────────────────────────────────────────────┘ │
+│ [           Sao chép cả PIN & Serial 1 chạm           ] │
+│ [      Tiếp tục mua thẻ      ] [ Xem lịch sử thẻ ]     │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 3. Sơ đồ Wireframe ASCII — Trung Tâm Săn Ưu Đãi Thương Hiệu (`DealsHub.tsx`)
+```
+┌─────────────────────────────────────────────────────────┐
+│ ← Săn Ưu Đãi & Voucher Pass               [Kho voucher] │
+├─────────────────────────────────────────────────────────┤
+│ 🏷️ DANH MỤC: [Tất cả] [Ăn uống] [Cà phê] [Phim] [Siêu thị]│
+├─────────────────────────────────────────────────────────┤
+│ ⚡ FLASH DEALS GIỜ VÀNG (Kết thúc sau 02:45:12)         │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ ☕ Highlands Coffee - Giảm 30.000đ đơn từ 69.000đ    │ │
+│ │ Còn 45 lượt • Đổi bằng 50 điểm hoặc 0 đ             │ │
+│ │                                      [Thu thập ngay]│ │
+│ └─────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────┤
+│ 🎟️ GÓI TIẾT KIỆM VOUCHER PASS (Tiết kiệm đến 70%)       │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 🍔 Gói Ăn Uống Thả Ga (4 voucher x 50.000đ)          │ │
+│ │ Giá gốc: 200.000 đ -> Mua gói chỉ: 29.000 đ         │ │
+│ │                                           [Mua gói] │ │
+│ └─────────────────────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 🎬 Gói Xem Phim Cuối Tuần (2 vé CGV 2D)             │ │
+│ │ Giá gốc: 220.000 đ -> Mua gói chỉ: 139.000 đ        │ │
+│ │                                           [Mua gói] │ │
+│ └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 4. Quy tắc Tương Tác & Phím Sao Chép 1 Chạm
+- **Sao chép PIN / Serial**: Nút icon copy hỗ trợ visual feedback "Đã chép!" (`Copied!`) trong 2 giây.
+- **Áp dụng ưu đãi trực tiếp**: Nút "Dùng ngay" trên voucher đã thu thập sẽ mở deep-link sang đúng dịch vụ thanh toán (ví dụ Voucher Highlands -> mở QR Thanh toán tại quầy; Voucher CGV -> mở màn hình Đặt vé xem phim).
+
+---
+
+## 38. Đặt Vé Xem Phim Trực Tuyến, Sơ Đồ Ghế Tương Tác & Combo Bắp Nước (Issue #105) — `MovieBooking.tsx`
+
+### 1. Bối cảnh & Khảo sát Thực tế
+- **Tham chiếu**: MoMo Vé Phim (đối tác CGV, Lotte Cinema, Galaxy, Beta Cinemas).
+- **Trải nghiệm trọng tâm**:
+  1. Chọn suất chiếu rạp thuận tiện.
+  2. Sơ đồ ghế phòng chiếu trực quan (Seat Map) phân hạng màu sắc rõ ràng.
+  3. Kiểm tra quy tắc chống bỏ trống 1 ghế lẻ (Single-Seat Gap / Orphan Seat Rule) trước khi giữ chỗ.
+  4. Chọn combo bắp nước và sinh vé điện tử phong cách vé xem phim cổ điển kèm QR check-in.
+
+### 2. Sơ đồ Wireframe ASCII — Sơ Đồ Ghế Phòng Chiếu & Orphan Seat Warning
+```
+┌─────────────────────────────────────────────────────────┐
+│ ← CGV Vincom Center • Suất 19:30 • Phòng 03 [2D Phụ đề]│
+├─────────────────────────────────────────────────────────┤
+│                   ════ MÀN CHIẾU ════                   │
+│                                                         │
+│   Hàng                                                  │
+│    A    [ ][ ][ ]  [ ][ ][ ][ ]  [ ][ ][ ]  (Thường)    │
+│    B    [ ][ ][ ]  [x][x][ ][ ]  [ ][ ][ ]  (Thường)    │
+│    C    [ ][ ][ ]  [ ][ ][ ][ ]  [ ][ ][ ]  (Thường)    │
+│    D    [ ][ ][ ]  [ ][x][x][ ]  [ ][ ][ ]  (VIP)       │
+│    E    [ ][ ][ ]  [ ][●][●][ ]  [ ][ ][ ]  (VIP - Chọn)│
+│    F    [ ][ ][ ]  [ ][ ][ ][ ]  [ ][ ][ ]  (VIP)       │
+│    G    [====]     [====]        [====]     (Couple)    │
+│                                                         │
+│   Chú thích: [ ] Trống   [●] Đang chọn   [x] Đã bán     │
+│              [====] Ghế Đôi Sweetbox                    │
+├─────────────────────────────────────────────────────────┤
+│ ⚠️ CẢNH BÁO QUY TẮC RẠP PHIM (ORPHAN SEAT)              │
+│ Bạn không thể để trống 1 ghế lẻ duy nhất ở giữa hoặc    │
+│ sát mép lối đi. Vui lòng chọn ghế liền kề!              │
+├─────────────────────────────────────────────────────────┤
+│ ĐANG CHỌN: E5, E6 (Ghế VIP) - Thời gian giữ: 09:42     │
+│ Tạm tính: 210.000 đ                                     │
+│ [              TIẾP TỤC: CHỌN BẮP NƯỚC                ] │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 3. Sơ đồ Wireframe ASCII — Chọn Combo Bắp Nước & Vé Điện Tử Răng Cưa
+```
+┌─────────────────────────────────────────────────────────┐
+│ COMBO BẮP NƯỚC RẠP                                      │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 🍿 Solo Combo (1 Bắp ngọt 60oz + 1 Nước 32oz)       │ │
+│ │ 79.000 đ                              [-] [ 1 ] [+] │ │
+│ └─────────────────────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 🍿 Couple Combo (1 Bắp lớn 2 vị + 2 Nước 32oz)      │ │
+│ │ 109.000 đ                             [-] [ 0 ] [+] │ │
+│ └─────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────┤
+│ Tổng tiền: 289.000 đ (2 vé VIP + 1 Solo Combo)          │
+│ [                THANH TOÁN BẰNG VÍ                   ] │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ • • • • • • • • VÉ XEM PHIM ĐIỆN TỬ • • • • • • • • • • │
+│ - - - - - - - - - - - - - - - - - - - - - - - - - - - - │
+│ 🎬 DUNE: HÀNH TINH CÁT (2D Phụ đề tiếng Việt)          │
+│ 🏛️ CGV Vincom Đồng Khởi - Phòng chiếu 03               │
+│ 🕒 19:30 - Thứ Bảy, 31/10/2026                         │
+│ 💺 Ghế: E5, E6 (VIP) • 🍿 Combo: 1x Solo Combo          │
+├─────────────────────────────────────────────────────────┤
+│      ┌───────────────────────────────────────────┐      │
+│      │               █████████████               │      │
+│      │               ██  MÃ QR   ██              │      │
+│      │               ██ CHECK-IN ██              │      │
+│      │               █████████████               │      │
+│      └───────────────────────────────────────────┘      │
+│ Mã lấy vé tự động: CGV-8921-3401                        │
+│ - - - - - - - - - - - - - - - - - - - - - - - - - - - - │
+│ • • • • • • • (Đường viền răng cưa cổ điển) • • • • • • │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 4. Quy tắc Kỹ thuật & Token UI
+- **Phân loại màu ghế**:
+  - Ghế thường (Hàng A-C): Border `--el-line`, background `--el-surface`.
+  - Ghế VIP (Hàng D-F): Border `--el-amber`, background `--el-surface-2`.
+  - Ghế Couple Sweetbox (Hàng G): Màu hồng đặc trưng `--el-accent-subtle`.
+  - Ghế đang chọn: Nền hồng MoMo `--el-accent`, icon check trắng.
+  - Ghế đã bán (`SOLD`): Nền xám tối `--el-muted`, ký tự gạch chéo disabled.
+- **Xử lý tranh chấp ghế đồng thời (Concurrency Control)**:
+  - Khi API trả về `409 Conflict`, hiển thị Banner màu đỏ `--el-danger`: *"Rất tiếc! Ghế E5 vừa có khách khác đặt trước. Vui lòng chọn ghế khác."* kèm tự động load lại ma trận ghế mới nhất.
+
+---
+
+## 39. Tích Lũy Vàng 999.9 Trực Tuyến & Đặt Lịch Nhận Vàng Vật Chất (Issue #115) — Tab "🪙 Tiệm Vàng Online" trên `Wealth.tsx`
+
+### 1. Bối cảnh & Khảo sát Thực tế
+- **Tham chiếu**: eGold DOJI (`egold.doji.vn`), MoMo Bảng Giá Vàng & Tích Luỹ Tài Sản, Revolut Commodities Gold.
+- **Bản chất nghiệp vụ**:
+  - Cho phép người dùng mua tích luỹ vàng nhẫn 999.9 với số vốn nhỏ từ **0,1 chỉ** (khoảng ~800.000đ - 900.000đ tuỳ thời giá).
+  - Phản ánh trung thực cơ chế chênh lệch giá Mua vào / Bán ra (`Bid-Ask Spread`).
+  - Gửi giữ hộ miễn phí trong Tủ Vàng Điện Tử (`GoldVaultHolding`), cho phép bán chốt lời 24/7 về Ví hoặc đặt lịch nhận vàng vật chất ép vỉ tại cửa hàng đối tác khi đạt từ $\ge 1,0$ chỉ.
+
+### 2. Sơ đồ Wireframe ASCII — Tab Tiệm Vàng Online & Tủ Vàng Tích Luỹ
+```
+┌─────────────────────────────────────────────────────────┐
+│ ← Tài Chính - Tích Luỹ              [Lịch sử giao dịch] │
+├─────────────────────────────────────────────────────────┤
+│ [Chứng chỉ quỹ] [🪙 Vàng nhẫn 999.9] [Tích lũy sinh lời]│
+├─────────────────────────────────────────────────────────┤
+│ 🏆 TỦ VÀNG CỦA TÔI                                      │
+│ Tổng sở hữu: 2,50 chỉ                                   │
+│ Giá trị thị trường: 21.875.000 đ                        │
+│ Lợi nhuận tạm tính: +1.125.000 đ (+5.42%)  📈 Tăng     │
+│ Giá vốn trung bình: 8.300.000 đ / chỉ                   │
+├─────────────────────────────────────────────────────────┤
+│ BẢNG GIÁ VÀNG TRỰC TUYẾN (Cập nhật: 10:30 Hôm nay)      │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 🪙 Vàng Nhẫn Tròn Trơn 999.9 (Hưng Thịnh Vương)     │ │
+│ │ Giá mua lại (Bid):           Giá bán ra (Ask):      │ │
+│ │ 8.650.000 đ / chỉ            8.750.000 đ / chỉ      │ │
+│ │ Spread: 100.000 đ / chỉ                             │ │
+│ └─────────────────────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 🥇 Vàng Miếng SJC 999.9 (Bội số 1 chỉ)              │ │
+│ │ Giá mua lại (Bid):           Giá bán ra (Ask):      │ │
+│ │ 8.820.000 đ / chỉ            8.980.000 đ / chỉ      │ │
+│ └─────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────┤
+│ [ Mua tích lũy từ 0.1 chỉ ]  [ Bán chốt lời về ví ]     │
+│ [          🪙 Đặt lịch rút vàng vật chất tại quầy       ] │
+├─────────────────────────────────────────────────────────┤
+│ ℹ️ Tuyên bố: Mô phỏng phục vụ nghiên cứu & học tập     │
+│ (Lab Simulation). Không phải dịch vụ kinh doanh vàng.   │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 3. Sơ đồ Wireframe ASCII — Đặt Lịch Nhận Vàng Vật Chất
+```
+┌─────────────────────────────────────────────────────────┐
+│ ← Đặt Lịch Rút Vàng Vật Chất Tại Quầy                  │
+├─────────────────────────────────────────────────────────┤
+│ Số dư vàng khả dụng rút: 2,50 chỉ                       │
+│ ⚠️ Chỉ hỗ trợ rút nguyên chỉ (bội số 1.0 chỉ)          │
+├─────────────────────────────────────────────────────────┤
+│ CHỌN SỐ LƯỢNG RÚT:                                      │
+│ [-] [ 2 ] [+] chỉ Vàng Nhẫn Tròn Trơn Ép Vỉ 999.9       │
+│ Phí gia công & ép vỉ bảo an: Miễn phí                   │
+├─────────────────────────────────────────────────────────┤
+│ ĐỊA ĐIỂM & THỜI GIAN NHẬN VÀNG                          │
+│ Cửa hàng: Tiệm Vàng Lab Chi nhánh Quận 1 (TP.HCM)       │
+│ Ngày hẹn nhận: 02/11/2026 (Trong giờ hành chính)        │
+├─────────────────────────────────────────────────────────┤
+│ Mã phiếu hẹn QR: GOLD-PICKUP-2026-9812                 │
+│ [                    XÁC NHẬN HẸN LẤY VÀNG            ] │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 4. Quy tắc Thiết kế & Phòng ngừa Rủi ro
+- **Chênh lệch Bid-Ask rõ ràng**:
+  - Khi Mua: tính theo giá `askPricePerChi` (Giá bán ra).
+  - Khi Bán: tính theo giá `bidPricePerChi` (Giá mua vào từ khách).
+  - Khung màu vàng kim `--el-amber` kết hợp `--el-surface-2` mang phong cách tiệm vàng sang trọng, tin cậy.
+- **Điều kiện rút vàng vật chất**:
+  - Khóa nút "Đặt lịch rút vàng" nếu tổng số dư $< 1.0$ chỉ, kèm tooltip: *"Cần tích luỹ tối thiểu từ 1,0 chỉ trở lên để quy đổi nhận vàng vật chất ép vỉ."*
+
+---
+
+## 40. Chia Tiền Hóa Đơn Theo Từng Món & Tự Động Phân Bổ Tỷ Lệ (Issue #116) — Mở Rộng `SplitBill.tsx`
+
+### 1. Bối cảnh & Khảo sát Thực tế
+- **Tham chiếu**: MoMo / ZaloPay Chia Tiền & Splitwise Pro Itemized Receipt Splitter.
+- **Vấn đề giải quyết**: Khi đi ăn uống theo nhóm hoặc đặt tiệc, mỗi người gọi các món khác nhau với giá khác nhau. Trên hoá đơn tổng luôn có thêm Thuế VAT (8% hoặc 10%), Phí phục vụ (Service Charge 5%) và Voucher giảm giá đơn hàng (Discount). Việc chia đều thì bất công, còn tự tính tay tỷ lệ phân bổ thuế/voucher rất phức tạp và dễ nhầm lẫn.
+
+### 2. Sơ đồ Wireframe ASCII — Chia Tiền Hóa Đơn Từng Món (`SplitBill.tsx`)
+```
+┌─────────────────────────────────────────────────────────┐
+│ ← Chia Tiền Hóa Đơn                [Mẫu hóa đơn mẫu]    │
+├─────────────────────────────────────────────────────────┤
+│ [Chia đều số người]    [🧾 Chia theo từng món ăn]       │
+├─────────────────────────────────────────────────────────┤
+│ DANH SÁCH MÓN ĂN                                        │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 1. Bò Wagyu Nướng             280.000 đ             │ │
+│ │    Người ăn: [👨 Nam] [👩 Lan]  (Mỗi người 140k)     │ │
+│ ├─────────────────────────────────────────────────────┤ │
+│ │ 2. Lẩu Thái Tomyum             360.000 đ             │ │
+│ │    Người ăn: [👨 Nam] [👩 Lan] [🧔 Hùng] (Mỗi ng 120k)│ │
+│ ├─────────────────────────────────────────────────────┤ │
+│ │ 3. Nước ép cam (Chỉ Hùng)      55.000 đ             │ │
+│ │    Người ăn: [🧔 Hùng]                               │ │
+│ └─────────────────────────────────────────────────────┘ │
+│ [+ Thêm món mới]                                        │
+├─────────────────────────────────────────────────────────┤
+│ THUẾ & PHỤ PHÍ CHUNG CỦA HÓA ĐƠN                        │
+│ • Thuế VAT (10%):           +69.500 đ                   │
+│ • Phí phục vụ (5%):         +34.750 đ                   │
+│ • Voucher Giảm giá:         -50.000 đ                   │
+│ ─────────────────────────────────────────────────────── │
+│ Tổng tiền thực trả cả bàn:   749.250 đ                  │
+├─────────────────────────────────────────────────────────┤
+│ BẢNG TÍNH PHÂN BỔ TỶ TRỌNG MINH BẠCH (PRO-RATA)         │
+│ 👨 Nam:  Tiền món 260k + Thuế/Giảm (+19.980đ) = 279.980đ│
+│ 👩 Lan:  Tiền món 260k + Thuế/Giảm (+19.980đ) = 279.980đ│
+│ 🧔 Hùng: Tiền món 175k + Thuế/Giảm (+14.290đ) = 189.290đ│
+│ Tổng cộng kiểm tra: 749.250 đ (Khớp 100% đến từng đồng) │
+├─────────────────────────────────────────────────────────┤
+│ [           GỬI YÊU CẦU CHIA TIỀN CHO CẢ NHÓM         ] │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 3. Sơ đồ Wireframe ASCII — Màn hình Thành viên Nhận Yêu Cầu Thanh Toán
+```
+┌─────────────────────────────────────────────────────────┐
+│ 🧾 CHI TIẾT YÊU CẦU THANH TOÁN TIỀN ĂN                  │
+│ Người tạo: Nam Nguyễn • Bữa tối Haidilao cuối tuần      │
+├─────────────────────────────────────────────────────────┤
+│ MÓN BẠN ĐÃ DÙNG:                                        │
+│ • 1/3 Lẩu Thái Tomyum:               120.000 đ          │
+│ • 1x Nước ép cam:                     55.000 đ          │
+│ Tiền món của bạn:                    175.000 đ          │
+│                                                         │
+│ PHÂN BỔ THUẾ & ƯU ĐÃI (Tỷ trọng 24.6%):                 │
+│ • Thuế VAT 10% & Phí dịch vụ 5%:     +26.500 đ          │
+│ • Chiết khấu giảm giá bàn ăn:        -12.210 đ          │
+│ ─────────────────────────────────────────────────────── │
+│ TỔNG SỐ TIỀN CẦN TRẢ:                189.290 đ          │
+├─────────────────────────────────────────────────────────┤
+│ [                XÁC NHẬN CHUYỂN TIỀN NGAY            ] │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 4. Quy chuẩn Thuật toán UI & Trải nghiệm
+- **Chạm avatar gán người ăn**: Mỗi avatar thành viên có viền màu riêng. Chạm vào avatar dưới mỗi món ăn để toggle bật/tắt người tham gia. Tiền món tự động chia đều cho số avatar được chọn.
+- **Bảo đảm không lệch số dư (Zero Rounding Error)**:
+  - Công thức: `finalAmount_i = round(subtotal_i + netAdjustment * (subtotal_i / totalSubtotal))`.
+  - Khoản dư làm tròn vài đồng lẻ do số thập phân được cộng trực tiếp vào phần của người đầu tiên (người tạo yêu cầu) để $\sum finalAmount == totalAmount$ tuyệt đối.
+- **Minh bạch hóa**: Khi người nhận mở link/thông báo thanh toán, danh sách món họ đã ăn được liệt kê cụ thể kèm cách tính thuế/giảm giá phân bổ, giúp tránh hoàn toàn tranh cãi hoặc ngại ngùng khi chia tiền nhóm.
+
+---
+
+## 41. Quản Lý Thiết Bị Tin Cậy (WebAuthn Passkeys) & Đóng Băng Ví Khẩn Cấp SOS (Issue #98) — `Account.tsx` & `Home.tsx`
+
+### 1. Bối cảnh & Khảo sát Thực tế
+- **Tham chiếu Pháp lý & Thị trường**: Thông tư 50/2024/TT-NHNN về an toàn bảo mật trực tuyến trong ngân hàng, MoMo / Revolut Security Center.
+- **Nghiệp vụ**:
+  - Người dùng có thể kiểm tra danh sách thiết bị đã đăng ký xác thực sinh trắc học (Passkeys / WebAuthn), xóa/thu hồi quyền truy cập của từng máy cũ hoặc máy bị mất.
+  - Tính năng **Đóng Băng Ví Khẩn Cấp (Emergency Wallet Freeze SOS)** cho phép chủ ví lập tức khóa toàn bộ chiều rút/chuyển tiền ra ngoài khi nghi ngờ lộ mật khẩu hoặc mất điện thoại, nhưng vẫn cho phép nhận tiền vào. Luồng kích hoạt được thiết kế chống bấm nhầm (Double Confirmation / Slider to Lock).
+
+### 2. Sơ đồ Wireframe ASCII — Màn hình Quản Lý Thiết Bị & Khóa Ví Khẩn Cấp (`Account.tsx`)
+```
+┌─────────────────────────────────────────────────────────┐
+│ ← Trung Tâm An Toàn & Bảo Mật                           │
+├─────────────────────────────────────────────────────────┤
+│ 🛡️ BẢO VỆ TÀI KHOẢN VÀ THIẾT BỊ                        │
+│                                                         │
+│ 📱 THIẾT BỊ TIN CẬY ĐÃ ĐĂNG KÝ (2 thiết bị)             │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 💻 MacBook Pro 14" (Touch ID)         [Thiết bị này]│ │
+│ │ Đăng ký: 12/10/2026 • Hoạt động: Vừa xong           │ │
+│ │ Khóa WebAuthn: cred-98124...          (Không thể xóa)│ │
+│ ├─────────────────────────────────────────────────────┤ │
+│ │ 📱 iPhone 16 Pro (Face ID)                          │ │
+│ │ Đăng ký: 05/09/2026 • Hoạt động: Hôm qua             │ │
+│ │ Khóa WebAuthn: cred-31049...           [🗑️ Thu hồi] │ │
+│ └─────────────────────────────────────────────────────┘ │
+│ [+ Đăng ký thêm thiết bị / Passkey mới]                 │
+├─────────────────────────────────────────────────────────┤
+│ 🚨 KHU VỰC KHẨN CẤP (SOS)                               │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ ⚠️ ĐÓNG BĂNG VÍ KHẨN CẤP                            │ │
+│ │ Khi nghi ngờ lộ tài khoản hoặc mất điện thoại:      │ │
+│ │ • Tạm khóa ngay chiều chuyển tiền, thanh toán, rút  │ │
+│ │ • Chiều nhận tiền vào ví vẫn hoạt động bình thường   │ │
+│ │ • Chỉ mở khóa lại bằng Sinh trắc học eKYC           │ │
+│ │                                                     │ │
+│ │ [       🚨 YÊU CẦU ĐÓNG BĂNG VÍ KHẨN CẤP        ]   │ │
+│ └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ ⚠️ XÁC NHẬN ĐÓNG BĂNG VÍ KHẨN CẤP (CHỐNG CHẠM NHẦM)    │
+├─────────────────────────────────────────────────────────┤
+│ Hành động này sẽ TẠM KHÓA TOÀN BỘ giao dịch chi tiêu   │
+│ trên mọi thiết bị cho tới khi bạn xác thực lại eKYC!    │
+│                                                         │
+│ Để xác nhận, vui lòng nhập chữ "KHOA VI" vào ô dưới:    │
+│ [ KHOA VI                                             ] │
+│                                                         │
+│        ───► [ Kéo thanh trượt để Khóa ngay ] ───►       │
+│                                                         │
+│ [                     HỦY BỎ                          ] │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 3. Sơ đồ Wireframe ASCII — Trạng Thái Ví Đang Bị Đóng Băng trên `Home.tsx`
+```
+┌─────────────────────────────────────────────────────────┐
+│ 🚨 BANNER CẢNH BÁO BẢO VỆ TOÀN CỤC                      │
+│ ⚠️ VÍ ĐANG Ở CHẾ ĐỘ ĐÓNG BĂNG BẢO VỆ KHẨN CẤP          │
+│ Mọi lệnh rút/chuyển tiền bị tạm dừng.       [Mở khóa ngay]
+├─────────────────────────────────────────────────────────┤
+│ SỐ DƯ VÍ: 5.420.000 đ                      [🔒 Đang khóa]│
+├─────────────────────────────────────────────────────────┤
+│ LƯỚI TÍNH NĂNG CHÍNH:                                   │
+│ [ ↗️ Chuyển tiền ] [ 🧾 Thanh toán ]  [ 💳 Rút tiền ]    │
+│ (Bị làm mờ + Badge ổ khóa "Tạm khóa chi tiêu SOS")       │
+│                                                         │
+│ [ 📥 Nạp tiền ]    [ 🏷️ Nhận tiền QR ]                    │
+│ (Vẫn hoạt động bình thường để nhận tiền an toàn)         │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 4. Quy chuẩn Trạng thái, Tokens & Micro-interactions
+- **Phòng chống bấm nhầm (Accidental Lock Prevention)**:
+  - Nút kích hoạt ban đầu màu đỏ viền `--el-danger`. Khi bấm sẽ mở Modal xác nhận 2 tầng: Yêu cầu gõ chính xác chuỗi `KHOA VI` hoa không dấu và Kéo thanh trượt (Slide-to-confirm).
+- **Thu hồi thiết bị (Revoke Device)**:
+  - Thiết bị hiện tại đang đăng nhập (`Current Device`) có nhãn "Thiết bị này", nút Thu hồi bị vô hiệu hóa để tránh người dùng tự khóa chính mình khỏi phiên làm việc hiện tại.
+  - Khi thu hồi thiết bị khác: Hiện Dialog xác nhận *"Bạn có chắc chắn muốn thu hồi quyền truy cập của 'iPhone 16 Pro'? Thiết bị này sẽ bị đăng xuất và không thể xác thực Passkey cho tới khi đăng ký lại."*
+- **Mở khóa ví (Unfreeze Flow)**:
+  - Bấm nút "Mở khóa ngay" trên Banner hoặc trong Cài đặt -> Mở camera quét khuôn mặt sống (eKYC Liveness Match) hoặc yêu cầu xác thực WebAuthn hợp lệ từ thiết bị tin cậy.
+
+---
+
+## 42. Trung Tâm Quản Lý Gói Đăng Ký Số & Lá Chắn Tự Hủy Dùng Thử (Issue #103) — `DigitalSubscription.tsx`
+
+### 1. Bối cảnh & Khảo sát Thực tế
+- **Tham chiếu**: Revolut Subscription Manager & Free-Trial Shield, MoMo Quản lý dịch vụ liên kết / Thanh toán định kỳ.
+- **Nỗi đau người dùng (Free Trial Trap)**: Người dùng hay đăng ký các gói dùng thử miễn phí hoặc gói khuyến mại tháng đầu (Netflix, YouTube Premium, Spotify, ChatGPT Plus, iCloud, Google One...), nhưng rất hay quên hủy trước hạn dẫn tới việc bị trừ tiền ngầm các tháng sau.
+- **Giải pháp**:
+  - Thống kê tổng số tiền thuê bao số cố định hàng tháng (`monthlyTotalVnd`).
+  - Cung cấp "Lá chắn dùng thử": Tự động kích hoạt trạng thái `CANCEL_AT_PERIOD_END` ngay lúc mua/dùng thử. Khách hàng vẫn dùng trọn vẹn 30 ngày kỳ hiện tại nhưng 100% không bị trừ tiền kỳ tiếp theo.
+
+### 2. Sơ đồ Wireframe ASCII — Trung Tâm Quản Lý Thuê Bao Số (`DigitalSubscription.tsx`)
+```
+┌─────────────────────────────────────────────────────────┐
+│ ← Gói Đăng Ký Dịch Vụ Số                [Lịch sử gói]   │
+├─────────────────────────────────────────────────────────┤
+│ 💳 TỔNG CHI PHÍ THUÊ BAO HÀNG THÁNG                     │
+│ 407.000 đ / tháng                                       │
+│ • Đang bật tự động gia hạn: 2 dịch vụ                   │
+│ • Gói sắp trừ tiền: YouTube Premium (79k) sau 3 ngày    │
+├─────────────────────────────────────────────────────────┤
+│ DỊCH VỤ ĐANG HOẠT ĐỘNG (ACTIVE SUBSCRIPTIONS)           │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ ▶️ YouTube Premium Cá Nhân                79.000 đ/th│ │
+│ │ Hết hạn kỳ này: 02/11/2026 (Còn 4 ngày)             │ │
+│ │ Tự động gia hạn: [ BẬT ● ]      [Hủy gia hạn kỳ sau]│ │
+│ ├─────────────────────────────────────────────────────┤ │
+│ │ 🎵 Spotify Premium 1 Tháng               59.000 đ/th│ │
+│ │ Hết hạn kỳ này: 24/11/2026                          │ │
+│ │ Tự động gia hạn: [ BẬT ● ]      [Hủy gia hạn kỳ sau]│ │
+│ ├─────────────────────────────────────────────────────┤ │
+│ │ 🤖 ChatGPT Plus (OpenAI)                499.000 đ/th│ │
+│ │ Hết hạn kỳ này: 15/11/2026                          │ │
+│ │ 🛡️ ĐÃ BẬT LÁ CHẮN TỰ HỦY: Kỳ sau sẽ không trừ tiền! │ │
+│ │ [ Kích hoạt lại gia hạn ]                           │ │
+│ └─────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────┤
+│ KHÁM PHÁ GÓI DỊCH VỤ MỚI                                │
+│ [ 🎬 Netflix ]  [ ☁️ iCloud+ 50GB ]  [ 📦 Google One ]  │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ ĐĂNG KÝ GÓI: NETFLIX STANDARD (1 THÁNG)                 │
+├─────────────────────────────────────────────────────────┤
+│ Giá gói cước: 260.000 đ / tháng                         │
+│ Chu kỳ: 30 ngày kể từ ngày thanh toán                  │
+├─────────────────────────────────────────────────────────┤
+│ 🛡️ LÁ CHẮN TỰ ĐỘNG BẢO VỆ VÍ (KHUYÊN DÙNG)              │
+│ [X] Tự động hủy gia hạn sau kỳ này                     │
+│     (Vẫn xem trọn vẹn 30 ngày, bảo đảm không bị trừ     │
+│      tiền ngoài ý muốn ở chu kỳ sau)                    │
+│                                                         │
+│ Đặt mức giá trần tối đa khi gia hạn (Max Cap):          │
+│ [ 260.000 đ                                           ] │
+│ (Chặn trừ tiền nếu nhà cung cấp tự ý tăng giá cước)     │
+├─────────────────────────────────────────────────────────┤
+│ [             THANH TOÁN & BẬT LÁ CHẮN                ] │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 3. Sơ đồ Wireframe ASCII — Trạng Thái Rỗng & Xử Lý Lỗi
+```
+┌─────────────────────────────────────────────────────────┐
+│ 📭 TRẠNG THÁI RỖNG (EMPTY STATE)                        │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │               🛡️✨                                  │ │
+│ │     Chưa có gói thuê bao nào được liên kết          │ │
+│ │  Bạn chưa đăng ký dịch vụ số định kỳ nào.           │ │
+│ │  Đăng ký ngay các dịch vụ giải trí phổ biến bên     │ │
+│ │  dưới kèm Lá Chắn Bảo Vệ Ví chống trừ tiền ngầm!    │ │
+│ │            [ Khám phá danh mục dịch vụ ]            │ │
+│ └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 4. Quy chuẩn Tokens & Tương Tác
+- **Badge Lá chắn Tự hủy**: Màu xanh ngọc `--el-info` với icon `shield`, hiển thị chữ *"Kỳ sau sẽ không trừ tiền"*.
+- **Gạt toggle Gia hạn tự động**:
+  - Gạt sang OFF: Không hủy gói ngay lập tức mà gọi `PATCH .../renewal` chuyển sang `CANCEL_AT_PERIOD_END`, giữ nguyên mã kích hoạt và hạn dùng hiện tại.
+  - Hiển thị Toast thông báo: *"Đã tắt gia hạn tự động. Bạn vẫn có thể sử dụng dịch vụ đến hết ngày DD/MM/YYYY."*
+- **Trần giá cước (`maxRenewalPrice`)**: Khi nhà cung cấp tăng giá cước vượt trần, hệ thống tự động treo giao dịch gia hạn và gửi thông báo nhắc duyệt ở Mục 35.
+
+---
+
+## 43. Hũ Tiết Kiệm Mục Tiêu 2.0: Khóa Hũ Kỷ Luật & Thử Thách Tiết Kiệm (Issue #109) — `Wealth.tsx`
+
+### 1. Bối cảnh & Khảo sát Thực tế
+- **Tham chiếu**: Monzo Locked Pots, Starling Spaces, Timo Goal Save, MoMo Heo đất tích lũy.
+- **Nghiệp vụ**:
+  - Hũ tiết kiệm thông thường hay thất bại do người dùng rút tiền ngẫu hứng (Impulse Withdrawal).
+  - Bổ sung **Chế độ Khóa Kỷ Luật (`commitmentLocked`)**: Khóa hũ cho tới ngày mục tiêu hoặc khi chạm 100% số tiền đích.
+  - Cung cấp **Mẫu Thử Thách Tiết Kiệm 52 Tuần / 30 Ngày**: Lộ trình nạp tiền tăng dần từng kỳ có bảng theo dõi trực quan và thưởng Huy hiệu + Điểm Loyalty khi hoàn thành mục tiêu.
+
+### 2. Sơ đồ Wireframe ASCII — Màn hình Hũ Tiết Kiệm & Lộ Trình Thử Thách
+```
+┌─────────────────────────────────────────────────────────┐
+│ ← Hũ Tiết Kiệm Mục Tiêu             [+ Tạo hũ mới]      │
+├─────────────────────────────────────────────────────────┤
+│ 🎯 DANH SÁCH MỤC TIÊU CỦA TÔI                           │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 💻 Mua MacBook Pro M4           🔒 ĐÃ KHÓA KỶ LUẬT  │ │
+│ │ Tiến độ: 24.000.000 đ / 40.000.000 đ (60%)          │ │
+│ │ [████████████████░░░░░░░░░░] Hạn: 31/12/2026        │ │
+│ │ Còn thiếu: 16.000.000 đ • 🔒 Mở khóa khi đạt 100%   │ │
+│ │ [ Bỏ ống thêm ]                    [Xin mở khóa sớm]│ │
+│ ├─────────────────────────────────────────────────────┤ │
+│ │ 📅 Thử thách tiết kiệm 52 tuần   [Tuần 18/52]       │ │
+│ │ Tích lũy: 1.710.000 đ / 13.780.000 đ (12.4%)        │ │
+│ │ Kỳ này (Tuần 18): Cần bỏ ống 180.000 đ              │ │
+│ │ [       ⚡ BỎ ỐNG TUẦN 18 (180.000 Đ) NGAY        ] │ │
+│ └─────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────┤
+│ BẢNG THEO DÕI THỬ THÁCH 52 TUẦN (CHALLENGE CHECKLIST)   │
+│ [v] T1   [v] T2   [v] T3   [v] T4   [v] T5   [v] T6     │
+│ [v] T7   [v] T8   [v] T9   [v] T10  [v] T11  [v] T12    │
+│ [v] T13  [v] T14  [v] T15  [v] T16  [v] T17  [●] T18    │
+│ [ ] T19  [ ] T20  [ ] T21  [ ] T22  [ ] T23  [ ] T24... │
+│ Ghi chú: [v] Đã bỏ ống   [●] Kỳ hiện tại   [ ] Chưa đến │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ ⚠️ XIN MỞ KHÓA SỚM (PHÁ VỠ KỶ LUẬT TIẾT KIỆM)           │
+├─────────────────────────────────────────────────────────┤
+│ Hũ "Mua MacBook Pro M4" đang được bảo vệ kỷ luật!       │
+│ Rút tiền trước hạn sẽ làm chậm mục tiêu của bạn.        │
+│                                                         │
+│ ⏳ THỜI GIAN CHỜ HẠ NHIỆT (COOLING-OFF PERIOD): 24 GIỜ  │
+│ Yêu cầu mở khóa sẽ có hiệu lực sau 24 giờ kể từ lúc gửi│
+│ để giúp bạn cân nhắc kỹ lưỡng tránh tiêu xài cảm tính.  │
+│                                                         │
+│ [           TÔI VẪN MUỐN GỬI YÊU CẦU MỞ KHÓA          ] │
+│ [              TIẾP TỤC GIỮ KỶ LUẬT (HỦY)             ] │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 3. Sơ đồ Wireframe ASCII — Màn hình Chúc Mừng Hoàn Thành Mục Tiêu 100%
+```
+┌─────────────────────────────────────────────────────────┐
+│ 🎉 • • • • CHÚC MỪNG BẠN ĐÃ CÁN ĐÍCH! • • • • 🎉        │
+├─────────────────────────────────────────────────────────┤
+│            🏆 BẬC THẦY KỶ LUẬT TIẾT KIỆM                │
+│                                                         │
+│ Hũ "Mua MacBook Pro M4" đã hoàn thành xuất sắc!         │
+│ Số tiền tích lũy: 40.000.000 đ / 40.000.000 đ (100%)    │
+│                                                         │
+│ 🎁 PHẦN THƯỞNG HOÀN THÀNH:                              │
+│ • +500 Điểm Thưởng Loyalty                             │
+│ • Voucher Pass mua sắm giảm 100.000 đ                   │
+│                                                         │
+│ [           RÚT TOÀN BỘ TIỀN VỀ VÍ CHÍNH              ] │
+│ [              TẠO MỤC TIÊU TIẾP THEO                 ] │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 4. Quy chuẩn Tokens & Micro-interactions
+- **Thanh tiến độ (Progress Bar)**:
+  - Khi đang tích lũy: Gradient `--el-accent` đến tím dịu.
+  - Khi chạm 100%: Chuyển sang xanh lá thành công `--el-success` kèm biểu tượng cúp vàng 🏆.
+- **Micro-interaction bỏ ống**: Khi bấm "Bỏ ống kỳ này", hoạt ảnh đồng xu vàng rơi vào hũ kêu "ting" kèm số tiền cộng dồn nhảy số mượt mà (count-up animation).
+- **Phá khóa kỷ luật**: Nút "Xin mở khóa sớm" dùng style nút phụ xám viền mờ `--el-line`, không dùng màu đỏ bắt mắt để tránh kích thích người dùng bấm vào.
+
+---
+
+## 44. Biệt Danh Nhận Tiền Cá Nhân Hóa `@Paytag` & Ẩn Số Điện Thoại Riêng Tư (Issue #111) — `Account.tsx`, `ReceiveQr.tsx` & `Transfer.tsx`
+
+### 1. Bối cảnh & Khảo sát Thực tế
+- **Tham chiếu**: Revolut Revtag (`@username`), Wise Wisetag, TPBank/MBBank Account Alias, MoMo Link Nhận Tiền Cá Nhân.
+- **Vấn đề**: Người dùng bán hàng online, nhận tiền quyên góp hoặc giao dịch với người lạ thường ngần ngại cung cấp số điện thoại thật vì sợ bị lộ thông tin cá nhân và bị gọi điện làm phiền.
+- **Giải pháp**:
+  - Đăng ký một biệt danh `@paytag` duy nhất (VD: `@minhanh`, `@hiepnh`).
+  - Khi nhận tiền qua `@paytag`, số điện thoại thật được tự động che `090***6789`, người chuyển chỉ thấy tên chủ ví đã xác thực eKYC.
+
+### 2. Sơ đồ Wireframe ASCII — Cài Đặt `@Paytag` & Danh Thiếp Nhận Tiền (`Account.tsx`)
+```
+┌─────────────────────────────────────────────────────────┐
+│ ← Cài Đặt Biệt Danh Nhận Tiền (@Paytag)                 │
+├─────────────────────────────────────────────────────────┤
+│ 🏷️ BIỆT DANH CỦA BẠN                                    │
+│ [ @hiepnh                                             ] │
+│ ✅ Biệt danh hợp lệ và khả dụng!                        │
+│ Quy tắc: 3-20 ký tự, chữ thường, số, dấu chấm/gạch dưới│
+├─────────────────────────────────────────────────────────┤
+│ 🔒 BẢO VỆ QUYỀN RIÊNG TƯ                                │
+│ [ BẬT ● ] Ẩn số điện thoại khi nhận tiền qua @Paytag    │
+│ Khi bật, người chuyển chỉ thấy tên thật eKYC và số      │
+│ điện thoại được che dạng: 090***6789                    │
+├─────────────────────────────────────────────────────────┤
+│ 💳 DANH THIẾP NHẬN TIỀN CÁ NHÂN                         │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │  EWALLET LAB PAYTAG                                 │ │
+│ │  👤 NGUYEN HOANG HIEP (Đã xác thực eKYC ✓)          │ │
+│ │  🏷️ @hiepnh                                         │ │
+│ │  📱 090***6789                                      │ │
+│ │  🔗 ewallet.local/@hiepnh               [Sao chép]  │ │
+│ └─────────────────────────────────────────────────────┘ │
+│ [           LƯU THAY ĐỔI BIỆT DANH                    ] │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 3. Sơ đồ Wireframe ASCII — Chuyển Tiền Theo `@Paytag` (`Transfer.tsx`)
+```
+┌─────────────────────────────────────────────────────────┐
+│ ← Chuyển Tiền Ví                                        │
+├─────────────────────────────────────────────────────────┤
+│ NGƯỜI NHẬN                                              │
+│ [ @minhanh                                            ] │
+│                                                         │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 👤 TRẦN MINH ANH  (eKYC VERIFIED ✓)                  │ │
+│ │ 🏷️ Paytag: @minhanh • 📱 SĐT: 091***4567             │ │
+│ └─────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────┤
+│ SỐ TIỀN CHUYỂN                                          │
+│ [ 250.000 đ                                           ] │
+│ Lời nhắn: [ Tiền mua áo thun vintage                  ] │
+├─────────────────────────────────────────────────────────┤
+│ Nguồn tiền: Ví chính (Số dư: 1.500.000 đ)               │
+│ Phí chuyển tiền: Miễn phí                               │
+│ [                 XÁC NHẬN CHUYỂN TIỀN                ] │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 4. Quy tắc Validation, Trạng Thái Lỗi & Bảo Mật
+- **Validation Biệt danh theo thời gian thực**:
+  - Gõ phím tới đâu validate tới đó (`debounce 300ms`).
+  - Regex: `^[a-z0-9._]{3,20}$`.
+  - Danh sách từ khoá cấm hệ thống (Reserved Keywords): `admin`, `system`, `support`, `momo`, `ewallet`, `root` -> Báo lỗi đỏ `--el-danger`: *"Biệt danh này đã được bảo lưu bởi hệ thống."*
+  - Nếu đã tồn tại người dùng khác -> Báo lỗi: *"Biệt danh @... đã có người sử dụng. Vui lòng chọn tên khác."*
+- **Quy tắc An Toàn eKYC**:
+  - Chỉ người dùng có trạng thái `kycStatus == VERIFIED` mới được kích hoạt nhận tiền qua `@paytag` nhằm ngăn chặn kẻ gian mạo danh người nổi tiếng hoặc nhãn hàng để lừa đảo.
+
+---
+
+## 45. Sổ Quản Lý Vay Mượn Cá Nhân 2 Chiều & Trả Nợ Từng Phần (Issue #123) — `PaymentReminder.tsx` / `PersonalDebtBook.tsx`
+
+### 1. Bối cảnh & Khảo sát Thực tế
+- **Tham chiếu**: MoMo / ZaloPay Nhắc Trả Tiền & Sổ Nợ, Splitwise / Toss IOU Tracker.
+- **Nghiệp vụ**:
+  - Trong đời sống thực tế, khi bạn bè mượn nhau khoản tiền lớn (ví dụ 5 triệu đồng), người vay thường trả góp thành nhiều đợt tùy theo khả năng tài chính (trả trước 2 triệu, tuần sau trả 1,5 triệu, còn lại trả cuối tháng).
+  - Hệ thống cung cấp **Sổ Quản Lý Vay Mượn Cá Nhân 2 Chiều**:
+    1. Theo dõi vị thế công nợ ròng ("Cần thu về" vs "Cần trả người khác").
+    2. Hỗ trợ trả nợ linh hoạt từng phần (`PARTIALLY_PAID`) cho tới khi số nợ còn lại về 0 (`PAID`).
+    3. Lưu lại nhật ký các đợt trả góp chi tiết để hai bên cùng đối soát minh bạch.
+
+### 2. Sơ đồ Wireframe ASCII — Sổ Quản Lý Vay Mượn 2 Chiều (`PersonalDebtBook.tsx`)
+```
+┌─────────────────────────────────────────────────────────┐
+│ ← Sổ Vay Mượn & Nhắc Nợ             [+ Tạo khoản nợ mới]│
+├─────────────────────────────────────────────────────────┤
+│ ⚖️ VỊ THẾ CÔNG NỢ RÒNG                                  │
+│ ┌───────────────────────────┐ ┌───────────────────────┐ │
+│ │ 💚 Bạn cần thu về         │ │ 🧡 Bạn cần trả        │ │
+│ │ + 3.500.000 đ             │ │ - 1.200.000 đ         │ │
+│ └───────────────────────────┘ └───────────────────────┘ │
+│ Vị thế ròng: + 2.300.000 đ (Đang cho vay nhiều hơn)     │
+├─────────────────────────────────────────────────────────┤
+│ [ Người khác nợ tôi (2) ]     [ Tôi đang nợ người khác (1) ]
+├─────────────────────────────────────────────────────────┤
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 👤 Hoàng Nam - "Tiền cọc phòng du lịch Đà Lạt"      │ │
+│ │ Gốc: 5.000.000 đ • Hạn trả: 15/11/2026               │ │
+│ │ Tiến độ: Đã trả 2.000.000 đ (40%)                   │ │
+│ │ [██████████░░░░░░░░░░░░░░] CÒN NỢ: 3.000.000 đ      │ │
+│ │ Trạng thái: [🟡 ĐÃ TRẢ MỘT PHẦN]                     │ │
+│ │                                                     │ │
+│ │ [ Xem lịch sử trả góp ]             [ Nhắc trả tiền ]│ │
+│ └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ ← Trả Tiền Khoản Nợ: "Tiền cọc phòng du lịch"          │
+├─────────────────────────────────────────────────────────┤
+│ Người nhận: Hoàng Nam • Tổng nợ ban đầu: 5.000.000 đ    │
+│ Số tiền còn lại phải trả: 3.000.000 đ                   │
+├─────────────────────────────────────────────────────────┤
+│ CHỌN HÌNH THỨC THANH TOÁN:                             │
+│ ( ) Trả hết toàn bộ số nợ còn lại (3.000.000 đ)         │
+│ (●) Trả một phần tùy chọn:                             │
+│     Số tiền trả đợt này:                                │
+│     [ 1.500.000 đ                                     ] │
+│     (Còn nợ lại sau đợt này: 1.500.000 đ)               │
+│                                                         │
+│ Lời nhắn: [ Tiền lương về trả trước đợt 2 nhé Nam ơi! ] │
+├─────────────────────────────────────────────────────────┤
+│ Nguồn tiền: Ví chính (Số dư: 4.820.000 đ)               │
+│ [             XÁC NHẬN CHUYỂN TIỀN TRẢ GÓP            ] │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 3. Sơ đồ Wireframe ASCII — Lịch Sử Chi Tiết Từng Lần Trả Góp
+```
+┌─────────────────────────────────────────────────────────┐
+│ 📜 LỊCH SỬ CÁC ĐỢT TRẢ GÓP                              │
+│ Khoản nợ: Tiền cọc phòng du lịch (Gốc 5.000.000 đ)      │
+├─────────────────────────────────────────────────────────┤
+│ • Đợt 2: 1.500.000 đ                    14:20 Hôm nay   │
+│   Ghi chú: Tiền lương về trả trước đợt 2                │
+│   Dư nợ còn lại sau đợt: 1.500.000 đ                    │
+│ ─────────────────────────────────────────────────────── │
+│ • Đợt 1: 2.000.000 đ                    09:15 20/10/2026│
+│   Ghi chú: Trả trước một phần nhé                       │
+│   Dư nợ còn lại sau đợt: 3.000.000 đ                    │
+│ ─────────────────────────────────────────────────────── │
+│ • Tạo khoản mượn: 5.000.000 đ           10:00 15/10/2026│
+├─────────────────────────────────────────────────────────┤
+│ [                       ĐÓNG                          ] │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 4. Quy chuẩn Tokens, Trạng Thái & Xử Lý Đồng Thời
+- **Bảng huy hiệu trạng thái (`PaymentRequestStatus`)**:
+  - `PENDING`: Badge vàng `--el-amber` ("Chưa trả").
+  - `PARTIALLY_PAID`: Badge cam `--el-warning` ("Đã trả một phần").
+  - `PAID`: Badge xanh lá `--el-success` ("Đã hoàn tất 100%").
+- **Kiểm soát đồng thời (Concurrency Control)**:
+  - Nếu có 2 luồng trả nợ cùng lúc dẫn tới số tiền trả vượt quá `remainingAmount`, hệ thống chặn với mã `409 Conflict` và hiện thông báo: *"Khoản nợ này vừa được cập nhật thanh toán từ giao dịch khác. Số nợ còn lại hiện tại là X đ."*
+- **Thông báo nhắc nợ tinh tế**:
+  - Nút "Nhắc trả tiền" gửi notification 1 chạm sang Trung tâm Thông báo (Mục 35) của người nợ, kèm deep-link mở thẳng form thanh toán đã điền sẵn số nợ còn lại.
+
+---
+
+## 46. Xác Thực Sinh Trắc Học FIDO2 / WebAuthn Passkeys & Ký Số Giao Dịch Động (Dynamic Linking) — `Account.tsx` & `StepUpModal.tsx`
+
+### 1. Bối cảnh & Khảo sát Thực tế
+- **Tham chiếu Pháp lý & Chuẩn Công nghiệp**:
+  - **Quyết định 2345/QĐ-NHNN & Thông tư 50/2024/TT-NHNN**: Yêu cầu xác thực tăng cường (Step-up Authentication) đối với giao dịch chuyển tiền/thanh toán trên 10.000.000đ/lần hoặc tổng giá trị trên 20.000.000đ/ngày.
+  - **Chuẩn FIDO2 / WebAuthn Level 3 (W3C)**: Thay thế mật khẩu và mã OTP truyền thống (vốn dễ bị tấn công Phishing, SIM swap, Man-in-the-middle) bằng cặp khóa bất đối xứng sinh ra an toàn trong phần cứng thiết bị (Apple Secure Enclave, Android Titan M/StrongBox).
+  - **Ký Số Giao Dịch Động (Dynamic Linking / Transaction Signing — P3)**: Khóa phiên ký gắn chặt với các thông số của chính giao dịch đó (Số tiền, Tài khoản người nhận, Mã định danh giao dịch `TX-...`), ngăn chặn kẻ tấn công chuyển hướng tiền sang tài khoản gian lận trong quá trình xác thực.
+
+### 2. Luồng Đăng Ký FIDO2 Passkey (`Account.tsx`)
+- **Vị trí**: Khu vực *Bảo mật & Xác thực Sinh trắc học* trên màn hình `Account.tsx`.
+- **Hộp thoại kích hoạt**:
+  - Biểu tượng Passkey FIDO2 đặc trưng (`fingerprint` kết hợp `key`).
+  - Cho phép người dùng đặt tên thiết bị thân thiện (Ví dụ: "MacBook Pro M3", "iPhone 16 Pro Max", "YubiKey 5C") hoặc tự động nhận diện từ User-Agent.
+  - Gọi ceremony `navigator.credentials.create()` với cấu hình `userVerification: 'required'`, `authenticatorAttachment: 'platform'`.
+- **Trạng thái hiển thị**:
+  - Huy hiệu "Đã kích hoạt Passkey" với icon tích xanh.
+  - Danh sách các khóa đã đăng ký kèm mã định danh rút gọn (`cred-xxxx...`), ngày tạo và lần xác thực gần nhất.
+
+#### Sơ đồ Wireframe ASCII — Đăng Ký Passkey FIDO2
+```
+┌─────────────────────────────────────────────────────────┐
+│ ← Cài Đặt Bảo Mật & Xác Thực FIDO2                      │
+├─────────────────────────────────────────────────────────┤
+│ 🔐 XÁC THỰC SINH TRẮC HỌC KHÔNG MẬT KHẨU (PASSKEYS)     │
+│ Đăng ký vân tay (Touch ID) hoặc khuôn mặt (Face ID) để   │
+│ ký số an toàn cho giao dịch giá trị cao theo QĐ 2345.   │
+├─────────────────────────────────────────────────────────┤
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 🔑 TẠO PASSKEY MỚI CHO THIẾT BỊ NÀY                 │ │
+│ │                                                     │ │
+│ │ Tên nhận diện thiết bị:                              │ │
+│ │ [ MacBook Pro M3 (Cơ quan)                        ] │ │
+│ │ (Giúp bạn dễ phân biệt khi quản lý nhiều thiết bị)  │ │
+│ │                                                     │ │
+│ │ [       🛡️ KÍCH HOẠT TOUCH ID / FACE ID NGAY       ] │ │
+│ └─────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────┤
+│ 📱 PASSKEYS ĐÃ LIÊN KẾT (2)                             │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 💻 MacBook Pro M3 (Cơ quan)           [Thiết bị này]│ │
+│ │ Mã khóa: cred_8f921... • Tạo ngày: 15/10/2026       │ │
+│ │ Lần dùng gần nhất: 10:15 Hôm nay      [✓ Đang bật]  │ │
+│ ├─────────────────────────────────────────────────────┤ │
+│ │ 📱 iPhone 16 Pro                                    │ │
+│ │ Mã khóa: cred_3a104... • Tạo ngày: 01/09/2026       │ │
+│ │ Lần dùng gần nhất: Hôm qua             [🗑️ Thu hồi] │ │
+│ └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 3. Luồng Ký Xác Nhận Giao Dịch Động (Transaction Signing / Dynamic Linking) — `StepUpModal.tsx`
+- **Thay thế StepUpModal đơn giản trước đây**:
+  - Trước đây, `StepUpModal` chỉ hiển thị dòng chữ thông báo đơn điệu và một nút bấm mô phỏng.
+  - Phiên bản mới tích hợp **Dynamic Linking**: Ràng buộc dữ liệu giao dịch trực tiếp vào Challenge của WebAuthn.
+- **Thành phần hiển thị trên Modal**:
+  1. **Khung tóm tắt giao dịch được liên kết (Transaction Summary Card)**:
+     - Số tiền giao dịch: Nổi bật với kích thước lớn và màu `--el-accent` (Ví dụ: `15.000.000 đ`).
+     - Người nhận / Đơn vị thụ hưởng: Tên chủ tài khoản hoặc dịch vụ (Ví dụ: `Nguyễn Văn B` hoặc `Điện lực TP.HCM`).
+     - Mã xác thực giao dịch động: `Mã phiên: TX-8921-3401`.
+  2. **Vùng quét sinh trắc học tương tác (Biometric Scanning Area)**:
+     - Biểu tượng vân tay `fingerprint` với hiệu ứng vòng tròn gợn sóng nhịp tim (Pulse wave animation).
+     - Dòng chỉ dẫn: *"Chạm cảm biến Touch ID hoặc nhìn vào Face ID để ký xác nhận giao dịch"*.
+  3. **Xử lý trạng thái lỗi & Fallback**:
+     - Khi người dùng huỷ hoặc quét sai: Hiển thị hộp thoại lỗi cảnh báo đỏ `--el-danger` kèm nút "Thử lại".
+     - Khi thiết bị không hỗ trợ hoặc chưa đăng ký FIDO2: Tự động chuyển sang chế độ dự phòng an toàn (Mã OTP xác thực bổ sung) với cảnh báo rõ ràng.
+
+#### Sơ đồ Wireframe ASCII — Hộp Thoại Ký Xác Nhận Giao Dịch Động (Dynamic Linking)
+```
+┌─────────────────────────────────────────────────────────┐
+│              CẦN XÁC THỰC BỔ SUNG (QĐ 2345)             │
+├─────────────────────────────────────────────────────────┤
+│ Giao dịch vượt ngưỡng 10.000.000 đ. Vui lòng xác thực   │
+│ sinh trắc học để ký duyệt lệnh chuyển tiền.             │
+├─────────────────────────────────────────────────────────┤
+│ 📋 THÔNG TIN GIAO DỊCH ĐƯỢC LIÊN KẾT ĐỘNG (P3)          │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ Số tiền ký duyệt:       15.000.000 đ                │ │
+│ │ Người nhận tiền:        NGUYEN VAN B                │ │
+│ │ Tài khoản / Ví:         0912 345 678                │ │
+│ │ Mã giao dịch động:      TX-8921-3401                │ │
+│ └─────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────┤
+│                   (((  ( 🫆 )  )))                      │
+│             [ Hiệu ứng gợn sóng sinh trắc ]             │
+│                                                         │
+│     Đang chờ bạn chạm Touch ID / Face ID trên máy...    │
+├─────────────────────────────────────────────────────────┤
+│ [            CHẠM TOUCH ID ĐỂ KÝ GIAO DỊCH            ] │
+│ [                     HỦY GIAO DỊCH                   ] │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ ⚠️ XÁC THỰC THẤT BẠI HOẶC BỊ HỦY                        │
+├─────────────────────────────────────────────────────────┤
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ ❌ Không nhận diện được vân tay hoặc bạn đã bấm hủy  │ │
+│ │    trên cửa sổ hệ thống.                            │ │
+│ └─────────────────────────────────────────────────────┘ │
+│ [                 THỬ LẠI XÁC THỰC                    ] │
+│ [      Xác thực bằng phương thức dự phòng (Mô phỏng)   ] │
+│ [                     HỦY GIAO DỊCH                   ] │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 4. Bảng Quy Chuẩn Tokens & Trạng Thái Xử Lý
+
+| Thành phần UI | Token Màu / Typo | Ý nghĩa & Hành vi |
+| :--- | :--- | :--- |
+| **Biểu tượng FIDO2** | `--el-accent` / `--el-accent-soft` | Icon `fingerprint` hoặc `key` nền tròn mềm mại 52x52px |
+| **Thẻ Dynamic Linking** | `--el-surface-2`, border `--el-line` | Bo góc 12px, nền tương phản nhẹ, font số tiền đậm 18px `--el-font-display` |
+| **Hiệu ứng Pulse Wave** | Gradient mờ từ `--el-accent` | 3 vòng tròn đồng tâm mở rộng mô phỏng sóng radar sinh trắc học |
+| **Nút Hành động Ký số** | Nền `--el-accent`, chữ trắng | Label thay đổi: "Chạm Touch ID để ký giao dịch" -> "Đang ký số..." |
+| **Banner lỗi xác thực** | `--el-danger`, nền `--el-danger-surface` | Viền đỏ nhạt, icon `error`, chữ đậm giải thích nguyên nhân |
+| **Nút Fallback** | Nền `--el-surface`, viền `--el-line` | Dùng khi không có phần cứng FIDO2 hoặc gặp lỗi liên tục |
+
+### 5. Xử Lý Trường Hợp Biên (Edge Cases & Fallback)
+1. **Trình duyệt / Thiết bị không hỗ trợ FIDO2 (`isUserVerifyingPlatformAuthenticatorAvailable == false`)**:
+   - Tự động ẩn nút Touch ID/Face ID.
+   - Hiển thị banner hướng dẫn: *"Thiết bị này chưa hỗ trợ sinh trắc học FIDO2. Sử dụng bước xác nhận dự phòng theo QĐ 2345."* kèm nút xác nhận thông thường.
+2. **Người dùng hủy trên hộp thoại hệ thống (`NotAllowedError` / User Cancelled)**:
+   - Giữ nguyên thông tin tóm tắt giao dịch, hiển thị nút "Thử lại" thay vì đóng modal đột ngột làm mất dữ liệu form chuyển tiền.
+3. **Thao tác ký số bị timeout (`TimeoutError`)**:
+   - Sau 60 giây không có phản hồi từ cảm biến sinh trắc học, modal tự động hủy phiên ký và hiển thị thông báo: *"Hết thời gian chờ xác thực. Vui lòng thử lại."*
+
+
 

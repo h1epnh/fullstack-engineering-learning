@@ -20,6 +20,8 @@ const WalletInvestmentFund = lazy(() => import('mfe_wallet/InvestmentFund'));
 const WalletSavingsGoals = lazy(() => import('mfe_wallet/SavingsGoals'));
 const WalletVoucherPass = lazy(() => import('mfe_wallet/VoucherPass'));
 const WalletTelcoTopup = lazy(() => import('mfe_wallet/TelcoTopup'));
+const WalletGameCardStore = lazy(() => import('mfe_wallet/GameCardStore'));
+const WalletDealsHub = lazy(() => import('mfe_wallet/DealsHub'));
 const TopupApp = lazy(() => import('mfe_topup/App'));
 const TransferApp = lazy(() => import('mfe_transfer/App'));
 const BillPaymentApp = lazy(() => import('mfe_bill_payment/App'));
@@ -63,8 +65,9 @@ const NAV_ITEMS: NavItem[] = [
 type Flow =
   | { name: 'none' }
   | { name: 'topup' }
-  | { name: 'transfer' }
+  | { name: 'transfer'; initialMode?: string }
   | { name: 'bill-payment' }
+
   | { name: 'all-services' }
   | { name: 'notifications' }
   | { name: 'receive' }
@@ -77,6 +80,8 @@ type Flow =
   | { name: 'savings-goals' }
   | { name: 'voucher-pass' }
   | { name: 'phone-topup' }
+  | { name: 'games' }
+  | { name: 'deals' }
   | { name: 'coming-soon'; feature: string };
 
 /**
@@ -138,6 +143,7 @@ export default function App() {
         <TransferApp
           session={session}
           initialPayToken={payToken}
+          initialStep={flow.initialMode}
           onDone={() => {
             deepLinkConsumedRef.current = true;
             setFlow({ name: 'none' });
@@ -164,11 +170,93 @@ export default function App() {
     return <ComingSoon feature={flow.feature} onBack={() => setFlow({ name: 'none' })} />;
   }
 
+  const handleNavigate = (routeKey: string) => {
+    switch (routeKey) {
+      case 'topup':
+        setFlow({ name: 'topup' });
+        break;
+      case 'transfer':
+      case 'bank-transfer':
+      case 'scheduled-transfer':
+      case 'split-bill':
+        setFlow({ name: 'transfer' });
+        break;
+      case 'send-card':
+        setFlow({ name: 'transfer', initialMode: 'send-card' });
+        break;
+      case 'lucky-money':
+        setFlow({ name: 'transfer', initialMode: 'lucky-money' });
+        break;
+      case 'payment-reminder':
+      case 'reminders':
+        setFlow({ name: 'transfer', initialMode: 'payment-reminder' });
+        break;
+      case 'history':
+        setTab('history');
+        setFlow({ name: 'none' });
+        break;
+
+      case 'bill-payment':
+      case 'bills-radar':
+      case 'bill-radar':
+      case 'parking':
+      case 'loan-bill':
+      case 'e-invoice':
+        setFlow({ name: 'bill-payment' });
+        break;
+      case 'receive':
+        setFlow({ name: 'receive' });
+        break;
+      case 'bnpl':
+        setFlow({ name: 'bnpl' });
+        break;
+      case 'loyalty':
+        setFlow({ name: 'loyalty' });
+        break;
+      case 'savings-pocket':
+        setFlow({ name: 'savings-pocket' });
+        break;
+      case 'family-wallet':
+        setFlow({ name: 'family-wallet' });
+        break;
+      case 'spending-report':
+      case 'spending':
+        setFlow({ name: 'spending-report' });
+        break;
+      case 'investment-fund':
+        setFlow({ name: 'investment-fund' });
+        break;
+      case 'savings-goals':
+        setFlow({ name: 'savings-goals' });
+        break;
+      case 'voucher-pass':
+        setFlow({ name: 'voucher-pass' });
+        break;
+      case 'phone-topup':
+      case 'phone-data':
+        setFlow({ name: 'phone-topup' });
+        break;
+      case 'games':
+        setFlow({ name: 'games' });
+        break;
+      case 'deals':
+        setFlow({ name: 'deals' });
+        break;
+      default:
+        setFlow({ name: 'coming-soon', feature: routeKey });
+        break;
+    }
+  };
+
   if (flow.name === 'all-services') {
     return (
       <WithBack onBack={() => setFlow({ name: 'none' })}>
         <Suspense fallback={<ProgressBar label="Đang tải mfe-wallet…" />}>
-          <WalletAllServices onComingSoon={(feature) => setFlow({ name: 'coming-soon', feature })} />
+          <WalletAllServices
+            session={session}
+            onNavigate={handleNavigate}
+            onComingSoon={(feature) => setFlow({ name: 'coming-soon', feature })}
+          />
         </Suspense>
       </WithBack>
     );
@@ -178,7 +266,12 @@ export default function App() {
     return (
       <WithBack onBack={() => setFlow({ name: 'none' })}>
         <Suspense fallback={<ProgressBar label="Đang tải mfe-wallet…" />}>
-          <WalletNotifications session={session} />
+          <WalletNotifications
+            session={session}
+            onNavigate={(routeKey: string) => {
+              handleNavigate(routeKey);
+            }}
+          />
         </Suspense>
       </WithBack>
     );
@@ -264,6 +357,30 @@ export default function App() {
     );
   }
 
+  if (flow.name === 'games') {
+    return (
+      <Suspense fallback={<ProgressBar label="Đang tải Cửa hàng Thẻ Game…" />}>
+        <WalletGameCardStore
+          session={session}
+          onBack={() => setFlow({ name: 'none' })}
+          onNavigate={handleNavigate}
+        />
+      </Suspense>
+    );
+  }
+
+  if (flow.name === 'deals') {
+    return (
+      <Suspense fallback={<ProgressBar label="Đang tải Săn Ưu Đãi & Deals…" />}>
+        <WalletDealsHub
+          session={session}
+          onBack={() => setFlow({ name: 'none' })}
+          onNavigate={handleNavigate}
+        />
+      </Suspense>
+    );
+  }
+
   return (
     <div>
       {tab === 'home' && (
@@ -290,7 +407,13 @@ export default function App() {
         </Suspense>
       )}
       {tab === 'deals' && (
-        <ComingSoon feature="deals" onBack={() => setTab('home')} />
+        <Suspense fallback={<ProgressBar label="Đang tải Săn Ưu Đãi & Deals…" />}>
+          <WalletDealsHub
+            session={session}
+            onBack={() => setTab('home')}
+            onNavigate={handleNavigate}
+          />
+        </Suspense>
       )}
       {tab === 'history' && (
         <Suspense fallback={<ProgressBar label="Đang tải mfe-wallet…" />}>

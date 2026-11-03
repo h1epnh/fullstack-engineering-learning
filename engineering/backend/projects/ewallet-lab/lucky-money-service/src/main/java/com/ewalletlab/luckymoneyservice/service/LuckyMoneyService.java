@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
@@ -59,19 +60,54 @@ public class LuckyMoneyService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể tự gửi lì xì cho chính mình");
         }
 
+        // Issue #56 / principle 7: this debit funds an envelope someone else can claim, so it stays
+        // SYNCHRONOUS and happens first (never an outbox event).
+        String debitKey = "lucky-send:" + UUID.randomUUID();
         try {
             walletServiceClient.debit(
                 request.fromUserId(), request.amount(), "TRANSFER_OUT",
-                recipient.id().toString(), "Lì xì cho " + recipient.name());
+                recipient.id().toString(), "Lì xì cho " + recipient.name(), debitKey);
         } catch (HttpClientErrorException.Conflict e) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Số dư không đủ để gửi lì xì");
+            // wallet 409 = insufficient balance OR monthly limit OR eKYC: pass wallet's message through unless it is the raw English default.
+            String conflict = e.getResponseBodyAsString();
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                conflict == null || conflict.isBlank() || conflict.trim().equalsIgnoreCase("Insufficient balance")
+                    ? "Số dư không đủ để gửi lì xì" : conflict);
+        } catch (HttpServerErrorException.ServiceUnavailable e) {
+            // Issue #85: 503 = debit rejected BEFORE execution (eKYC unverifiable, ADR-02): nothing debited,
+            // no envelope/card/outbox row, no refund call. Other 5xx / I/O errors are ambiguous: not mapped.
+            String body = e.getResponseBodyAsString();
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, body != null && !body.isBlank() ? body
+                : "Hệ thống chưa thể xác minh định danh hoặc xử lý giao dịch lúc này, vui lòng thử lại sau");
         }
 
         Instant expiresAt = Instant.now().plus(Duration.ofHours(ttlHours));
         LuckyMoney lm = new LuckyMoney(
             request.fromUserId(), request.fromName(), recipient.id(), recipient.phone(),
             request.amount(), request.message(), expiresAt);
-        return repository.save(lm);
+        try {
+            return repository.save(lm);
+        } catch (RuntimeException e) {
+            refundSenderAfterFailedSave(request, debitKey, e);
+            throw e;
+        }
+    }
+
+    /** Debit succeeded but the envelope could not be saved (caught exception): refund the sender with an
+     * idempotent REFUND credit. If the refund also fails, or the pod dies between debit and save, the
+     * money is stuck: ERROR with a reference code (accepted trade-off, same as #60; see DESIGN.md). */
+    private void refundSenderAfterFailedSave(SendLuckyMoneyRequestDto request, String debitKey, RuntimeException cause) {
+        String ref = "LS-" + UUID.nameUUIDFromBytes(debitKey.getBytes()).toString().substring(0, 8);
+        try {
+            walletServiceClient.credit(request.fromUserId(), request.amount(), "REFUND", "lucky-send-failed",
+                "Hoàn tiền gửi lì xì thất bại (mã " + ref + ")", "refund:" + debitKey);
+            log.warn("lucky send ref={} sender={} — envelope save failed ({}), sender refunded", ref,
+                request.fromUserId(), cause.toString());
+        } catch (RuntimeException refundEx) {
+            log.error("LUCKY_SEND_MONEY_STUCK ref={} sender={} amount={} debitKey={} — debited, envelope NOT saved, " +
+                "refund FAILED ({}); original: {}. Needs manual reconciliation.", ref, request.fromUserId(),
+                request.amount(), debitKey, refundEx.toString(), cause.toString());
+        }
     }
 
     public LuckyMoney get(UUID id) {
@@ -106,14 +142,7 @@ public class LuckyMoneyService {
         LuckyMoney claimed = withOptimisticLockRetry("claim", id,
             () -> mutationExecutor.claimPendingOnce(id, toUserId));
 
-        try {
-            walletServiceClient.credit(
-                toUserId, claimed.getAmount(), "TRANSFER_IN", claimed.getFromUserId().toString(),
-                "Nhận lì xì từ " + claimed.getFromName());
-        } catch (RuntimeException e) {
-            mutationExecutor.revertToPending(id);
-            throw e;
-        }
+        // Issue #56: the recipient's credit is an outbox event written in claimPendingOnce's transaction.
         return claimed;
     }
 
@@ -163,14 +192,7 @@ public class LuckyMoneyService {
             return repository.findById(lm.getId()).orElse(lm);
         }
 
-        try {
-            walletServiceClient.credit(
-                claimed.getFromUserId(), claimed.getAmount(), "REFUND", claimed.getToUserId().toString(),
-                "Hoàn tiền lì xì hết hạn (48h) chưa được nhận");
-        } catch (RuntimeException e) {
-            mutationExecutor.revertToPending(claimed.getId());
-            throw e;
-        }
+        // Issue #56: the sender's REFUND is an outbox event written in claimExpiryOnce's transaction.
         return claimed;
     }
 

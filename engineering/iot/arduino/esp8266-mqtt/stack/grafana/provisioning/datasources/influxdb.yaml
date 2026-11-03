@@ -1,0 +1,15 @@
+apiVersion: 1
+
+datasources:
+  - name: InfluxDB
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    isDefault: true
+    jsonData:
+      version: Flux
+      organization: esp8266-lab
+      defaultBucket: sensors
+      tlsSkipVerify: true
+    secureJsonData:
+      token: esp8266-lab-token-change-me

@@ -55,3 +55,57 @@ export const telcoService = {
     return http.get<TelcoOrder>(`${API_BASE.topup}/telco/orders/${encodeURIComponent(id)}`);
   },
 };
+
+export type GamePublisher =
+  | 'GARENA'
+  | 'ZING'
+  | 'VCOIN'
+  | 'GATE'
+  | 'FUNCARD'
+  | 'APPOTA'
+  | 'GOOGLE_PLAY';
+
+export interface GameCardPackage {
+  publisher: GamePublisher;
+  publisherName: string;
+  description: string;
+  denomination: number;
+  discountRate: number;
+  finalPrice: number;
+}
+
+export interface GameCardOrder {
+  id: string;
+  userId: string;
+  publisher: GamePublisher;
+  publisherName: string;
+  denomination: number;
+  discountRate: number;
+  finalPrice: number;
+  pinCode: string;
+  serialNumber: string;
+  expiryDate: string;
+  createdAt: string;
+}
+
+export const gameCardService = {
+  getPackages(): Promise<GameCardPackage[]> {
+    return http.get<GameCardPackage[]>(`${API_BASE.topup}/telco/game-cards/packages`);
+  },
+
+  purchase(req: {
+    userId: string;
+    publisher: GamePublisher;
+    denomination: number;
+    stepUpConfirmed?: boolean;
+  }): Promise<GameCardOrder> {
+    return http.post<GameCardOrder>(`${API_BASE.topup}/telco/game-cards`, req);
+  },
+
+  getOrders(userId: string): Promise<GameCardOrder[]> {
+    return http.get<GameCardOrder[]>(
+      `${API_BASE.topup}/telco/game-cards?userId=${encodeURIComponent(userId)}`,
+    );
+  },
+};
+

@@ -3,6 +3,7 @@ import { Button, Card, EmptyState, Icon, Screen, StatusPill, TextField, formatVn
 import { useEffect, useState } from 'react';
 import { BILL_CATEGORIES } from '../categories';
 import { cancelMandate, loadMandates, type AutoBillRegistration } from '../mandates';
+import { BillsRadar } from './BillsRadar';
 import { DigitalServices } from './DigitalServices';
 import { MicroInsurance } from './MicroInsurance';
 import { TravelTicketing } from './TravelTicketing';
@@ -14,7 +15,7 @@ export function BillLookupForm({
   userId?: string;
   onLookup: (category: BillCategory, customerCode: string) => Promise<string | null>;
 }) {
-  const [tab, setTab] = useState<'lookup' | 'digital' | 'travel' | 'insurance' | 'mandates'>('lookup');
+  const [tab, setTab] = useState<'lookup' | 'radar' | 'digital' | 'travel' | 'insurance' | 'mandates'>('lookup');
   const [category, setCategory] = useState<BillCategory>('ELECTRICITY');
   const [customerCode, setCustomerCode] = useState('');
   const [error, setError] = useState<string | undefined>();
@@ -84,6 +85,23 @@ export function BillLookupForm({
           }}
         >
           Hoá đơn tiện ích
+        </button>
+        <button
+          onClick={() => setTab('radar')}
+          style={{
+            flex: 1,
+            padding: '7px 0',
+            borderRadius: 8,
+            border: 0,
+            background: tab === 'radar' ? 'var(--el-surface)' : 'none',
+            color: tab === 'radar' ? 'var(--el-ink)' : 'var(--el-muted)',
+            fontWeight: tab === 'radar' ? 700 : 500,
+            fontSize: 12,
+            cursor: 'pointer',
+            boxShadow: tab === 'radar' ? 'var(--el-shadow)' : 'none',
+          }}
+        >
+          Radar 30N
         </button>
         <button
           onClick={() => setTab('digital')}
@@ -300,6 +318,7 @@ export function BillLookupForm({
         </div>
       )}
 
+      {tab === 'radar' && userId && <BillsRadar userId={userId} />}
       {tab === 'digital' && userId && <DigitalServices userId={userId} />}
       {tab === 'travel' && userId && <TravelTicketing userId={userId} />}
       {tab === 'insurance' && userId && <MicroInsurance userId={userId} />}

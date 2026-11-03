@@ -38,6 +38,21 @@ public class AutoBillRegistration {
     @Column(nullable = false, length = 32)
     private AutoBillStatus status;
 
+    @Column(name = "spike_alert_threshold_percent")
+    private Double spikeAlertThresholdPercent = 30.0;
+
+    @Column(name = "held_amount", precision = 19, scale = 2)
+    private BigDecimal heldAmount;
+
+    @Column(name = "held_period", length = 32)
+    private String heldPeriod;
+
+    @Column(name = "held_reason", length = 500)
+    private String heldReason;
+
+    @Column(name = "held_previous_amount", precision = 19, scale = 2)
+    private BigDecimal heldPreviousAmount;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -49,6 +64,11 @@ public class AutoBillRegistration {
 
     public AutoBillRegistration(UUID userId, BillCategory category, String customerCode,
                                 BigDecimal maxAmount, Integer autoPayDay) {
+        this(userId, category, customerCode, maxAmount, autoPayDay, 30.0);
+    }
+
+    public AutoBillRegistration(UUID userId, BillCategory category, String customerCode,
+                                BigDecimal maxAmount, Integer autoPayDay, Double spikeAlertThresholdPercent) {
         this.id = UUID.randomUUID();
         this.userId = userId;
         this.category = category;
@@ -56,6 +76,7 @@ public class AutoBillRegistration {
         this.maxAmount = maxAmount;
         this.autoPayDay = autoPayDay;
         this.status = AutoBillStatus.ACTIVE;
+        this.spikeAlertThresholdPercent = spikeAlertThresholdPercent != null ? spikeAlertThresholdPercent : 30.0;
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
     }
@@ -109,6 +130,59 @@ public class AutoBillRegistration {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public Double getSpikeAlertThresholdPercent() {
+        return spikeAlertThresholdPercent != null ? spikeAlertThresholdPercent : 30.0;
+    }
+
+    public void setSpikeAlertThresholdPercent(Double spikeAlertThresholdPercent) {
+        this.spikeAlertThresholdPercent = spikeAlertThresholdPercent;
+        this.updatedAt = Instant.now();
+    }
+
+    public BigDecimal getHeldAmount() {
+        return heldAmount;
+    }
+
+    public void setHeldAmount(BigDecimal heldAmount) {
+        this.heldAmount = heldAmount;
+        this.updatedAt = Instant.now();
+    }
+
+    public String getHeldPeriod() {
+        return heldPeriod;
+    }
+
+    public void setHeldPeriod(String heldPeriod) {
+        this.heldPeriod = heldPeriod;
+        this.updatedAt = Instant.now();
+    }
+
+    public String getHeldReason() {
+        return heldReason;
+    }
+
+    public void setHeldReason(String heldReason) {
+        this.heldReason = heldReason;
+        this.updatedAt = Instant.now();
+    }
+
+    public BigDecimal getHeldPreviousAmount() {
+        return heldPreviousAmount;
+    }
+
+    public void setHeldPreviousAmount(BigDecimal heldPreviousAmount) {
+        this.heldPreviousAmount = heldPreviousAmount;
+        this.updatedAt = Instant.now();
+    }
+
+    public void clearHeld() {
+        this.heldAmount = null;
+        this.heldPeriod = null;
+        this.heldReason = null;
+        this.heldPreviousAmount = null;
+        this.updatedAt = Instant.now();
     }
 }
 

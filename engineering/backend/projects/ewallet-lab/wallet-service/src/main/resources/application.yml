@@ -64,8 +64,26 @@ ewallet-lab:
   # FamilyWalletServiceClient's javadoc for the fail-open behavior if this is unreachable.
   family-wallet-service:
     base-url: ${FAMILY_WALLET_SERVICE_URL:http://localhost:8098}
-  # Issue #40 — eKYC tier limit (5.000.000đ/tháng cho tài khoản UNVERIFIED)
-  unverified-monthly-limit: ${UNVERIFIED_MONTHLY_LIMIT:5000000}
+  # Issue #40 — eKYC tier (binary model, see WalletMutationExecutor.debitOnce's javadoc): UNVERIFIED
+  # accounts are blocked from ANY outbound debit, VERIFIED accounts use monthly-outbound-limit above
+  # as normal. No separate limit config needed for UNVERIFIED (not "a smaller monthly cap" anymore).
   user-service:
     base-url: ${USER_SERVICE_URL:http://localhost:8090}
+    # Issue #55 — explicit timeouts so an unreachable user-service fails fast (fail-closed for money-OUT).
+    connect-timeout-ms: ${USER_SERVICE_CONNECT_TIMEOUT_MS:1000}
+    read-timeout-ms: ${USER_SERVICE_READ_TIMEOUT_MS:2000}
+  # ADR-06 (DESIGN.md) — SNS publish for the NEW "payment.completed" notification fan-out, a
+  # second, isolated async layer (NOT a replacement for Kafka/Outbox). Credentials come from the
+  # k8s Secret `ewallet-lab-aws-notify` (created out-of-band by the operator, see
+  # scripts/init-aws-infra.sh), mounted via Helm's `envFrom.secretRef` — NOT from
+  # ~/.aws/config or any instance profile. All 3 default to blank/disabled on purpose: a local
+  # docker-compose run with no AWS credentials must keep working exactly as before, with SNS
+  # publishing silently no-op'd (see PaymentNotificationPublisher).
+  aws:
+    access-key-id: ${AWS_ACCESS_KEY_ID:}
+    secret-access-key: ${AWS_SECRET_ACCESS_KEY:}
+    region: ${AWS_DEFAULT_REGION:ap-southeast-1}
+  sns:
+    # Not secret (see values.yaml's aws.snsTopicArn comment) — the topic's own ARN.
+    topic-arn: ${SNS_TOPIC_ARN:}
 

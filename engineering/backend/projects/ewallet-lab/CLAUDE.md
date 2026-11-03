@@ -12,12 +12,13 @@ minh, không phải tài liệu trang trí. File này chỉ ghi **quy ước v�
 | wallet-service | 8091 | Postgres | số dư, debit/credit |
 | topup-service | 8092 | Postgres + Kafka | nạp tiền (MoMo Collection Link đã xác minh) + rút tiền |
 | mock-bank-gateway | 8093 | — (Go) | giả lập ngân hàng, cùng công thức chữ ký với topup-service |
-| transfer-service | 8094 | — (stateless) | chuyển tiền P2P, saga có compensation, KHÔNG persist state |
+| transfer-service | 8094 | Postgres (`ewallet_transfer`) | chuyển tiền P2P (saga có compensation, KHÔNG persist trạng thái saga) + danh bạ người thụ hưởng (#32) + chuyển tiền định kỳ (#31) |
 | loyalty-service | 8099 | Postgres | **mô phỏng** Điểm thưởng (issue #19) — claim-trước-move-tiền-sau, xem DESIGN.md |
 | bnpl-service | 8098 | Postgres | **mô phỏng** Ví Trả Sau (issue #18) — claim-trước-move-tiền-sau, xem DESIGN.md |
 | family-wallet-service | 8100 | Postgres | **mô phỏng** Ví Gia Đình (issue #12) |
 | fund-service | 8101 | Postgres | **mô phỏng** Quỹ nhóm (issue #14) — quỹ N người, creator rút |
 | investment-fund-service | 8102 | Postgres | **mô phỏng** Sàn Đầu Tư (issue #25) — chứng chỉ quỹ mở, NAV biến động, rủi ro lỗ |
+| notification-service | 8103 | — (Go) | ADR-06 — consumer SQS fan-out `payment.completed` (SNS/SQS thật trên AWS, lớp async THỨ HAI, song song Kafka, KHÔNG thay Outbox); `replicas: 0` mặc định trên local |
 
 Spring Boot 3.4.1 / Java 21 / Gradle 8.11.1. Dùng `RestClient` cho gọi service-to-service,
 `ResponseStatusException` để map lỗi HTTP, `@DecimalMin` cho validate số tiền.
@@ -35,8 +36,12 @@ Spring Boot 3.4.1 / Java 21 / Gradle 8.11.1. Dùng `RestClient` cho gọi servic
   mode mặc định, phá `KAFKA_ZOOKEEPER_CONNECT`.
 - **CORS qua `ALLOWED_ORIGIN_PATTERN` env var** (default `http://localhost:*`, Helm override thành
   `http://*.ewallet-lab.local`) — đừng hardcode lại pattern cũ khi thêm service mới.
-- **transfer-service cố tình không có DB** (saga không persist) — đây là gap đã biết, ghi trong
-  DESIGN.md, không phải bug. Đừng "sửa" bằng cách thêm DB nếu chưa bàn với user.
+- **Saga của transfer-service cố tình không persist trạng thái** (gap đã biết, ghi trong DESIGN.md,
+  không phải bug). Lưu ý: bản thân service **có** DB `ewallet_transfer` từ #31/#32 (bảng
+  `saved_payees`, `recurring_transfers`, `recurring_transfer_logs`), nhưng bảng đó phục vụ danh bạ và
+  lịch định kỳ, **không** ghi bước của saga. Đừng "sửa" gap này bằng cách thêm bảng trạng thái saga
+  nếu chưa bàn với user (hướng đúng nếu làm: Outbox, xem TD-04 trong DESIGN.md). Cảnh báo triển khai:
+  DB và env `DB_*` của service này hiện chỉ có trong cluster, chưa có trong chart/init script (TD-13).
 - **Thêm giá trị mới vào một Java enum dùng `@Enumerated(EnumType.STRING)` (vd. `TransactionType`)
   không đủ nếu Postgres đã có sẵn CHECK constraint sinh ra từ Hibernate lúc tạo bảng lần đầu** —
   `ddl-auto: update` KHÔNG tự nới constraint đó. Triệu chứng: JSON hợp lệ, code compile sạch, nhưng
@@ -104,10 +109,29 @@ Mọi thay đổi kỹ thuật của `agent-dev` phải tuân thủ 5 nguyên l�
 3. **Cơ chế Triệt tiêu Tranh chấp Tiền tệ (Zero-Loss / Zero-Creation Concurrency)**:
    - Mọi luồng di chuyển tiền xuyên service (distributed business process) phải tuân theo pattern: **Claim trước (local lock/optimistic lock) -> Di chuyển tiền (remote call) -> Commit/Revert (compensation)**.
    - Tránh tuyệt đối check-then-act không có khoá dẫn đến bug "sinh tiền từ hư không" (như #10) hoặc "mất tiền mid-flight" (như #14).
+   - Khuôn "claim trước" đúng cho chiều tiền **ra** khỏi một số dư. Với chiều tiền **vào** một số dư rút được (cộng quỹ, cộng ví...), xem nguyên lý 7: claim "cộng" trước là tạo giá trị chưa có nguồn (bug #60).
 
 4. **Trách nhiệm Giải trình & Kiểm toán (Auditability & Traceability)**:
    - Mọi lần ghi sổ cái bắt buộc kèm `reference` (ID giao dịch nghiệp vụ gốc), `TransactionType` đã được cấp phép, và `note` rõ ràng. Không ghi sổ "nặc danh".
 
 5. **Ngân sách Tài nguyên & Khả năng Phục hồi (Resource Isolation & Resilience)**:
    - Toàn hệ thống dùng chung 1 Postgres server với `max_connections=200`: Mọi service Java bắt buộc giới hạn `hikari.maximum-pool-size: 5` để đảm bảo ngân sách connection khi rolling-restart.
+
+6. **Loại giao dịch theo bản chất kế toán, không theo kênh (Transaction Type ≠ Channel)**:
+   - `TransactionType` chỉ mô tả bản chất kế toán của bút toán (tiền vào ví từ ngoài, tiền ra khỏi ví, chuyển nội bộ...). Kênh hay nguồn (ngân hàng, Google Pay, Apple Pay, QR, VNPAY...) là thuộc tính riêng, ví dụ `source`/`providerRef`/`channel`, lưu ở service nghiệp vụ.
+   - Không tạo `TransactionType` mới chỉ vì có kênh mới. Mỗi loại mới phải được thêm vào mọi quy tắc tuân thủ (hạn mức tháng #7, step-up #15, eKYC #40); quên một chỗ là bỏ qua kiểm soát pháp lý.
+   - Nguồn: ADR-03 trong DESIGN.md (nạp từ thẻ token hoá ghi `TOPUP` + `source`). Operator duyệt nâng thành nguyên lý ngày 2026-10-18, qua AskUserQuestion trong phiên Claude Code.
+
+7. **Thứ tự theo bản chất tài chính (Debit trước khi tạo giá trị tiêu được)**:
+   - Bước nào làm xuất hiện số dư hoặc quyền rút được ở nơi khác (cộng quỹ, cộng ví, mở hạn mức) chỉ được thực hiện **sau khi** bước lấy tiền từ nguồn đã được xác nhận, đồng bộ, trong cùng request.
+   - Outbox/hàng đợi chỉ dành cho bước mà trì hoãn không tạo ra giá trị tiêu được: credit đến chậm, hoàn tiền, bù trừ, thông báo.
+   - Câu hỏi kiểm tra cho mọi luồng mới: (1) bước nào tạo giá trị tiêu được? (2) bước nào lấy tiền từ nguồn? (3) có ai tiêu được (1) trước khi (2) được xác nhận không? Nếu có, (2) phải đồng bộ và xong trước.
+   - Nguồn: ADR-05 trong DESIGN.md (bug #60: outbox claim-first cho góp quỹ làm quỹ tăng trước khi ví bị trừ, người tạo quỹ rút được tiền chưa tồn tại). Operator chọn phương án (B) ngày 2026-10-24, qua AskUserQuestion trong phiên Claude Code (do orchestrator hỏi).
+
+## Mọi Deployment mới phải khai báo resources (issue #53)
+
+Thêm entry vào map `resources:` trong `deploy/helm/ewallet-lab/values.yaml` (requests + limits memory, cpu requests)
+rồi gọi helper `{{- include "ewallet-lab.resources" (dict "root" $ "name" "<ten>") | nindent 10 }}` trong container;
+service Java thêm env `JAVA_TOOL_OPTIONS` từ helper `ewallet-lab.javaToolOptions`. Thiếu entry thì `helm template` lỗi.
+Ngân sách RAM tổng: DESIGN.md mục "Ngân sách RAM".
 

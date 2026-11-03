@@ -5,17 +5,23 @@ import com.ewalletlab.walletservice.domain.SavingsGoalStatus;
 import com.ewalletlab.walletservice.domain.SavingsGoalTransaction;
 import com.ewalletlab.walletservice.domain.SavingsGoalTransactionType;
 import com.ewalletlab.walletservice.domain.TransactionType;
+import com.ewalletlab.walletservice.domain.Wallet;
 import com.ewalletlab.walletservice.repository.SavingsGoalRepository;
 import com.ewalletlab.walletservice.repository.SavingsGoalTransactionRepository;
+import com.ewalletlab.walletservice.repository.WalletRepository;
 import com.ewalletlab.walletservice.service.SavingsGoalMutationExecutor;
 import com.ewalletlab.walletservice.service.SavingsGoalService;
 import com.ewalletlab.walletservice.service.StepUpRequiredException;
+import com.ewalletlab.walletservice.service.UserServiceClient;
 import com.ewalletlab.walletservice.service.WalletService;
 import com.ewalletlab.walletservice.web.dto.CreateSavingsGoalRequestDto;
 import com.ewalletlab.walletservice.web.dto.DepositSavingsGoalRequestDto;
 import com.ewalletlab.walletservice.web.dto.SavingsGoalDetailDto;
 import com.ewalletlab.walletservice.web.dto.SavingsGoalDto;
 import com.ewalletlab.walletservice.web.dto.WithdrawSavingsGoalRequestDto;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,7 +33,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -49,7 +57,14 @@ class SavingsGoalServiceTests {
     @Mock
     private WalletService walletService;
 
+    @Mock
+    private WalletRepository walletRepository;
+
+    @Mock
+    private UserServiceClient userServiceClient;
+
     private SavingsGoalService savingsGoalService;
+    private Validator validator;
 
     @BeforeEach
     void setUp() {
@@ -57,9 +72,13 @@ class SavingsGoalServiceTests {
             savingsGoalRepository,
             savingsGoalTransactionRepository,
             mutationExecutor,
-            walletService
+            walletService,
+            walletRepository,
+            userServiceClient
         );
+        validator = Validation.buildDefaultValidatorFactory().getValidator();
     }
+
 
     @Test
     @DisplayName("Tạo mục tiêu thành công kèm số tiền nạp ban đầu")
@@ -70,6 +89,7 @@ class SavingsGoalServiceTests {
             new BigDecimal("5000000"), false
         );
 
+        when(walletRepository.findByUserId(userId)).thenReturn(Optional.of(new Wallet(userId)));
         when(savingsGoalRepository.save(any(SavingsGoal.class))).thenAnswer(invocation -> {
             SavingsGoal g = invocation.getArgument(0);
             org.springframework.test.util.ReflectionTestUtils.setField(g, "id", UUID.randomUUID());
@@ -177,5 +197,91 @@ class SavingsGoalServiceTests {
 
         verify(walletService, never()).credit(any(), any(), any(), any(), any());
     }
+
+    @Test
+    @DisplayName("Tên mục tiêu 101 ký tự vi phạm Bean Validation và Service ném IllegalArgumentException")
+    void testCreateGoalNameExceeds100Chars() {
+        UUID userId = UUID.randomUUID();
+        String longName = "A".repeat(101);
+        CreateSavingsGoalRequestDto req = new CreateSavingsGoalRequestDto(
+            userId, longName, new BigDecimal("10000000"), LocalDate.now().plusMonths(3),
+            BigDecimal.ZERO, false
+        );
+
+        // 1. Kiểm tra Bean Validation (@Size(max = 100))
+        Set<ConstraintViolation<CreateSavingsGoalRequestDto>> violations = validator.validate(req);
+        assertFalse(violations.isEmpty(), "Phải có lỗi validation khi tên mục tiêu > 100 ký tự");
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("name")));
+
+        // 2. Kiểm tra Service phòng thủ
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> savingsGoalService.createGoal(req));
+        assertTrue(ex.getMessage().contains("Tên mục tiêu không được vượt quá 100 ký tự"));
+    }
+
+    @Test
+    @DisplayName("Số tiền mục tiêu vượt quá trần 200.000.000đ vi phạm Bean Validation và Service ném IllegalArgumentException")
+    void testCreateGoalTargetAmountExceedsCeiling() {
+        UUID userId = UUID.randomUUID();
+        CreateSavingsGoalRequestDto req = new CreateSavingsGoalRequestDto(
+            userId, "Mục tiêu siêu lớn", new BigDecimal("200000001"), LocalDate.now().plusMonths(3),
+            BigDecimal.ZERO, false
+        );
+
+        // 1. Kiểm tra Bean Validation (@DecimalMax("200000000"))
+        Set<ConstraintViolation<CreateSavingsGoalRequestDto>> violations = validator.validate(req);
+        assertFalse(violations.isEmpty(), "Phải có lỗi validation khi targetAmount > 200.000.000đ");
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("targetAmount")));
+
+        // 2. Kiểm tra Service phòng thủ
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> savingsGoalService.createGoal(req));
+        assertTrue(ex.getMessage().contains("Số tiền mục tiêu tối đa là 200.000.000đ"));
+    }
+
+    @Test
+    @DisplayName("UserId lạ không tồn tại cả ở ví và user-service thì ném NoSuchElementException (404)")
+    void testCreateGoalUserDoesNotExist_ThrowsNoSuchElementException() {
+        UUID userId = UUID.randomUUID();
+        CreateSavingsGoalRequestDto req = new CreateSavingsGoalRequestDto(
+            userId, "Mục tiêu hợp lệ", new BigDecimal("10000000"), LocalDate.now().plusMonths(3),
+            BigDecimal.ZERO, false
+        );
+
+        when(walletRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(userServiceClient.findUser(userId)).thenReturn(Optional.empty());
+
+        NoSuchElementException ex = assertThrows(NoSuchElementException.class, () -> savingsGoalService.createGoal(req));
+        assertTrue(ex.getMessage().contains("Không tìm thấy người dùng hoặc ví cho userId: " + userId));
+
+        verify(savingsGoalRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("UserId chưa có ví nhưng tồn tại ở user-service thì tạo ví mới và tạo mục tiêu thành công")
+    void testCreateGoalUserExistsInUserService_CreatesWalletAndGoal() {
+        UUID userId = UUID.randomUUID();
+        CreateSavingsGoalRequestDto req = new CreateSavingsGoalRequestDto(
+            userId, "Mục tiêu từ user mới", new BigDecimal("10000000"), LocalDate.now().plusMonths(3),
+            BigDecimal.ZERO, false
+        );
+
+        when(walletRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(userServiceClient.findUser(userId)).thenReturn(Optional.of(
+            new UserServiceClient.UserResponse(userId, "0912345678", "Nguyễn Văn A", "VERIFIED", "123456789")
+        ));
+        when(walletService.getOrCreateWallet(userId)).thenReturn(new Wallet(userId));
+        when(savingsGoalRepository.save(any(SavingsGoal.class))).thenAnswer(invocation -> {
+            SavingsGoal g = invocation.getArgument(0);
+            org.springframework.test.util.ReflectionTestUtils.setField(g, "id", UUID.randomUUID());
+            return g;
+        });
+
+        SavingsGoalDto result = savingsGoalService.createGoal(req);
+
+        assertNotNull(result);
+        assertEquals("Mục tiêu từ user mới", result.name());
+        verify(walletService).getOrCreateWallet(userId);
+        verify(savingsGoalRepository).save(any(SavingsGoal.class));
+    }
 }
+
 

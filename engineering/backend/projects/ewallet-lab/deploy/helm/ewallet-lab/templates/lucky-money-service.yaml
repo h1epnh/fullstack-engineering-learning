@@ -4,7 +4,7 @@ metadata:
   name: lucky-money-service
   namespace: {{ .Values.namespace }}
 spec:
-  replicas: {{ .Values.luckyMoneyService.replicas }}
+  replicas: {{ include "ewallet-lab.replicas" (dict "root" $ "name" "lucky-money-service" "default" .Values.luckyMoneyService.replicas) }}
   selector:
     matchLabels: { app: lucky-money-service }
   template:
@@ -21,9 +21,12 @@ spec:
         - name: lucky-money-service
           image: {{ include "ewallet-lab.image" (dict "root" $ "name" "lucky-money-service") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "ewallet-lab.resources" (dict "root" $ "name" "lucky-money-service") | nindent 10 }}
           ports:
             - containerPort: {{ .Values.luckyMoneyService.port }}
           env:
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ include "ewallet-lab.javaToolOptions" . | quote }}
             - name: DB_HOST
               value: postgres
             - name: DB_PORT
@@ -46,10 +49,12 @@ spec:
             httpGet: { path: /actuator/health/readiness, port: {{ .Values.luckyMoneyService.port }} }
             initialDelaySeconds: 15
             periodSeconds: 5
+            {{- include "ewallet-lab.probeExtras" (dict "root" $ "name" "lucky-money-service") | nindent 12 }}
           livenessProbe:
             httpGet: { path: /actuator/health/liveness, port: {{ .Values.luckyMoneyService.port }} }
             initialDelaySeconds: 20
             periodSeconds: 10
+            {{- include "ewallet-lab.probeExtras" (dict "root" $ "name" "lucky-money-service") | nindent 12 }}
 ---
 apiVersion: v1
 kind: Service

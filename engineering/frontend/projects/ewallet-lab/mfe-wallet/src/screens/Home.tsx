@@ -11,8 +11,15 @@ import {
   TransactionRow,
   formatVnd,
 } from '@ewallet-lab/ui';
-import { useEffect, useState } from 'react';
-import { buildNotifications, loadReadIds } from '../notifications';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  NOTIFICATION_EVENT,
+  buildNotifications,
+  loadAllNotifications,
+  loadReadIds,
+  type NotificationItem,
+} from '../notifications';
+import { ALL_SERVICES_FLAT, DEFAULT_PINNED_KEYS, type ServiceItem } from '../servicesCatalog';
 
 /**
  * Structure below mirrors the real MoMo app's actual home screen (analyzed from first-hand
@@ -211,6 +218,7 @@ export default function Home({
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [pocketOpened, setPocketOpened] = useState(false);
   const [pocketBalance, setPocketBalance] = useState(0);
   const [user, setUser] = useState<UserResponse | null>(null);
@@ -233,28 +241,133 @@ export default function Home({
     setPocketOpened(pocketRes.opened);
     setPocketBalance(pocketRes.balance);
     if (userRes) setUser(userRes);
+    loadAllNotifications(session.id).then(setNotifications).catch(() => {});
     setLoading(false);
   }
 
   useEffect(() => {
     refresh();
+    const handleNotifChanged = () => {
+      setReadIds(loadReadIds(session.id));
+      loadAllNotifications(session.id).then(setNotifications).catch(() => {});
+    };
+    window.addEventListener(NOTIFICATION_EVENT, handleNotifChanged);
+    return () => {
+      window.removeEventListener(NOTIFICATION_EVENT, handleNotifChanged);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id]);
 
-  const unreadCount = buildNotifications(transactions).filter((n) => !readIds.has(n.id)).length;
+  const activeNotifs = notifications.length > 0 ? notifications : buildNotifications(transactions);
+  const unreadCount = activeNotifs.filter((n) => !readIds.has(n.id)).length;
+  const hasActionRequired = activeNotifs.some(
+    (n) => n.category === 'ACTION_REQUIRED' && !readIds.has(n.id),
+  );
 
-  function handleGridClick(item: { key: string; more?: boolean; real?: boolean }) {
-    if (item.more) onMoreServices();
-    else if (item.key === 'transfer') onTransfer();
-    else if (item.key === 'bill-payment') onBillPayment();
-    else if (item.key === 'phone-topup') {
-      if (onPhoneTopup) onPhoneTopup();
-      else onComingSoon(item.key);
+  const storageKey = 'ewallet_pinned_favorites_' + (session?.id || 'default');
+  const [pinnedKeys] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // ignore
     }
-    else if (item.key === 'family-wallet') onFamilyWallet();
-    else if (item.key === 'spending') onSpendingReport();
-    else if (item.real) onTransfer();
-    else onComingSoon(item.key);
+    return DEFAULT_PINNED_KEYS;
+  });
+
+  const gridItems = useMemo(() => {
+    const items = pinnedKeys
+      .map((key) => ALL_SERVICES_FLAT.find((s) => s.key === key))
+      .filter((s): s is ServiceItem => Boolean(s))
+      .slice(0, 7)
+      .map((s) => ({
+        key: s.key,
+        icon: s.icon,
+        label: s.label,
+        real: s.real,
+        routeKey: s.routeKey,
+        more: false,
+      }));
+
+    items.push({
+      key: 'more-services',
+      icon: 'more_horiz',
+      label: 'Xem thêm\ndịch vụ',
+      real: true,
+      routeKey: 'all-services',
+      more: true,
+    });
+    return items;
+  }, [pinnedKeys]);
+
+  function handleGridClick(item: { key: string; more?: boolean; real?: boolean; routeKey?: string }) {
+    if (item.more || item.key === 'more-services') {
+      onMoreServices();
+      return;
+    }
+    const rKey = item.routeKey || item.key;
+    switch (rKey) {
+      case 'transfer':
+      case 'bank-transfer':
+      case 'scheduled-transfer':
+      case 'split-bill':
+      case 'send-card':
+        onTransfer();
+        break;
+      case 'bill-payment':
+      case 'parking':
+      case 'loan-bill':
+      case 'e-invoice':
+        onBillPayment();
+        break;
+      case 'phone-topup':
+      case 'phone-data':
+        if (onPhoneTopup) onPhoneTopup();
+        else onComingSoon(item.key);
+        break;
+      case 'family-wallet':
+        onFamilyWallet();
+        break;
+      case 'spending-report':
+      case 'spending':
+        onSpendingReport();
+        break;
+      case 'savings-pocket':
+        onSavingsPocket();
+        break;
+      case 'bnpl':
+        if (onBnpl) onBnpl();
+        else onComingSoon(item.key);
+        break;
+      case 'investment-fund':
+        if (onInvestmentFund) onInvestmentFund();
+        else onComingSoon(item.key);
+        break;
+      case 'savings-goals':
+        if (onSavingsGoals) onSavingsGoals();
+        else onComingSoon(item.key);
+        break;
+      case 'voucher-pass':
+        if (onVoucherPass) onVoucherPass();
+        else onComingSoon(item.key);
+        break;
+      case 'loyalty':
+        if (onLoyalty) onLoyalty();
+        else onComingSoon(item.key);
+        break;
+      case 'receive':
+        onReceive();
+        break;
+      case 'topup':
+        onTopup();
+        break;
+      default:
+        onComingSoon(item.key);
+        break;
+    }
   }
 
   const monthLabel = new Date().toLocaleDateString('vi-VN', { month: 'long' });
@@ -285,7 +398,11 @@ export default function Home({
             )}
           </div>
         </div>
-        <NotificationBell count={unreadCount} onClick={onOpenNotifications} />
+        <NotificationBell
+          count={unreadCount}
+          hasActionRequired={hasActionRequired}
+          onClick={onOpenNotifications}
+        />
       </div>
 
       {/* Issue #40: eKYC Unverified Warning Banner */}
@@ -310,7 +427,7 @@ export default function Home({
                 Ví chưa định danh eKYC
               </div>
               <div style={{ fontSize: 11.5, color: '#873800' }}>
-                Hạn mức tối đa 5.000.000đ/tháng. Xác thực CCCD để mở hạn mức 100.000.000đ/tháng.
+                Chưa thể rút/chuyển/thanh toán bằng số dư ví. Vẫn nạp/nhận tiền bình thường. Xác thực CCCD để mở khoá đầy đủ (hạn mức 100.000.000đ/tháng).
               </div>
             </div>
           </div>
@@ -419,7 +536,7 @@ export default function Home({
         Dịch vụ
       </h2>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px 4px', marginBottom: 24 }}>
-        {MAIN_GRID.map((item) => (
+        {gridItems.map((item) => (
           <QuickAction
             key={item.key}
             icon={item.icon}

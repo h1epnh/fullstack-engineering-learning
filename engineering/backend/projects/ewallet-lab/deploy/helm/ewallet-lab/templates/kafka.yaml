@@ -21,9 +21,12 @@ spec:
       containers:
         - name: kafka
           image: {{ .Values.kafka.image }}
+          {{- include "ewallet-lab.resources" (dict "root" $ "name" "kafka") | nindent 10 }}
           ports:
             - containerPort: 9092
           env:
+            - name: KAFKA_HEAP_OPTS
+              value: {{ .Values.resources.kafka.heapOpts | quote }}
             - name: KAFKA_BROKER_ID
               value: "1"
             - name: KAFKA_ZOOKEEPER_CONNECT

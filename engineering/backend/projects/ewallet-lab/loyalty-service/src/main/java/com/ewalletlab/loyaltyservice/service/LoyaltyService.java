@@ -164,7 +164,7 @@ public class LoyaltyService {
         return LoyaltyMissionCatalog.MISSIONS.stream()
             .filter(LoyaltyMission::active)
             .map(mission -> {
-                boolean qualifies = todaysTransactions.stream().anyMatch(t -> t.type().equals(mission.requiredTransactionType()));
+                boolean qualifies = todaysTransactions.stream().anyMatch(t -> qualifiesMission(t, mission));
                 UserMissionProgress progress = executor.upsertMissionProgress(userId, mission.code(), today, qualifies);
                 return MissionDto.of(mission, progress.getStatus());
             })
@@ -181,11 +181,17 @@ public class LoyaltyService {
         // the caller's last GET /missions might be stale if the qualifying transaction only just
         // landed, or if missions() was never called yet today at all for this user.
         List<WalletServiceClient.WalletTransaction> todaysTransactions = todaysTransactions(userId, today);
-        boolean qualifies = todaysTransactions.stream().anyMatch(t -> t.type().equals(mission.requiredTransactionType()));
+        boolean qualifies = todaysTransactions.stream().anyMatch(t -> qualifiesMission(t, mission));
         executor.upsertMissionProgress(userId, mission.code(), today, qualifies);
         PointEntry claimed = executor.claimMissionOnce(userId, mission, today);
         long balance = accounts.findByUserId(userId).orElseThrow().getPointsBalance();
         return new ClaimMissionResultDto(mission.code(), (int) claimed.getPoints(), balance);
+    }
+
+    private boolean qualifiesMission(WalletServiceClient.WalletTransaction t, LoyaltyMission mission) {
+        return t.type().equals(mission.requiredTransactionType())
+            && t.amountVnd() != null
+            && t.amountVnd() >= mission.minAmountVnd();
     }
 
     private List<WalletServiceClient.WalletTransaction> todaysTransactions(UUID userId, LocalDate today) {

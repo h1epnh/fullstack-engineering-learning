@@ -4,7 +4,7 @@ metadata:
   name: shell
   namespace: {{ .Values.namespace }}
 spec:
-  replicas: {{ .Values.frontend.replicas }}
+  replicas: {{ include "ewallet-lab.replicas" (dict "root" $ "name" "shell" "default" .Values.frontend.replicas) }}
   selector:
     matchLabels: { app: shell }
   template:
@@ -21,6 +21,7 @@ spec:
         - name: shell
           image: {{ include "ewallet-lab.image" (dict "root" $ "name" "shell") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "ewallet-lab.resources" (dict "root" $ "name" "shell") | nindent 10 }}
           ports:
             - containerPort: {{ .Values.frontend.port }}
           readinessProbe:

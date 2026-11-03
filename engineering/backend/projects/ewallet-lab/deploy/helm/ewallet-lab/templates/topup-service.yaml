@@ -4,7 +4,7 @@ metadata:
   name: topup-service
   namespace: {{ .Values.namespace }}
 spec:
-  replicas: {{ .Values.topupService.replicas }}
+  replicas: {{ include "ewallet-lab.replicas" (dict "root" $ "name" "topup-service" "default" .Values.topupService.replicas) }}
   selector:
     matchLabels: { app: topup-service }
   template:
@@ -21,9 +21,12 @@ spec:
         - name: topup-service
           image: {{ include "ewallet-lab.image" (dict "root" $ "name" "topup-service") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "ewallet-lab.resources" (dict "root" $ "name" "topup-service") | nindent 10 }}
           ports:
             - containerPort: {{ .Values.topupService.port }}
           env:
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ include "ewallet-lab.javaToolOptions" . | quote }}
             - name: DB_HOST
               value: postgres
             - name: DB_PORT
@@ -38,6 +41,15 @@ spec:
               value: "kafka:9092"
             - name: BANK_GATEWAY_URL
               value: "http://mock-bank-gateway:{{ .Values.mockBankGateway.port }}"
+            # Issue #52: the shared accessKey/secretKey pair. Injected from the bank-gateway-credentials
+            # Secret (see templates/secret-postgres.yaml) — NOT hardcoded in the image. topup-service
+            # refuses to start without them (see its application.yml: no default secret), so a missing
+            # Secret surfaces as a CrashLoopBackOff with a clear message rather than a silent
+            # signature mismatch at IPN time.
+            - name: BANK_GATEWAY_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: bank-gateway-credentials, key: BANK_GATEWAY_ACCESS_KEY } }
+            - name: BANK_GATEWAY_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: bank-gateway-credentials, key: BANK_GATEWAY_SECRET_KEY } }
             - name: WALLET_SERVICE_URL
               value: "http://wallet-service:{{ .Values.walletService.port }}"
             - name: USER_SERVICE_URL

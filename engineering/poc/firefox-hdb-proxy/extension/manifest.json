@@ -1,0 +1,33 @@
+{
+  "manifest_version": 2,
+  "name": "HDB Proxy",
+  "version": "0.1.0",
+  "description": "Routes *.hdbank.com.vn through the wired (RJ45) adapter via a local SOCKS5 helper; all other sites stay on Wi-Fi.",
+  "icons": {
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": ["proxy", "storage", "tabs", "<all_urls>"],
+  "background": {
+    "scripts": ["defaults.js", "matcher.js", "background.js"]
+  },
+  "browser_action": {
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    },
+    "default_title": "HDB Proxy",
+    "default_popup": "popup.html"
+  },
+  "options_ui": {
+    "page": "options.html"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "firefox-hdb-proxy@local",
+      "strict_min_version": "115.0",
+      "data_collection_permissions": { "required": ["none"] }
+    }
+  }
+}

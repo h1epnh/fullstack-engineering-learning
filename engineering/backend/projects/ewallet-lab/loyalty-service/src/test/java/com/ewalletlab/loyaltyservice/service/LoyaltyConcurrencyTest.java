@@ -1,5 +1,6 @@
 package com.ewalletlab.loyaltyservice.service;
 
+import com.ewalletlab.loyaltyservice.domain.MissionStatus;
 import com.ewalletlab.loyaltyservice.domain.PointEntryKind;
 import com.ewalletlab.loyaltyservice.domain.PointEntryStatus;
 import org.junit.jupiter.api.Test;
@@ -169,6 +170,82 @@ class LoyaltyConcurrencyTest {
         var status = service.checkInStatus(user);
         assertThat(status.checkedInToday()).isTrue();
         assertThat(status.currentStreakDay()).isEqualTo(1);
+    }
+
+    @Test
+    void missionBelowMinAmountDoesNotComplete() {
+        UUID user = userWith(List.of(tx("TRANSFER_OUT", "49999")));
+
+        var missions = service.missions(user);
+        var transferMission = missions.stream()
+            .filter(m -> "DAILY_TRANSFER".equals(m.code()))
+            .findFirst()
+            .orElseThrow();
+        assertThat(transferMission.status()).isEqualTo(MissionStatus.IN_PROGRESS);
+
+        assertThatThrownBy(() -> service.claimMission(user, "DAILY_TRANSFER"))
+            .isInstanceOf(ResponseStatusException.class)
+            .hasMessageContaining("Nhiệm vụ hôm nay chưa hoàn thành");
+    }
+
+    @Test
+    void missionAtOrAboveMinAmountCompletesAndClaims() {
+        UUID user = userWith(List.of(tx("TRANSFER_OUT", "50000")));
+
+        var missions = service.missions(user);
+        var transferMission = missions.stream()
+            .filter(m -> "DAILY_TRANSFER".equals(m.code()))
+            .findFirst()
+            .orElseThrow();
+        assertThat(transferMission.status()).isEqualTo(MissionStatus.COMPLETED);
+
+        var claimResult = service.claimMission(user, "DAILY_TRANSFER");
+        assertThat(claimResult.pointsAwarded()).isEqualTo(20);
+        assertThat(claimResult.pointsBalance()).isGreaterThanOrEqualTo(20);
+
+        var missionsAfterClaim = service.missions(user);
+        var claimedMission = missionsAfterClaim.stream()
+            .filter(m -> "DAILY_TRANSFER".equals(m.code()))
+            .findFirst()
+            .orElseThrow();
+        assertThat(claimedMission.status()).isEqualTo(MissionStatus.CLAIMED);
+    }
+
+    @Test
+    void missionDailyBillAndSavingsBelowAndAboveMinAmount() {
+        // Test farm 1đ (Issue #69 bug description)
+        UUID userFarm1Vnd = userWith(List.of(
+            tx("BILL_PAYMENT", "1"),
+            tx("SAVINGS_GOAL_DEPOSIT", "1")
+        ));
+        var missionsFarm = service.missions(userFarm1Vnd);
+        var billMissionFarm = missionsFarm.stream().filter(m -> "DAILY_BILL".equals(m.code())).findFirst().orElseThrow();
+        var savingsMissionFarm = missionsFarm.stream().filter(m -> "DAILY_SAVINGS".equals(m.code())).findFirst().orElseThrow();
+        assertThat(billMissionFarm.status()).isEqualTo(MissionStatus.IN_PROGRESS);
+        assertThat(savingsMissionFarm.status()).isEqualTo(MissionStatus.IN_PROGRESS);
+        assertThatThrownBy(() -> service.claimMission(userFarm1Vnd, "DAILY_BILL"))
+            .isInstanceOf(ResponseStatusException.class)
+            .hasMessageContaining("Nhiệm vụ hôm nay chưa hoàn thành");
+        assertThatThrownBy(() -> service.claimMission(userFarm1Vnd, "DAILY_SAVINGS"))
+            .isInstanceOf(ResponseStatusException.class)
+            .hasMessageContaining("Nhiệm vụ hôm nay chưa hoàn thành");
+
+        // Test đúng ngưỡng 50.000đ
+        UUID userEligible = userWith(List.of(
+            tx("BILL_PAYMENT", "50000"),
+            tx("SAVINGS_GOAL_DEPOSIT", "50000")
+        ));
+        var missionsEligible = service.missions(userEligible);
+        var billEligible = missionsEligible.stream().filter(m -> "DAILY_BILL".equals(m.code())).findFirst().orElseThrow();
+        var savingsEligible = missionsEligible.stream().filter(m -> "DAILY_SAVINGS".equals(m.code())).findFirst().orElseThrow();
+        assertThat(billEligible.status()).isEqualTo(MissionStatus.COMPLETED);
+        assertThat(savingsEligible.status()).isEqualTo(MissionStatus.COMPLETED);
+
+        var claimBill = service.claimMission(userEligible, "DAILY_BILL");
+        assertThat(claimBill.pointsAwarded()).isEqualTo(50);
+
+        var claimSavings = service.claimMission(userEligible, "DAILY_SAVINGS");
+        assertThat(claimSavings.pointsAwarded()).isEqualTo(30);
     }
 
     private record Outcome(AtomicInteger ok, AtomicInteger rejected, List<Throwable> unexpected) {

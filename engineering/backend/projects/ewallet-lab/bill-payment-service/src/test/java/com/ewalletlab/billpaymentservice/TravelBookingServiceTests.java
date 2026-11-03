@@ -173,4 +173,37 @@ class TravelBookingServiceTests {
 
         verifyNoInteractions(walletServiceClient);
     }
+
+    @Test
+    void bookTicket_wallet503_mapsTo503AndDoesNotBook() {
+        UUID tripId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        TravelTrip trip = new TravelTrip(
+            tripId, TripType.BUS, "Phương Trang", "Hà Nội", "Sa Pa",
+            Instant.now().plus(1, ChronoUnit.DAYS), Instant.now().plus(1, ChronoUnit.DAYS).plus(6, ChronoUnit.HOURS),
+            new BigDecimal("280000"), 40, 10
+        );
+        when(travelTripRepository.findById(tripId)).thenReturn(Optional.of(trip));
+        when(walletServiceClient.debit(eq(userId), any(), anyString(), anyString(), eq(false)))
+            .thenThrow(org.springframework.web.client.HttpServerErrorException.create(
+                org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "Service Unavailable",
+                new org.springframework.http.HttpHeaders(),
+                "Không thể xác minh định danh lúc này, vui lòng thử lại sau".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                java.nio.charset.StandardCharsets.UTF_8));
+
+        BookTicketRequestDto request = new BookTicketRequestDto(
+            userId, tripId, "Nguyen Van A", "0901234567", "A01"
+        );
+
+        assertThatThrownBy(() -> service.bookTicket(request))
+            .isInstanceOf(ResponseStatusException.class)
+            .satisfies(ex -> {
+                ResponseStatusException rse = (ResponseStatusException) ex;
+                assertThat(rse.getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE);
+                assertThat(rse.getReason()).contains("thử lại sau");
+            });
+
+        verify(travelBookingRepository, never()).save(any());
+        verify(walletServiceClient, never()).credit(any(), any(), any(), any(), any());
+    }
 }

@@ -25,6 +25,12 @@ dependencies {
 	implementation 'org.springframework.kafka:spring-kafka'
 	runtimeOnly 'org.postgresql:postgresql'
 
+	// ADR-06 (DESIGN.md) — SNS publish, best-effort, AFTER commit, never blocking the response
+	// (see PaymentNotificationPublisher). BOM pins every software.amazon.awssdk:* artifact to one
+	// consistent version; only the `sns` module is actually needed here.
+	implementation platform('software.amazon.awssdk:bom:2.57.6')
+	implementation 'software.amazon.awssdk:sns'
+
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.kafka:spring-kafka-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

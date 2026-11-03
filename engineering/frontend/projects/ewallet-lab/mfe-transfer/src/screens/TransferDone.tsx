@@ -1,6 +1,7 @@
 import { transferService } from '@ewallet-lab/api-client';
 import { Button, Card, Icon, Screen, TextField, formatVnd } from '@ewallet-lab/ui';
 import { useState } from 'react';
+import { GREETING_THEMES } from './TransferAmount';
 
 export function TransferDone({
   toName,
@@ -8,6 +9,8 @@ export function TransferDone({
   selfUserId,
   amount,
   newBalance,
+  greetingCardTheme,
+  greetingMessage,
   onDone,
 }: {
   toName: string;
@@ -15,6 +18,8 @@ export function TransferDone({
   selfUserId?: string;
   amount: number;
   newBalance: number;
+  greetingCardTheme?: string;
+  greetingMessage?: string;
   onDone: () => void;
 }) {
   const [saved, setSaved] = useState(false);
@@ -22,6 +27,8 @@ export function TransferDone({
   const [nickname, setNickname] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  const matchedTheme = GREETING_THEMES.find((t) => t.id === greetingCardTheme);
 
   async function handleSavePayee() {
     if (!selfUserId || !toPhone) return;
@@ -43,7 +50,69 @@ export function TransferDone({
   }
 
   return (
-    <Screen title="Chuyển tiền" withNavGutter={false}>
+    <Screen title={matchedTheme ? 'Gửi thiệp mừng thành công' : 'Chuyển tiền'} withNavGutter={false}>
+      {/* Tấm thiệp chúc mừng rực rỡ nếu có greetingCardTheme (Issue #92) */}
+      {matchedTheme && (
+        <div
+          style={{
+            background: matchedTheme.bg,
+            border: `1.5px solid ${matchedTheme.border}`,
+            borderRadius: 16,
+            padding: '20px 18px',
+            marginBottom: 16,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+            gap: 10,
+            boxShadow: 'var(--el-shadow)',
+          }}
+        >
+          <div
+            style={{
+              width: 52,
+              height: 52,
+              borderRadius: '50%',
+              background: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            }}
+          >
+            <Icon name={matchedTheme.icon} size={28} style={{ color: matchedTheme.color }} />
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: matchedTheme.color }}>
+            {matchedTheme.title}
+          </div>
+          <p
+            style={{
+              fontSize: 13.5,
+              color: 'var(--el-ink)',
+              margin: '2px 0 6px',
+              fontStyle: 'italic',
+              lineHeight: 1.5,
+              maxWidth: 320,
+            }}
+          >
+            &ldquo;{greetingMessage || matchedTheme.defaultWish}&rdquo;
+          </p>
+          <div
+            style={{
+              background: '#fff',
+              padding: '6px 14px',
+              borderRadius: 20,
+              fontSize: 13,
+              fontWeight: 700,
+              color: matchedTheme.color,
+              border: `1px solid ${matchedTheme.border}`,
+            }}
+          >
+            Tiền mừng: {formatVnd(amount)}
+          </div>
+        </div>
+      )}
+
       <Card>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '10px 0' }}>
           <Icon name="check_circle" size={40} style={{ color: 'var(--el-accent)' }} />
@@ -57,6 +126,7 @@ export function TransferDone({
           </p>
         </div>
       </Card>
+
 
       {/* Nút lưu danh bạ yêu thích (Issue #32) */}
       {selfUserId && toPhone && (

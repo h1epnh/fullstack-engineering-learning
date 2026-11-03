@@ -21,12 +21,55 @@ ranh giới rõ ràng giữa phần bám spec thật và phần tự thiết k�
 tiền — merchant thu tiền từ khách qua MoMo), không phải API cho "MoMo tự nạp tiền vào ví của họ".
 `topup-service`/`mock-bank-gateway` **thích nghi** field/MAC pattern đã xác minh sang chiều "ngân
 hàng thu tiền để nạp vào ví" — hợp lý về mặt kỹ thuật (cùng bản chất: 1 bên uỷ quyền chuyển tiền,
-xác nhận qua IPN bất đồng bộ) nhưng **chưa được MoMo xác nhận** là đúng cách họ tự làm nội bộ.
+xác nhận qua IPN bất đồng bộ) nhưng **chưa được MoMo xác minh** là đúng cách họ tự làm nội bộ.
 
-**Gap đã biết, không giấu**: công thức chữ ký cho riêng IPN (khác với chữ ký của create-request)
-không được xác nhận chi tiết từ trang đã fetch — `IpnController` cố tình **không** verify chữ ký IPN
-bằng công thức chưa xác nhận, và có comment giải thích rõ đây là thiếu sót cần bổ sung trước khi
-dùng thật, không phải bỏ sót âm thầm.
+### Chữ ký IPN — **đã xác minh + đã triển khai** (issue #52, TD-03)
+
+Trước #52, `IpnController` **không** verify chữ ký IPN: ai gọi được `/ipn/topup` với
+`resultCode: 0` là tạo được tiền. Nay đã sửa xong, theo 3 tầng:
+
+1. **Danh sách field ký IPN — đã xác minh từ tài liệu chính thức.** Trang
+   [Collection Link](https://developers.momo.vn/v3/docs/payment/api/collection-link/), mục
+   *"Processing payment result"*, nói rõ MoMo gửi các field này trong `redirectUrl` **và** trong body
+   của `ipnUrl`. Bộ field được ký gồm **13** field, sort a-z, HMAC-SHA256 bằng secret:
+   `accessKey, amount, extraData, message, orderId, orderInfo, orderType, partnerCode, payType,
+   requestId, responseTime, resultCode, transId`.
+   Xem `topup-service/.../service/IpnSignatureVerifier.java` (Javadoc ghi link nguồn + ngày fetch).
+   **Caveat của lab (không phải spec MoMo)**: cặp `accessKey`/`secretKey` là secret nội bộ chia sẻ
+   giữa `topup-service` và `mock-bank-gateway`; giá trị đặt vào `orderType`/`payType` là do lab tự
+   định nghĩa, không phải enum của MoMo; cửa sổ replay (5 phút) là kiểm soát của lab, vì trang tài
+   liệu không nói MoMo giới hạn cửa sổ timestamp thế nào.
+2. **Verify constant-time + so khớp số tiền + chống replay.** `IpnController` (và
+   `BankTransferOutIpnController`) so sánh bằng `MessageDigest.isEqual`, đối chiếu `ipn.amount` với
+   `TopupRequest.getAmount()`, và kiểm `responseTime` nằm trong cửa sổ cấu hình được
+   (`ewallet-lab.ipn.replay-window-seconds`, mặc định 300). Sai chữ ký → **401**, không đổi trạng
+   thái, không publish Kafka. IPN hợp lệ gửi lại lần 2 → no-op (đơn đã `CONFIRMED`).
+3. **Secret ra khỏi code.** `BANK_GATEWAY_ACCESS_KEY` / `BANK_GATEWAY_SECRET_KEY` đến từ env, nạp
+   qua K8s Secret `bank-gateway-credentials` (tạo ngoài chart, **không có giá trị nào trong repo**) hoặc
+   `.env` gitignored (docker-compose, mẫu ở `.env.example`). Cả hai vế đọc **cùng một** nguồn — nếu
+   lệch nhau, mọi IPN sẽ bị từ chối như là bị tấn công.
+4. **Chống IPN đồng thời** (race): chuyển `PENDING -> CONFIRMED/FAILED` bằng một câu `UPDATE ... WHERE
+   order_id=? AND status='PENDING'` (`transitionFromPending`); chỉ request thắng (1 dòng bị ảnh hưởng)
+   mới publish Kafka / hoàn tiền, các request còn lại trả 204 và không làm gì.
+
+**Tạo Secret `bank-gateway-credentials`** (lần đầu, hoặc để rotate; giá trị ngẫu nhiên, không ghi vào
+repo/log). Sau khi đổi phải restart `mock-bank-gateway` rồi `topup-service`, từng cái một:
+```bash
+kubectl -n ewallet-lab create secret generic bank-gateway-credentials \
+  --from-literal=BANK_GATEWAY_ACCESS_KEY="$(openssl rand -hex 8)" \
+  --from-literal=BANK_GATEWAY_SECRET_KEY="$(openssl rand -hex 32)" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+Giá trị cũ (`lab-secret-key-...`) còn trong lịch sử git; đó là secret giả của lab và đã bị thay trên cluster.
+
+**Chứng minh hai vế khớp nhau**: `mock-bank-gateway/collection_test.go` và
+`topup-service/.../IpnSignatureVerifierTests.java` cùng assert **một vector cố định** (digest
+HMAC-SHA256 tính sẵn bằng Python) cho đúng bộ 13 field đó. Sửa canonical string ở một vế là
+test vế kia đỏ.
+
+**Còn thiếu (nói thẳng)**: không có đối soát (reconciliation) và không có truy vấn chủ động khi mất
+webhook — đơn `PENDING` sẽ treo vĩnh viễn nếu IPN không tới. Đây là phần còn lại của nợ kỹ thuật về
+đối soát, chưa nằm trong #52.
 
 ### P2P Transfer, Bill Payment — **không có spec MoMo công khai**
 
@@ -35,6 +78,34 @@ transfer hay bill payment nội bộ. `transfer-service`/`bill-payment-service` 
 phẩm ví điện tử phổ quát — không giả vờ có spec. `bill-payment-service` cụ thể là biller **hoàn
 toàn mock** (due amount = hash deterministic của category+customerCode, xem DESIGN.md mục "Luồng
 bill payment") — không dùng tên nhà cung cấp thật nào.
+
+### SNS + SQS thật trên AWS (ADR-06) — fan-out thông báo `payment.completed`
+
+Xem DESIGN.md's ADR-06 cho spec đầy đủ (schema, naming, resource budget, 2 điểm mở đã quyết). Tóm
+tắt vận hành:
+
+- `wallet-service` publish lên SNS topic `ewallet-lab-payment-completed` SAU KHI mỗi debit/credit
+  đã commit (best-effort, không chặn response, lỗi chỉ log WARN — xem
+  `PaymentNotificationPublisher`). KHÔNG route lại bất kỳ luồng tiền Kafka/Outbox hiện có nào.
+- `notification-service` (Go, mới — xem `notification-service/`) long-poll SQS queue
+  `ewallet-lab-payment-completed-notify` (subscribe topic trên, DLQ
+  `ewallet-lab-payment-completed-notify-dlq`, `maxReceiveCount=5`), dedupe theo `eventId`, và chỉ
+  log/giả lập gửi thông báo — không gọi push/SMS/email thật.
+- Tài nguyên AWS thật (SNS topic, 2 SQS queue, IAM user scoped-down, access key) được operator tự
+  tạo bằng CLI profile admin của chính họ, qua `scripts/init-aws-infra.sh` — không agent nào chạy
+  lệnh IAM bằng key admin. Script đó in ra lệnh `kubectl create secret` cuối cùng để tạo Secret
+  `ewallet-lab-aws-notify` (giữ `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_DEFAULT_REGION`),
+  mount vào CẢ `wallet-service` VÀ `notification-service` qua `envFrom.secretRef` — không giá trị
+  nào nằm trong repo.
+- `notification-service` mặc định `replicas: 0` trên local (`values-local.yaml`) — long-poll SQS
+  24/7 không test gì tốn quota free-tier một cách vô ích. Bật lên khi test:
+  ```bash
+  kubectl -n ewallet-lab scale deploy/notification-service --replicas=1
+  # ... test xong ...
+  kubectl -n ewallet-lab scale deploy/notification-service --replicas=0
+  ```
+- Account id/ARN/queue URL không phải secret (đã ghi trong DESIGN.md ADR-06 và
+  `deploy/helm/ewallet-lab/values.yaml`'s `aws:` block) — chỉ access key pair là secret.
 
 ## Services & DB
 
@@ -50,6 +121,7 @@ bill payment") — không dùng tên nhà cung cấp thật nào.
 | `lucky-money-service` | 8097 | `ewallet_lucky_money` | Lì xì 1-1 (escrow) |
 | `loyalty-service` | 8099 | `ewallet_loyalty` | **Mô phỏng** Điểm thưởng — tích điểm hoá đơn, hạng, đổi hoàn tiền (xem DESIGN.md) |
 | `bnpl-service` | 8098 | `ewallet_bnpl` | **Mô phỏng** Ví Trả Sau — không phải sản phẩm cho vay thật (xem DESIGN.md) |
+| `notification-service` | 8103 | — (Go, không DB) | ADR-06: consumer SQS cho fan-out `payment.completed` (SNS thật trên AWS) — chỉ log/giả lập gửi thông báo, xem mục "SNS + SQS thật trên AWS (ADR-06)" dưới |
 
 ## Chạy lab
 
@@ -101,8 +173,16 @@ curl -X POST http://localhost:8095/bills/pay \
   -d '{"userId":"<userId>","category":"ELECTRICITY","customerCode":"PD01001234"}'
 ```
 
+## Quy tắc thay đổi cấu hình cluster (issue #54)
+
+Không dùng `kubectl patch` / `kubectl set env` / `kubectl scale` cho thay đổi lâu dài: nó khiến release Helm lệch và
+conflict field-manager. Chữa cháy được, nhưng phải đưa ngược vào `values.yaml`/template cùng ngày. Trước khi
+`helm upgrade`: `helm template ... | kubectl apply --server-side --dry-run=server --field-manager=helm -f -` phải 0 conflict.
+Replica cố ý 0 khai ở `replicaOverrides` trong `values-local.yaml`.
+
 ## Chưa làm
 
-- Chưa verify chữ ký IPN (gap đã ghi rõ ở trên).
+- Chưa có đối soát (reconciliation) và chưa truy vấn chủ động khi mất IPN — đơn `PENDING` treo vĩnh
+  viễn nếu webhook không tới (chữ ký IPN đã verify xong, xem mục trên).
 - Frontend React đã có ở `engineering/frontend/projects/ewallet-lab/` (xem DESIGN.md riêng của
   phần đó) nhưng còn nhiều tính năng comingSoon (QR, payment-link, split-bill, ...).

@@ -15,7 +15,23 @@ func getenv(key, fallback string) string {
 	return fallback
 }
 
+// requireEnv reads a mandatory env var and exits if it is missing/blank. Issue #52: the shared
+// secret is CONFIGURATION, never a compiled-in constant — so a missing value must stop the process
+// loudly instead of silently falling back to a well-known default (which would be a hardcoded
+// secret all over again, and would silently break the IPN signature handshake instead of failing
+// at startup where the operator can see it).
+func requireEnv(key string) string {
+	v := os.Getenv(key)
+	if v == "" {
+		log.Fatalf("%s must be set (issue #52: no default secret — set it via env/Secret)", key)
+	}
+	return v
+}
+
 func main() {
+	accessKey = requireEnv("BANK_GATEWAY_ACCESS_KEY")
+	secretKey = requireEnv("BANK_GATEWAY_SECRET_KEY")
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -24,7 +40,7 @@ func main() {
 	mux.HandleFunc("/v2/gateway/api/create", handleCreate)
 
 	port := getenv("HTTP_PORT", "8093")
-	log.Printf("mock-bank-gateway listening on :%s", port)
+	log.Printf("mock-bank-gateway listening on :%s (accessKey=%s)", port, accessKey)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
 		log.Fatalf("server stopped: %v", err)
 	}

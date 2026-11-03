@@ -98,6 +98,10 @@ public class PaymentRequest {
     @Column(name = "paid_by_user_id")
     private UUID paidByUserId;
 
+    /** Issue #126: Timestamp when request entered PAYING state to support TTL/Reconciliation */
+    @Column(name = "paying_started_at")
+    private Instant payingStartedAt;
+
     /** New wallet balance of the payer right after transfer-service confirmed the pay — kept as a
      * simple receipt reference, not a foreign key into any other service's data. */
     @Column(name = "transfer_reference")
@@ -176,16 +180,24 @@ public class PaymentRequest {
     }
 
     /**
-     * Claims the PENDING -> PAID transition WITHOUT a transfer-service reference yet — this is
-     * deliberately split from the old single-step {@code markPaid(payerUserId, transferReference)}
-     * so {@link PaymentRequestMutationExecutor#claimPendingOnce} can commit this status flip (and
-     * thus win/lose the optimistic-lock race) strictly BEFORE the real transfer-service call
-     * happens. Call {@link #attachTransferReference} once that call succeeds.
+     * Issue #67 (TD-04c) — Claims the PENDING -> PAYING transition BEFORE calling transfer-service.
+     * Replaces the old "lying state" markPaidPending which marked PAID prematurely.
      */
-    public void markPaidPending(UUID payerUserId) {
-        this.status = PaymentRequestStatus.PAID;
+    public void markPaying(UUID payerUserId) {
+        this.status = PaymentRequestStatus.PAYING;
         this.paidByUserId = payerUserId;
+        this.paidAt = null;
+        this.payingStartedAt = Instant.now();
+    }
+
+    /**
+     * Finalizes the payment transition PAYING -> PAID once transfer-service has confirmed the transfer.
+     */
+    public void markPaid(String transferReference) {
+        this.status = PaymentRequestStatus.PAID;
         this.paidAt = Instant.now();
+        this.payingStartedAt = null;
+        this.transferReference = transferReference;
     }
 
     public void attachTransferReference(String transferReference) {
@@ -199,6 +211,7 @@ public class PaymentRequest {
         this.status = PaymentRequestStatus.PENDING;
         this.paidByUserId = null;
         this.paidAt = null;
+        this.payingStartedAt = null;
         this.transferReference = null;
     }
 
@@ -272,5 +285,13 @@ public class PaymentRequest {
 
     public String getTransferReference() {
         return transferReference;
+    }
+
+    public Instant getPayingStartedAt() {
+        return payingStartedAt;
+    }
+
+    public void setPayingStartedAt(Instant payingStartedAt) {
+        this.payingStartedAt = payingStartedAt;
     }
 }

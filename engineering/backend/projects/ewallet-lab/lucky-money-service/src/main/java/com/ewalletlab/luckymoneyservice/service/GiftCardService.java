@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -65,11 +66,14 @@ public class GiftCardService {
     private final GiftCardTransferRepository repository;
     private final UserServiceClient userServiceClient;
     private final WalletServiceClient walletServiceClient;
+    private final LuckyMoneyMutationExecutor mutationExecutor;
 
     public GiftCardService(
             GiftCardTransferRepository repository,
             UserServiceClient userServiceClient,
-            WalletServiceClient walletServiceClient) {
+            WalletServiceClient walletServiceClient,
+            LuckyMoneyMutationExecutor mutationExecutor) {
+        this.mutationExecutor = mutationExecutor;
         this.repository = repository;
         this.userServiceClient = userServiceClient;
         this.walletServiceClient = walletServiceClient;
@@ -103,46 +107,32 @@ public class GiftCardService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể gửi thiệp mừng cho chính mình");
         }
 
-        // 1. Debit sender wallet (TRANSFER_OUT)
+        // 1. Debit sender wallet (TRANSFER_OUT) — SYNCHRONOUS and first (issue #56 / principle 7).
+        String debitKey = "giftcard-send:" + UUID.randomUUID();
         try {
             walletServiceClient.debit(
                 request.senderId(),
                 request.amount(),
                 "TRANSFER_OUT",
                 recipient.id().toString(),
-                "Gửi thiệp mừng " + request.templateCode() + " cho " + recipient.name()
+                "Gửi thiệp mừng " + request.templateCode() + " cho " + recipient.name(),
+                debitKey
             );
         } catch (HttpClientErrorException.Conflict e) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Số dư không đủ để gửi thiệp mừng");
+            // wallet 409 = insufficient balance OR monthly limit OR eKYC: pass wallet's message through unless it is the raw English default.
+            String conflict = e.getResponseBodyAsString();
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                conflict == null || conflict.isBlank() || conflict.trim().equalsIgnoreCase("Insufficient balance")
+                    ? "Số dư không đủ để gửi thiệp mừng" : conflict);
+        } catch (HttpServerErrorException.ServiceUnavailable e) {
+            // Issue #85: 503 = debit rejected BEFORE execution (eKYC unverifiable, ADR-02): nothing debited,
+            // no envelope/card/outbox row, no refund call. Other 5xx / I/O errors are ambiguous: not mapped.
+            String body = e.getResponseBodyAsString();
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, body != null && !body.isBlank() ? body
+                : "Hệ thống chưa thể xác minh định danh hoặc xử lý giao dịch lúc này, vui lòng thử lại sau");
         }
 
-        // 2. Credit recipient wallet (TRANSFER_IN)
-        try {
-            walletServiceClient.credit(
-                recipient.id(),
-                request.amount(),
-                "TRANSFER_IN",
-                request.senderId().toString(),
-                "Nhận thiệp mừng " + request.templateCode() + " từ " + request.senderName()
-            );
-        } catch (Exception e) {
-            log.error("Failed to credit recipient {} for gift card from sender {}, compensating...",
-                recipient.id(), request.senderId(), e);
-            try {
-                walletServiceClient.credit(
-                    request.senderId(),
-                    request.amount(),
-                    "REFUND",
-                    recipient.id().toString(),
-                    "Hoàn tiền gửi thiệp mừng do lỗi chuyển khoản"
-                );
-            } catch (Exception ce) {
-                log.error("CRITICAL: Failed to compensate sender {} for gift card!", request.senderId(), ce);
-            }
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Lỗi chuyển tiền đến người nhận, giao dịch đã được hoàn lại");
-        }
-
-        // 3. Save GiftCardTransfer record
+        // 2. Save the card + the recipient-credit OUTBOX row in ONE transaction (issue #56, TD-04).
         GiftCardTransfer card = new GiftCardTransfer(
             request.senderId(),
             request.senderName(),
@@ -153,8 +143,32 @@ public class GiftCardService {
             request.templateCode(),
             request.customMessage() != null ? request.customMessage().trim() : null
         );
+        try {
+            return mutationExecutor.saveGiftCardWithOutbox(card,
+                "Nhận thiệp mừng " + request.templateCode() + " từ " + request.senderName());
+        } catch (RuntimeException e) {
+            refundSenderAfterFailedSave(request, debitKey, e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                "Không thể ghi nhận thiệp mừng, giao dịch đã được hoàn lại");
+        }
+    }
 
-        return repository.save(card);
+    /** Debit succeeded but card+outbox could not be saved (caught exception): idempotent REFUND to the
+     * sender; failing that, ERROR with a reference code (pod death between debit and save is the same
+     * accepted trade-off as #60, see DESIGN.md). */
+    private void refundSenderAfterFailedSave(SendGiftCardRequestDto request, String debitKey, RuntimeException cause) {
+        String ref = "GS-" + UUID.nameUUIDFromBytes(debitKey.getBytes()).toString().substring(0, 8);
+        try {
+            walletServiceClient.credit(request.senderId(), request.amount(), "REFUND", "giftcard-send-failed",
+                "Hoàn tiền gửi thiệp mừng thất bại (mã " + ref + ")", "refund:" + debitKey);
+            log.warn("gift card send ref={} sender={} — save failed ({}), sender refunded", ref, request.senderId(),
+                cause.toString());
+        } catch (RuntimeException refundEx) {
+            log.error("GIFTCARD_SEND_MONEY_STUCK ref={} sender={} amount={} debitKey={} — debited, card NOT saved, " +
+                "refund FAILED ({}); original: {}. Needs manual reconciliation.", ref, request.senderId(),
+                request.amount(), debitKey, refundEx.toString(), cause.toString());
+        }
+
     }
 
     public List<GiftCardTransfer> getReceived(UUID recipientUserId) {

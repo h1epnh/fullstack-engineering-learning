@@ -23,6 +23,8 @@ export default defineConfig({
         './SavingsGoals': './src/screens/SavingsGoals.tsx',
         './VoucherPass': './src/screens/VoucherPass.tsx',
         './TelcoTopup': './src/screens/TelcoTopup.tsx',
+        './GameCardStore': './src/screens/GameCardStore.tsx',
+        './DealsHub': './src/screens/DealsHub.tsx',
       },
       shared: {
         react: { singleton: true, requiredVersion: false },

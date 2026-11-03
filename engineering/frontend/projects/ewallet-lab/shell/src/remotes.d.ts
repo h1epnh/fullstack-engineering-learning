@@ -86,12 +86,20 @@ declare module 'mfe_wallet/History' {
 }
 
 declare module 'mfe_wallet/AllServices' {
-  const AllServices: RemoteCmp<{ onComingSoon: (feature: string) => void }>;
+  const AllServices: RemoteCmp<{
+    session?: RemoteSession;
+    onNavigate?: (routeKey: string) => void;
+    onComingSoon: (feature: string) => void;
+  }>;
   export default AllServices;
 }
 
 declare module 'mfe_wallet/Notifications' {
-  const Notifications: RemoteCmp<{ session: RemoteSession }>;
+  const Notifications: RemoteCmp<{
+    session: RemoteSession;
+    onNavigate?: (routeKey: string, payload?: unknown) => void;
+    onBack?: () => void;
+  }>;
   export default Notifications;
 }
 
@@ -111,9 +119,12 @@ declare module 'mfe_transfer/App' {
     onComingSoon: (feature: string) => void;
     /** Issue #3 — shell deep-link: open straight at the pay-link screen for a `pay` token. */
     initialPayToken?: string;
+    /** Issue #92 — open straight at send-card screen */
+    initialStep?: string;
   }>;
   export default App;
 }
+
 
 declare module 'mfe_bill_payment/App' {
   const App: RemoteCmp<{
@@ -141,4 +152,22 @@ declare module 'mfe_wallet/VoucherPass' {
     onGoToBillPayment?: () => void;
   }>;
   export default VoucherPass;
+}
+
+declare module 'mfe_wallet/GameCardStore' {
+  const GameCardStore: RemoteCmp<{
+    session: RemoteSession;
+    onBack: () => void;
+    onNavigate?: (routeKey: string) => void;
+  }>;
+  export default GameCardStore;
+}
+
+declare module 'mfe_wallet/DealsHub' {
+  const DealsHub: RemoteCmp<{
+    session: RemoteSession;
+    onBack: () => void;
+    onNavigate?: (routeKey: string) => void;
+  }>;
+  export default DealsHub;
 }

@@ -52,6 +52,10 @@ public class BillPayment {
     @Column(name = "payment_source", nullable = false)
     private PaymentSource paymentSource = PaymentSource.MAIN_WALLET;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private BillPaymentStatus status = BillPaymentStatus.PAID;
+
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
 
@@ -127,5 +131,29 @@ public class BillPayment {
 
     public PaymentSource getPaymentSource() {
         return paymentSource;
+    }
+
+    public BillPaymentStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(BillPaymentStatus status) {
+        this.status = status;
+    }
+
+    public void setDiscountAmount(BigDecimal discountAmount) {
+        this.discountAmount = discountAmount;
+    }
+
+    public void setVoucherId(UUID voucherId) {
+        this.voucherId = voucherId;
+    }
+
+    public void setFinalAmount(BigDecimal finalAmount) {
+        this.finalAmount = finalAmount;
+    }
+
+    public void setPaymentSource(PaymentSource paymentSource) {
+        this.paymentSource = paymentSource;
     }
 }

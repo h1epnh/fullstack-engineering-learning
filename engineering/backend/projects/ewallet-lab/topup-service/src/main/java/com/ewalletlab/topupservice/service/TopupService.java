@@ -1,13 +1,20 @@
 package com.ewalletlab.topupservice.service;
 
+import com.ewalletlab.topupservice.domain.OutboxEvent;
+import com.ewalletlab.topupservice.domain.OutboxEventType;
 import com.ewalletlab.topupservice.domain.TopupRequest;
 import com.ewalletlab.topupservice.domain.TopupStatus;
+import com.ewalletlab.topupservice.repository.OutboxEventRepository;
 import com.ewalletlab.topupservice.repository.TopupRequestRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -16,12 +23,43 @@ public class TopupService {
     private final TopupRequestRepository topupRequestRepository;
     private final BankGatewayClient bankGatewayClient;
     private final WalletServiceClient walletServiceClient;
+    private final OutboxEventRepository outboxEventRepository;
+    private final ObjectMapper objectMapper;
 
     public TopupService(TopupRequestRepository topupRequestRepository, BankGatewayClient bankGatewayClient,
-                         WalletServiceClient walletServiceClient) {
+                         WalletServiceClient walletServiceClient, OutboxEventRepository outboxEventRepository,
+                         ObjectMapper objectMapper) {
         this.topupRequestRepository = topupRequestRepository;
         this.bankGatewayClient = bankGatewayClient;
         this.walletServiceClient = walletServiceClient;
+        this.outboxEventRepository = outboxEventRepository;
+        this.objectMapper = objectMapper;
+    }
+
+    /**
+     * Issue #66 (TD-04b): Atomically transitions TopupRequest from PENDING to CONFIRMED
+     * and saves a PENDING OutboxEvent in the EXACT SAME local database transaction.
+     * Only returns true if this caller won the race (updated == 1).
+     */
+    @Transactional
+    public boolean confirmTopupWithOutbox(String orderId, TopupRequest topupRequest, String bankTransactionId) {
+        int updated = topupRequestRepository.transitionFromPending(orderId, TopupStatus.CONFIRMED);
+        if (updated == 1) {
+            try {
+                String payload = objectMapper.writeValueAsString(Map.of(
+                    "userId", topupRequest.getUserId().toString(),
+                    "amount", topupRequest.getAmount().toPlainString(),
+                    "bankTransactionId", bankTransactionId,
+                    "orderId", orderId,
+                    "idempotencyKey", "topup:" + bankTransactionId
+                ));
+                outboxEventRepository.save(OutboxEvent.pending(OutboxEventType.TOPUP_CONFIRMED, payload));
+                return true;
+            } catch (JsonProcessingException e) {
+                throw new IllegalStateException("Failed to serialize outbox payload", e);
+            }
+        }
+        return false;
     }
 
     /**

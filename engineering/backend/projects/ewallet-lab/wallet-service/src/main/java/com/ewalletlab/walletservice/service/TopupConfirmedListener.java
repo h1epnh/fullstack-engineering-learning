@@ -49,8 +49,11 @@ class TopupConfirmedListener {
 
         BigDecimal amount = new BigDecimal(node.path("amount").asText());
         String bankTransactionId = node.path("bankTransactionId").asText();
+        String idempotencyKey = node.hasNonNull("idempotencyKey")
+            ? node.path("idempotencyKey").asText()
+            : "topup:" + bankTransactionId;
 
-        walletService.credit(userId, amount, TransactionType.TOPUP, bankTransactionId, "Top-up from linked bank");
-        log.info("credited topup for user={} amount={} bankTxn={}", userId, amount, bankTransactionId);
+        walletService.credit(userId, amount, TransactionType.TOPUP, bankTransactionId, "Top-up from linked bank", idempotencyKey);
+        log.info("credited topup for user={} amount={} bankTxn={} idempotencyKey={}", userId, amount, bankTransactionId, idempotencyKey);
     }
 }

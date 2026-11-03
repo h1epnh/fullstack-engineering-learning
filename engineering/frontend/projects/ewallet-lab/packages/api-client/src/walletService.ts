@@ -33,14 +33,88 @@ export type Transaction = {
   createdAt: string;
 };
 
-/** Issue #16 — "Quản lý chi tiêu" MVP báo cáo tự động, read-only trên `Transaction` có sẵn. */
 export type SpendingPeriod = 'week' | 'month';
+
+export type CategoryBreakdownItem = {
+  categoryCode: string;
+  categoryName: string;
+  icon: string;
+  color: string;
+  amount: number;
+  percentage: number;
+  transactionCount: number;
+};
+
+export type SpendingTransactionItem = {
+  id: string;
+  source: 'WALLET' | 'CASH';
+  amount: number;
+  categoryCode: string;
+  categoryName: string;
+  icon: string;
+  color: string;
+  note: string | null;
+  spentAt: string;
+};
 
 export type SpendingReport = {
   period: SpendingPeriod;
   periodStart: string;
   total: number;
   breakdown: Partial<Record<TransactionType, number>>;
+  inWalletTotal?: number;
+  externalTotal?: number;
+  categoryBreakdown?: CategoryBreakdownItem[];
+  transactions?: SpendingTransactionItem[];
+};
+
+export type SpendingCategory = {
+  code: string;
+  name: string;
+  icon: string;
+  color: string;
+  isCustom: boolean;
+};
+
+export type CreateCustomCategoryRequest = {
+  code: string;
+  name: string;
+  icon?: string;
+  color?: string;
+};
+
+export type CreateExternalExpenseRequest = {
+  amount: number;
+  categoryCode?: string;
+  note?: string;
+  spentAt?: string;
+};
+
+export type ExternalExpense = {
+  id: string;
+  userId: string;
+  amount: number;
+  categoryCode: string;
+  note: string;
+  spentAt: string;
+  createdAt: string;
+};
+
+export type MonthlyBudget = {
+  id: string;
+  month: string;
+  categoryCode: string;
+  categoryName: string;
+  budgetLimit: number;
+  spentAmount: number;
+  percentage: number;
+  status: 'SAFE' | 'WARNING_80' | 'EXCEEDED_100';
+};
+
+export type SetMonthlyBudgetRequest = {
+  month: string;
+  categoryCode?: string;
+  budgetLimit: number;
 };
 
 /** Issue #36 — "Bộ lọc lịch sử giao dịch thông minh". Mirrors backend's `TransactionPageDto`. */
@@ -122,4 +196,32 @@ export const walletService = {
    * đây là file, không phải JSON). */
   getStatementCsvUrl: (userId: string, month: string) =>
     `${API_BASE.wallet}/wallets/${userId}/statement/export?month=${month}&format=csv`,
+
+  // --- Issue #88: PFM 2.0 Methods ---
+
+  setTransactionCategory: (userId: string, txId: string, categoryCode: string) =>
+    http.put<void>(`${API_BASE.wallet}/wallets/${userId}/transactions/${txId}/category`, { categoryCode }),
+
+  getSpendingCategories: (userId: string) =>
+    http.get<SpendingCategory[]>(`${API_BASE.wallet}/wallets/${userId}/spending/categories`),
+
+  createSpendingCategory: (userId: string, req: CreateCustomCategoryRequest) =>
+    http.post<SpendingCategory>(`${API_BASE.wallet}/wallets/${userId}/spending/categories`, req),
+
+  createExternalExpense: (userId: string, req: CreateExternalExpenseRequest) =>
+    http.post<ExternalExpense>(`${API_BASE.wallet}/wallets/${userId}/spending/external-expenses`, req),
+
+  getExternalExpenses: (userId: string) =>
+    http.get<ExternalExpense[]>(`${API_BASE.wallet}/wallets/${userId}/spending/external-expenses`),
+
+  deleteExternalExpense: (userId: string, expenseId: string) =>
+    http.delete<void>(`${API_BASE.wallet}/wallets/${userId}/spending/external-expenses/${expenseId}`),
+
+  getBudgets: (userId: string, month?: string) =>
+    http.get<MonthlyBudget[]>(
+      `${API_BASE.wallet}/wallets/${userId}/spending/budgets${month ? `?month=${encodeURIComponent(month)}` : ''}`
+    ),
+
+  setBudget: (userId: string, req: SetMonthlyBudgetRequest) =>
+    http.put<MonthlyBudget>(`${API_BASE.wallet}/wallets/${userId}/spending/budgets`, req),
 };

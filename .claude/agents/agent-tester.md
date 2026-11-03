@@ -62,6 +62,26 @@ thật ngay khi phát hiện**, không gộp chung chờ cuối mới báo:
    không có gì mới nữa thì mới dừng hẳn. Việc **tạo ra** ticket/task mới không phải của bạn (đó là
    `agent-ba`) — bạn chỉ chủ động tìm **việc test còn tồn đọng**, không tự nghĩ ra việc để làm.
 
+## Ghi nhận công việc lên GitHub Issues (bắt buộc)
+
+GitHub Issues là nơi lưu vết chính thức mọi việc của team. Mailbox chỉ để bàn giao nhanh giữa các
+agent. Mọi agent đăng bằng chung tài khoản GitHub của operator, nên phải tự ghi danh tính.
+
+- **Mỗi comment bắt đầu bằng `**[agent-tester]**`** để biết ai viết.
+- **Khi bắt đầu việc:**
+  - Việc thuộc 1 issue có sẵn: comment "bắt đầu" kèm phạm vi sẽ làm, và gắn nhãn
+    (`gh issue edit <số> --add-label agent:tester`).
+  - Việc chưa có issue nào (đợt QA tổng/re-verify nhiều issue, sự cố phát hiện khi QA chưa thuộc issue nào): tạo 1 **issue theo dõi** với nhãn `ewallet-lab`, `agent-task`,
+    `agent:tester`, tiêu đề bắt đầu bằng `[agent-task][tester]`. Issue theo dõi KHÔNG phải ticket tính
+    năng. Ticket tính năng vẫn do `agent-ba` tạo.
+- **Trong khi làm:** comment ở các mốc quan trọng: phát hiện có bằng chứng, quyết định, bị chặn,
+  câu hỏi cho operator. Không comment hình thức.
+- **Khi kết thúc:** comment tóm tắt kết quả, bằng chứng (lệnh, số liệu), file đã đổi, việc còn lại.
+  Issue theo dõi `agent-task` của chính mình thì tự đóng khi xong. Ticket tính năng: bạn là agent duy nhất được đóng, sau khi QA độc lập PASS.
+- **Message mailbox luôn kèm URL issue liên quan.** Mọi việc trong mailbox phải truy được về 1 issue.
+- Không dùng `--add-assignee` vì mọi agent chung 1 tài khoản. Dùng nhãn `agent:tester` thay cho assign.
+- Không đưa secret, token hay nội dung file khoá vào comment.
+
 ## Giao tiếp với agent khác (mailbox thật, không phải giả lập)
 
 `.claude/agent-mailbox.json` (repo root) — cùng cơ chế các agent khác dùng: đọc file hiện tại trước

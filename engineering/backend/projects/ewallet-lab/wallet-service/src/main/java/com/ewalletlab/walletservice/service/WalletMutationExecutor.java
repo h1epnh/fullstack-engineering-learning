@@ -1,6 +1,7 @@
 package com.ewalletlab.walletservice.service;
 
 import com.ewalletlab.walletservice.domain.Transaction;
+import com.ewalletlab.walletservice.domain.TransactionDirection;
 import com.ewalletlab.walletservice.domain.TransactionType;
 import com.ewalletlab.walletservice.domain.Wallet;
 import com.ewalletlab.walletservice.repository.TransactionRepository;
@@ -46,23 +47,31 @@ class WalletMutationExecutor {
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
     private final BigDecimal monthlyOutboundLimit;
-    private final BigDecimal unverifiedMonthlyLimit;
     private final StepUpPolicy stepUpPolicy;
     private final FamilyWalletServiceClient familyWalletServiceClient;
     private final UserServiceClient userServiceClient;
 
     WalletMutationExecutor(WalletRepository walletRepository, TransactionRepository transactionRepository,
                             @Value("${ewallet-lab.monthly-outbound-limit:100000000}") BigDecimal monthlyOutboundLimit,
-                            @Value("${ewallet-lab.unverified-monthly-limit:5000000}") BigDecimal unverifiedMonthlyLimit,
                             StepUpPolicy stepUpPolicy, FamilyWalletServiceClient familyWalletServiceClient,
                             UserServiceClient userServiceClient) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.monthlyOutboundLimit = monthlyOutboundLimit;
-        this.unverifiedMonthlyLimit = unverifiedMonthlyLimit;
         this.stepUpPolicy = stepUpPolicy;
         this.familyWalletServiceClient = familyWalletServiceClient;
         this.userServiceClient = userServiceClient;
+    }
+
+    /**
+     * Result of one credit/debit attempt. {@code transaction} is {@code null} exactly when no new
+     * ledger row was written this call (the idempotency pre-check short-circuited) — ADR-06
+     * (DESIGN.md) uses this {@code null} to decide whether to publish a {@code payment.completed}
+     * SNS notification: a short-circuited idempotent no-op must NOT publish a second notification
+     * for a transaction that (if it exists at all) already published one on its real, original
+     * commit.
+     */
+    record MutationResult(Wallet wallet, Transaction transaction) {
     }
 
     /**
@@ -76,59 +85,79 @@ class WalletMutationExecutor {
      * reference}).
      */
     @Transactional
-    Wallet creditOnce(UUID userId, BigDecimal amount, TransactionType type, String reference, String note,
-                       String idempotencyKey) {
+    MutationResult creditOnce(UUID userId, BigDecimal amount, TransactionType type, String reference, String note,
+                               String idempotencyKey) {
         Wallet wallet = getOrCreateWalletInternal(userId);
         if (idempotencyKey != null && transactionRepository.findByIdempotencyKey(idempotencyKey).isPresent()) {
-            return wallet;
+            return new MutationResult(wallet, null);
         }
         wallet.credit(amount);
         walletRepository.save(wallet);
-        transactionRepository.save(new Transaction(wallet.getId(), type, amount, reference, note, idempotencyKey));
-        return wallet;
+        Transaction transaction =
+            transactionRepository.save(new Transaction(wallet.getId(), type, amount, reference, note, idempotencyKey));
+        return new MutationResult(wallet, transaction);
     }
 
     /**
-     * Throws IllegalStateException (mapped to 409 by the controller) if balance is insufficient OR
-     * if this debit would push the wallet's cumulative outbound total for the current calendar
-     * month over {@link #monthlyOutboundLimit} (issue #7). The monthly check runs BEFORE
-     * {@code wallet.debit(amount)}, inside this same {@code @Transactional} method — not as a
-     * separate pre-check — so it shares the same optimistic-lock-driven serialization as the
-     * balance check: if two concurrent debits race, the loser's {@code walletRepository.save}
-     * throws {@code ObjectOptimisticLockingFailureException}, {@link WalletService}'s retry re-runs
-     * this whole method from scratch, and the retry's fresh sum query sees the winner's now-committed
-     * transaction row. Computing the sum outside this transaction (e.g. in {@link WalletService}
-     * before calling this method) would reopen exactly that race.
+     * Throws IllegalStateException (mapped to 409 by the controller) if: the wallet's owner is
+     * {@code UNVERIFIED} eKYC tier (issue #40, binary model below) and {@code type} is an outbound
+     * ({@link TransactionDirection#OUT}) movement — i.e. ANY debit, regardless of amount; OR balance
+     * is insufficient; OR this debit would push the wallet's cumulative outbound total for the
+     * current calendar month over {@link #monthlyOutboundLimit} (issue #7, VERIFIED accounts only).
+     * The monthly check runs BEFORE {@code wallet.debit(amount)}, inside this same
+     * {@code @Transactional} method — not as a separate pre-check — so it shares the same
+     * optimistic-lock-driven serialization as the balance check: if two concurrent debits race, the
+     * loser's {@code walletRepository.save} throws {@code ObjectOptimisticLockingFailureException},
+     * {@link WalletService}'s retry re-runs this whole method from scratch, and the retry's fresh
+     * sum query sees the winner's now-committed transaction row. Computing the sum outside this
+     * transaction (e.g. in {@link WalletService} before calling this method) would reopen exactly
+     * that race.
      */
     @Transactional
-    Wallet debitOnce(UUID userId, BigDecimal amount, TransactionType type, String reference, String note,
-                      boolean stepUpConfirmed, String idempotencyKey) {
+    MutationResult debitOnce(UUID userId, BigDecimal amount, TransactionType type, String reference, String note,
+                              boolean stepUpConfirmed, String idempotencyKey) {
         Wallet wallet = getOrCreateWalletInternal(userId);
         if (idempotencyKey != null && transactionRepository.findByIdempotencyKey(idempotencyKey).isPresent()) {
-            return wallet;
+            return new MutationResult(wallet, null);
+        }
+        /*
+         * Issue #40 (revised binary model — operator-confirmed after agent-designer verified
+         * directly against momo.vn: an account that is eKYC-UNVERIFIED cannot use its wallet
+         * balance for ANY outbound movement — no intermediate reduced monthly cap, which was the
+         * previous (unsourced) model this replaces). Deliberately checked against
+         * type.direction() == OUT — the single source of truth from TransactionType (issue #36) —
+         * rather than a hand-maintained list of debit TransactionTypes, so every current and future
+         * OUT type (TRANSFER_OUT, WITHDRAW, BILL_PAYMENT, BNPL_REPAYMENT, INVESTMENT_BUY,
+         * SAVINGS_GOAL_DEPOSIT, VOUCHER_PASS_PURCHASE) is covered automatically and every IN type
+         * (TOPUP, TRANSFER_IN, REFUND, LOYALTY_REDEMPTION, INVESTMENT_SELL, SAVINGS_GOAL_WITHDRAW)
+         * is automatically exempt — matching exactly which operations momo.vn describes as blocked
+         * vs. unaffected for an unverified wallet. This check runs for EVERY debit, not just the
+         * ones in MONTHLY_LIMIT_TYPES below, because BNPL_REPAYMENT is excluded from that set (Điều
+         * 26's own carve-out) but is still real money leaving the wallet and must still be blocked
+         * here.
+         */
+        if (type.direction() == TransactionDirection.OUT) {
+            // Issue #55 (TD-08, ADR-02): FAIL-CLOSED. Unknown tier -> KycUnavailableException (503, thrown
+            // by UserServiceClient); user not found (404) -> reject too. Only an explicit non-UNVERIFIED
+            // tier lets money leave. Runs before any state change, so nothing to compensate.
+            UserServiceClient.UserResponse kycUser = userServiceClient.findUser(userId)
+                .orElseThrow(() -> new IllegalStateException(
+                    "Không tìm thấy hồ sơ định danh của tài khoản này, không thể thực hiện giao dịch chuyển/rút tiền."));
+            boolean isUnverified = "UNVERIFIED".equalsIgnoreCase(kycUser.kycTier());
+            if (isUnverified) {
+                throw new IllegalStateException(
+                    "Ví chưa hoàn tất định danh (eKYC), vui lòng xác thực CCCD trước khi rút/chuyển tiền.");
+            }
         }
         if (MONTHLY_LIMIT_TYPES.contains(type)) {
             BigDecimal spentThisMonth = transactionRepository.sumAmountByWalletIdAndTypeInSince(
                 wallet.getId(), MONTHLY_LIMIT_TYPES, currentMonthStart());
             BigDecimal projectedSpend = spentThisMonth.add(amount);
 
-            // Issue #40: check eKYC tier limit (5.000.000đ if UNVERIFIED, 100.000.000đ if VERIFIED)
-            boolean isUnverified = userServiceClient.findUser(userId)
-                .map(u -> "UNVERIFIED".equalsIgnoreCase(u.kycTier()))
-                .orElse(false);
-
-            BigDecimal effectiveMonthlyLimit = isUnverified ? unverifiedMonthlyLimit : monthlyOutboundLimit;
-
-            if (projectedSpend.compareTo(effectiveMonthlyLimit) > 0) {
-                if (isUnverified) {
-                    throw new IllegalStateException(
-                        "Đã vượt hạn mức giao dịch %s/tháng cho tài khoản chưa định danh eKYC. Vui lòng xác thực CCCD để nâng hạn mức lên %s/tháng."
-                            .formatted(formatVnd(unverifiedMonthlyLimit), formatVnd(monthlyOutboundLimit)));
-                } else {
-                    throw new IllegalStateException(
-                        "Đã vượt hạn mức giao dịch chuyển tiền/thanh toán %s/tháng theo Điều 26 Thông tư 40/2024/TT-NHNN (sửa bởi Thông tư 41/2025/TT-NHNN)"
-                            .formatted(formatVnd(monthlyOutboundLimit)));
-                }
+            if (projectedSpend.compareTo(monthlyOutboundLimit) > 0) {
+                throw new IllegalStateException(
+                    "Đã vượt hạn mức giao dịch chuyển tiền/thanh toán %s/tháng theo Điều 26 Thông tư 40/2024/TT-NHNN (sửa bởi Thông tư 41/2025/TT-NHNN)"
+                        .formatted(formatVnd(monthlyOutboundLimit)));
             }
             // Issue #12 — "Ví Gia Đình" (VNPay-inspired, NOT MoMo). Reuses the exact same
             // spentThisMonth/projectedSpend already computed above for the legal limit — a
@@ -162,8 +191,9 @@ class WalletMutationExecutor {
         }
         wallet.debit(amount);
         walletRepository.save(wallet);
-        transactionRepository.save(new Transaction(wallet.getId(), type, amount, reference, note, idempotencyKey));
-        return wallet;
+        Transaction transaction =
+            transactionRepository.save(new Transaction(wallet.getId(), type, amount, reference, note, idempotencyKey));
+        return new MutationResult(wallet, transaction);
     }
 
     private Wallet getOrCreateWalletInternal(UUID userId) {

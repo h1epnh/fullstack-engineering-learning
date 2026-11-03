@@ -5,7 +5,10 @@ export type TransferResponse = {
   toUserId: string;
   toName: string;
   newBalance: number;
+  greetingCardTheme?: string;
+  greetingMessage?: string;
 };
+
 
 export type SavedPayee = {
   id: string;
@@ -81,8 +84,23 @@ export const transferService = {
    * never show a name the actual transfer doesn't also verify. */
   /** `stepUpConfirmed` — issue #15: pass `true` when retrying after the user has confirmed the
    * (simulated) step-up prompt shown for a 428 response. */
-  transfer: (fromUserId: string, toPhone: string, amount: number, stepUpConfirmed?: boolean) =>
-    http.post<TransferResponse>(`${API_BASE.transfer}/transfers`, { fromUserId, toPhone, amount, stepUpConfirmed }),
+  transfer: (
+    fromUserId: string,
+    toPhone: string,
+    amount: number,
+    stepUpConfirmed?: boolean,
+    greetingCardTheme?: string,
+    greetingMessage?: string,
+  ) =>
+    http.post<TransferResponse>(`${API_BASE.transfer}/transfers`, {
+      fromUserId,
+      toPhone,
+      amount,
+      stepUpConfirmed,
+      greetingCardTheme,
+      greetingMessage,
+    }),
+
 
   // Issue #32: Saved Payees & Favorites
   listPayees: (userId: string) =>

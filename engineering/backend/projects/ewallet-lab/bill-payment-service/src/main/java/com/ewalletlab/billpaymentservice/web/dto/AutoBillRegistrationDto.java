@@ -16,9 +16,20 @@ public record AutoBillRegistrationDto(
     BigDecimal maxAmount,
     Integer autoPayDay,
     AutoBillStatus status,
+    Double spikeAlertThresholdPercent,
+    BigDecimal heldAmount,
+    String heldPeriod,
+    String heldReason,
+    BigDecimal heldPreviousAmount,
     Instant createdAt,
     Instant updatedAt
 ) {
+    public AutoBillRegistrationDto(UUID id, UUID userId, BillCategory category, String customerCode,
+                                   BigDecimal maxAmount, Integer autoPayDay, AutoBillStatus status,
+                                   Instant createdAt, Instant updatedAt) {
+        this(id, userId, category, customerCode, maxAmount, autoPayDay, status, 30.0, null, null, null, null, createdAt, updatedAt);
+    }
+
     public static AutoBillRegistrationDto from(AutoBillRegistration reg) {
         return new AutoBillRegistrationDto(
             reg.getId(),
@@ -28,6 +39,11 @@ public record AutoBillRegistrationDto(
             reg.getMaxAmount(),
             reg.getAutoPayDay(),
             reg.getStatus(),
+            reg.getSpikeAlertThresholdPercent(),
+            reg.getHeldAmount(),
+            reg.getHeldPeriod(),
+            reg.getHeldReason(),
+            reg.getHeldPreviousAmount(),
             reg.getCreatedAt(),
             reg.getUpdatedAt()
         );

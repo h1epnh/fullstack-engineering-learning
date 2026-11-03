@@ -1,13 +1,21 @@
 package com.ewalletlab.luckymoneyservice.service;
 
 import com.ewalletlab.luckymoneyservice.domain.LuckyMoney;
+import com.ewalletlab.luckymoneyservice.domain.GiftCardTransfer;
 import com.ewalletlab.luckymoneyservice.domain.LuckyMoneyStatus;
+import com.ewalletlab.luckymoneyservice.domain.OutboxEvent;
+import com.ewalletlab.luckymoneyservice.domain.OutboxEventType;
+import com.ewalletlab.luckymoneyservice.repository.GiftCardTransferRepository;
 import com.ewalletlab.luckymoneyservice.repository.LuckyMoneyRepository;
+import com.ewalletlab.luckymoneyservice.repository.OutboxEventRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -32,9 +40,26 @@ import java.util.UUID;
 class LuckyMoneyMutationExecutor {
 
     private final LuckyMoneyRepository repository;
+    private final GiftCardTransferRepository giftCardRepository;
+    private final OutboxEventRepository outboxRepository;
+    private final ObjectMapper objectMapper;
 
-    LuckyMoneyMutationExecutor(LuckyMoneyRepository repository) {
+    LuckyMoneyMutationExecutor(LuckyMoneyRepository repository, GiftCardTransferRepository giftCardRepository,
+                                OutboxEventRepository outboxRepository, ObjectMapper objectMapper) {
         this.repository = repository;
+        this.giftCardRepository = giftCardRepository;
+        this.outboxRepository = outboxRepository;
+        this.objectMapper = objectMapper;
+    }
+
+    /** Issue #56 — writes the PENDING outbox row; always called inside the caller's @Transactional. */
+    private void enqueue(OutboxEventType type, OutboxPayload payload) {
+        try {
+            outboxRepository.save(OutboxEvent.pending(type, objectMapper.writeValueAsString(payload)));
+        } catch (JsonProcessingException e) {
+            // Failing the whole local transaction is far safer than a state change with no follow-up row.
+            throw new IllegalStateException("Không thể serialize outbox payload", e);
+        }
     }
 
     @Transactional
@@ -51,7 +76,11 @@ class LuckyMoneyMutationExecutor {
                     : "Lì xì này đã hết hạn và được hoàn tiền lại người gửi");
         }
         lm.markClaimed();
-        return repository.save(lm);
+        LuckyMoney saved = repository.save(lm);
+        // Issue #56: the recipient's credit is relayed (same transaction as the CLAIMED status).
+        enqueue(OutboxEventType.LUCKY_CLAIM_CREDIT, new OutboxPayload(saved.getId(), toUserId, saved.getAmount(),
+            "TRANSFER_IN", saved.getFromUserId().toString(), "Nhận lì xì từ " + saved.getFromName(), null));
+        return saved;
     }
 
     /**
@@ -69,7 +98,12 @@ class LuckyMoneyMutationExecutor {
             return null;
         }
         lm.markExpiredRefunded();
-        return repository.save(lm);
+        LuckyMoney saved = repository.save(lm);
+        // Issue #56: the sender's REFUND is relayed (same transaction as the EXPIRED_REFUNDED status).
+        enqueue(OutboxEventType.LUCKY_EXPIRE_REFUND, new OutboxPayload(saved.getId(), saved.getFromUserId(),
+            saved.getAmount(), "REFUND", saved.getToUserId().toString(),
+            "Hoàn tiền lì xì hết hạn (48h) chưa được nhận", null));
+        return saved;
     }
 
     /** Compensates a claim/expiry whose follow-up wallet-service call failed afterwards — reverts
@@ -81,5 +115,25 @@ class LuckyMoneyMutationExecutor {
             lm.revertToPending();
             repository.save(lm);
         });
+    }
+
+    /** Issue #56 — gift card: the sender was already debited synchronously; saves the card and the
+     * recipient-credit outbox row in ONE transaction. */
+    @Transactional
+    GiftCardTransfer saveGiftCardWithOutbox(GiftCardTransfer card, String note) {
+        GiftCardTransfer saved = giftCardRepository.save(card);
+        enqueue(OutboxEventType.GIFT_CARD_CREDIT_RECIPIENT, new OutboxPayload(saved.getId(),
+            saved.getRecipientUserId(), saved.getAmount(), "TRANSFER_IN", saved.getSenderId().toString(), note,
+            saved.getSenderId()));
+        return saved;
+    }
+
+    /** Issue #56 — recipient credit permanently failed: delete the phantom card and enqueue the
+     * sender's REFUND, atomically (replaces the old inline "CRITICAL: failed to compensate" log). */
+    @Transactional
+    void compensateGiftCard(UUID cardId, UUID senderId, UUID recipientId, BigDecimal amount) {
+        giftCardRepository.findById(cardId).ifPresent(giftCardRepository::delete);
+        enqueue(OutboxEventType.GIFT_CARD_REFUND_SENDER, new OutboxPayload(cardId, senderId, amount, "REFUND",
+            recipientId.toString(), "Hoàn tiền gửi thiệp mừng do lỗi chuyển khoản", senderId));
     }
 }

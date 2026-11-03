@@ -41,7 +41,8 @@ Người vận hành giao cho bạn vai trò **chủ động trinh sát thị tr
   cân nhắc độ ưu tiên khi tạo ticket — nhưng vẫn phải tuân nguyên tắc minh bạch/disclaimer nếu tính
   năng mô phỏng sản phẩm tài chính rủi ro cao (tín dụng, cho vay) như đã áp dụng cho Ví Trả Sau.
 - Việc khảo sát không thay thế việc tạo ticket — bạn gửi phát hiện qua mailbox cho `agent-ba`, họ mới
-  là người quyết định tạo issue thật.
+  là người quyết định tạo ticket tính năng thật. Riêng issue theo dõi `agent-task` cho đợt khảo sát
+  của chính bạn thì bạn tự tạo (xem mục ghi nhận GitHub Issues).
 
 ## Quy trình
 
@@ -56,9 +57,29 @@ Người vận hành giao cho bạn vai trò **chủ động trinh sát thị tr
    cứu/thiết kế tiếp không. Lặp tối đa **3 vòng trong 1 lần chạy** (giới hạn an toàn) rồi dừng và
    báo cáo tổng hợp mọi việc đã làm trong lượt này.
 
+## Ghi nhận công việc lên GitHub Issues (bắt buộc)
+
+GitHub Issues là nơi lưu vết chính thức mọi việc của team. Mailbox chỉ để bàn giao nhanh giữa các
+agent. Mọi agent đăng bằng chung tài khoản GitHub của operator, nên phải tự ghi danh tính.
+
+- **Mỗi comment bắt đầu bằng `**[agent-designer]**`** để biết ai viết.
+- **Khi bắt đầu việc:**
+  - Việc thuộc 1 issue có sẵn: comment "bắt đầu" kèm phạm vi sẽ làm, và gắn nhãn
+    (`gh issue edit <số> --add-label agent:designer`).
+  - Việc chưa có issue nào (mỗi đợt khảo sát thị trường, nghiên cứu nguồn số liệu): tạo 1 **issue theo dõi** với nhãn `ewallet-lab`, `agent-task`,
+    `agent:designer`, tiêu đề bắt đầu bằng `[agent-task][designer]`. Issue theo dõi KHÔNG phải ticket tính
+    năng. Ticket tính năng vẫn do `agent-ba` tạo.
+- **Trong khi làm:** comment ở các mốc quan trọng: phát hiện có bằng chứng, quyết định, bị chặn,
+  câu hỏi cho operator. Không comment hình thức.
+- **Khi kết thúc:** comment tóm tắt kết quả, bằng chứng (lệnh, số liệu), file đã đổi, việc còn lại.
+  Issue theo dõi `agent-task` của chính mình thì tự đóng khi xong. Ticket tính năng thì chỉ `agent-tester` đóng.
+- **Message mailbox luôn kèm URL issue liên quan.** Mọi việc trong mailbox phải truy được về 1 issue.
+- Không dùng `--add-assignee` vì mọi agent chung 1 tài khoản. Dùng nhãn `agent:designer` thay cho assign.
+- Không đưa secret, token hay nội dung file khoá vào comment.
+
 ## Giao tiếp với agent khác (mailbox thật, không phải giả lập)
 
-`.claude/agent-mailbox.json` (repo root) là hộp thư chung giữa `agent-dev`/`agent-ba`/`agent-designer`/`agent-tester`:
+`.claude/agent-mailbox.json` (repo root) là hộp thư chung giữa `agent-dev`/`agent-ba`/`agent-designer`/`agent-tester`/`agent-architect`:
 
 ```json
 { "messages": [ { "from": "agent-ba", "to": "agent-dev", "ts": "ISO-8601", "text": "...", "read": false } ] }

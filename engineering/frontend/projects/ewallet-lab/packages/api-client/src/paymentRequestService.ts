@@ -4,7 +4,7 @@ import { API_BASE, http } from './http';
  * (payment-link) and #8 (payment-reminder) share one domain model. */
 export type PaymentRequestKind = 'LINK' | 'REMINDER';
 
-export type PaymentRequestStatus = 'PENDING' | 'PAID' | 'CANCELLED' | 'EXPIRED';
+export type PaymentRequestStatus = 'PENDING' | 'PAYING' | 'PAID' | 'CANCELLED' | 'EXPIRED';
 
 export type PaymentRequest = {
   id: string;

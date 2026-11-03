@@ -22,9 +22,12 @@ spec:
       containers:
         - name: zookeeper
           image: {{ .Values.zookeeper.image }}
+          {{- include "ewallet-lab.resources" (dict "root" $ "name" "zookeeper") | nindent 10 }}
           ports:
             - containerPort: 2181
           env:
+            - name: KAFKA_HEAP_OPTS
+              value: {{ .Values.resources.zookeeper.heapOpts | quote }}
             - name: ZOOKEEPER_CLIENT_PORT
               value: "2181"
             - name: ZOOKEEPER_TICK_TIME

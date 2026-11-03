@@ -36,7 +36,7 @@ export type BillPaymentReceipt = {
 /** Issue #26 — Auto-debit Mandates, persisted server-side in bill-payment-service
  * (AutoBillRegistration), NOT in browser localStorage — a mandate registered on one device must
  * be visible/processed by the backend scheduler regardless of which device looks at it later. */
-export type AutoBillStatus = 'ACTIVE' | 'PAUSED' | 'CANCELLED';
+export type AutoBillStatus = 'ACTIVE' | 'PAUSED' | 'CANCELLED' | 'HELD_FOR_SPIKE_REVIEW';
 
 export type AutoBillRegistration = {
   id: string;
@@ -46,18 +46,54 @@ export type AutoBillRegistration = {
   maxAmount: number;
   autoPayDay: number;
   status: AutoBillStatus;
+  spikeAlertThresholdPercent?: number;
+  heldAmount?: number;
+  heldPeriod?: string;
+  heldReason?: string;
+  heldPreviousAmount?: number;
   createdAt: string;
   updatedAt: string;
 };
 
+export type UpcomingBillItem = {
+  id: string;
+  type: 'AUTO_BILL' | 'DIGITAL_SUBSCRIPTION';
+  title: string;
+  customerCode: string;
+  dueDate: string;
+  daysUntilDue: number;
+  expectedAmount: number;
+  previousMonthAmount?: number;
+  changePercent?: number;
+  isSpikeDetected: boolean;
+  status: string;
+  heldReason?: string;
+};
+
+export type UpcomingBillsRadarResponse = {
+  items: UpcomingBillItem[];
+  totalDueNext7Days: number;
+  totalDueNext30Days: number;
+  currentWalletBalance: number;
+  shortfallNext7Days: number;
+};
+
 export const autoBillService = {
-  register: (userId: string, category: BillCategory, customerCode: string, maxAmount: number, autoPayDay: number) =>
+  register: (
+    userId: string,
+    category: BillCategory,
+    customerCode: string,
+    maxAmount: number,
+    autoPayDay: number,
+    spikeAlertThresholdPercent = 30,
+  ) =>
     http.post<AutoBillRegistration>(`${API_BASE.billPayment}/bills/auto-pay/register`, {
       userId,
       category,
       customerCode,
       maxAmount,
       autoPayDay,
+      spikeAlertThresholdPercent,
     }),
 
   list: (userId: string) =>
@@ -65,6 +101,17 @@ export const autoBillService = {
 
   updateStatus: (id: string, status: AutoBillStatus) =>
     http.put<AutoBillRegistration>(`${API_BASE.billPayment}/bills/auto-pay/${id}/status`, { status }),
+
+  getUpcomingRadar: (userId: string, days = 30) =>
+    http.get<UpcomingBillsRadarResponse>(
+      `${API_BASE.billPayment}/bills/upcoming-radar?userId=${encodeURIComponent(userId)}&days=${days}`,
+    ),
+
+  approveSpike: (id: string) =>
+    http.post<BillPaymentReceipt>(`${API_BASE.billPayment}/bills/auto-pay/${id}/approve-spike`, {}),
+
+  skipCycle: (id: string) =>
+    http.post<AutoBillRegistration>(`${API_BASE.billPayment}/bills/auto-pay/${id}/skip-cycle`, {}),
 };
 
 export const billPaymentService = {

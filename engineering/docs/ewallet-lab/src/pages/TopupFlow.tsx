@@ -30,9 +30,13 @@ export default function TopupFlow() {
 
       <Note kind="gap" icon="!">
         <p>
-          <strong>Gap đã biết:</strong> <code>IpnController</code> hiện chưa verify chữ ký của chính IPN (khác công
-          thức chữ ký của request tạo giao dịch) — công thức IPN signature cụ thể chưa được xác nhận từ tài liệu đã
-          fetch. Xem mục <PageLink to="momo-spec">MoMo spec references</PageLink>.
+          <strong>Đã xử lý (issue #52):</strong> <code>IpnController</code> <strong>verify chữ ký của chính
+          IPN</strong> bằng công thức HMAC-SHA256 canonical của MoMo (13 trường, ký tên
+          <code>key=value</code> sắp xếp a-z nối bằng <code>&amp;</code>), kèm kiểm tra cửa sổ replay
+          theo <code>responseTime</code>. IPN thiếu/sai chữ ký hoặc ngoài cửa sổ replay bị từ chối với
+          HTTP 401; IPN khớp số tiền trả về HTTP 400. Shared secret nằm trong K8s Secret
+          (<code>bank-gateway-credentials</code>), không hardcode trong image. Xem mục{' '}
+          <PageLink to="momo-spec">MoMo spec references</PageLink>.
         </p>
       </Note>
     </section>

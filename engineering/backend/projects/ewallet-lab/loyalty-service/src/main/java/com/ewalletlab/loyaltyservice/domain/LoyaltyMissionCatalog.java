@@ -21,11 +21,11 @@ public class LoyaltyMissionCatalog {
 
     public static final List<LoyaltyMission> MISSIONS = List.of(
         new LoyaltyMission("DAILY_TRANSFER", "Chuyển tiền trong ngày",
-            "Thực hiện 1 giao dịch chuyển tiền bất kỳ hôm nay", 20, "TRANSFER_OUT", true),
+            "Thực hiện 1 giao dịch chuyển tiền từ 50.000đ hôm nay", 20, "TRANSFER_OUT", 50_000L, true),
         new LoyaltyMission("DAILY_BILL", "Thanh toán hoá đơn hoặc dịch vụ số",
-            "Thanh toán 1 hoá đơn hoặc dịch vụ số hôm nay", 50, "BILL_PAYMENT", true),
+            "Thanh toán 1 hoá đơn hoặc dịch vụ số từ 50.000đ hôm nay", 50, "BILL_PAYMENT", 50_000L, true),
         new LoyaltyMission("DAILY_SAVINGS", "Gửi tiết kiệm mục tiêu",
-            "Nạp tiền vào Mục tiêu tiết kiệm hôm nay", 30, "SAVINGS_GOAL_DEPOSIT", true)
+            "Nạp từ 50.000đ vào Mục tiêu tiết kiệm hôm nay", 30, "SAVINGS_GOAL_DEPOSIT", 50_000L, true)
     );
 
     public static Optional<LoyaltyMission> findByCode(String code) {

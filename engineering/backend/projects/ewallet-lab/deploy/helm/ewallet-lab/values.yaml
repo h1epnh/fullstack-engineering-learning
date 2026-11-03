@@ -48,7 +48,24 @@ ingress:
 # matching), which is why adding TLS/https origins here previously still 403'd. Keep BOTH
 # schemes: https for the new WebAuthn-required secure context, http so any caller still on the
 # plain link (older bookmarks, prior tickets' curl scripts) keeps working.
-corsAllowedOriginPattern: "http://*.ewallet-lab.local,https://*.ewallet-lab.local"
+# Issue #41 (4th layer): the plain `https://*.ewallet-lab.local` pattern above is an Ant-style
+# wildcard anchored at both ends — it matches ONLY an origin with no port at all. This lab has no
+# usable port 443 (binding it needs sudo, not always available), so the operator must reach
+# Touch ID/WebAuthn via `kubectl port-forward ... 18443:443` and hit
+# `https://shell.ewallet-lab.local:18443`, which the browser sends as
+# `Origin: https://shell.ewallet-lab.local:18443` (WITH the port) — that origin 403'd even though
+# the no-port form passed, because the no-port pattern's regex is anchored right after `.local`.
+# Fixed by ADDING (not replacing) Spring's own documented optional-port syntax: appending
+# `:[*]` to a pattern makes CorsConfiguration.OriginPattern treat the trailing `(:\d+)` as
+# OPTIONAL (see CorsConfiguration$OriginPattern#initPattern / PORTS_PATTERN =
+# `(.*):\[(\*|\d+(,\d+)*)]` in spring-web 6.1.x, matches Spring Boot 3.4.1's Spring Framework
+# version) — verified by decompiling spring-web-6.1.3.jar and exercising
+# CorsConfiguration.checkOrigin() directly with both forms before deploying. Keeping the original
+# no-port patterns alongside the new `:[*]` ones is redundant (the `:[*]` form alone already
+# matches both with- and without-port) but intentional, per the no-regression rule for CORS fixes
+# on this ticket — a 5th reviewer should not have to re-derive that the old patterns are still
+# safe to drop.
+corsAllowedOriginPattern: "http://*.ewallet-lab.local,https://*.ewallet-lab.local,http://*.ewallet-lab.local:[*],https://*.ewallet-lab.local:[*]"
 
 postgres:
   image: postgres:16
@@ -88,6 +105,10 @@ topupService:
 mockBankGateway:
   port: 8093
   replicas: 1
+
+# Issue #52 — the topup-service <-> mock-bank-gateway accessKey/secretKey pair is NOT configured here.
+# It is read from the K8s Secret `bank-gateway-credentials`, created out-of-band with random values
+# (see README "Tạo Secret bank-gateway-credentials"); no value is committed to the repo.
 
 transferService:
   port: 8094
@@ -140,7 +161,128 @@ investmentFundService:
   port: 8102
   replicas: 1
 
+# ADR-06 (DESIGN.md) — second, isolated async layer: SNS fan-out + SQS notification consumer,
+# does NOT replace/route any existing Kafka/Outbox flow. Account id/ARNs are NOT secret (the
+# account itself is already named in DESIGN.md's ADR-06); only the IAM access key pair is secret,
+# and that lives in the k8s Secret `ewallet-lab-aws-notify` created out-of-band by the operator via
+# scripts/init-aws-infra.sh (see that script + README for the exact kubectl command). Update these
+# 2 ARNs/URL here if the operator ever re-runs the script against a different AWS account.
+aws:
+  region: ap-southeast-1
+  snsTopicArn: "arn:aws:sns:ap-southeast-1:456021728709:ewallet-lab-payment-completed"
+  notifyQueueUrl: "https://sqs.ap-southeast-1.amazonaws.com/456021728709/ewallet-lab-payment-completed-notify"
+
+notificationService:
+  port: 8103
+  replicas: 1
+
 frontend:
   port: 80
   replicas: 1
+
+# Issue #53 (TD-01) — resource budget, ONE place. Memory sized from measured cgroup memory.current
+# (2026-10-24, JVMs had unbounded heap) vs. node allocatable 8126672Ki (~7.75 GiB). Full table and
+# reasoning: backend DESIGN.md "Ngân sách RAM". Rule: every new Deployment MUST add an entry here
+# (the `ewallet-lab.resources` helper fails `helm template` if it is missing).
+# CPU: requests only for Burstable pods (no CPU limit => no throttling during JVM startup);
+# Guaranteed infra (postgres/kafka/zookeeper) has requests == limits for both.
+jvm:
+  # Heap = this % of the container memory LIMIT; the rest is metaspace, code cache, threads, direct buffers.
+  maxRamPercentage: 60
+
+resources:
+  # ADR-06 (DESIGN.md): wallet-service now ALSO có phụ thuộc mạng ra AWS (SNS publish, best-effort,
+  # sau khi commit); lỗi/timeout không chặn response, chỉ log WARN. Không phải container mới nên
+  # không có entry resources riêng cho việc này — số liệu dưới đây không đổi vì #06.
+  wallet-service:
+    requests: { memory: 384Mi, cpu: 100m }
+    limits: { memory: 640Mi }
+  topup-service:
+    requests: { memory: 320Mi, cpu: 100m }
+    limits: { memory: 640Mi }
+  user-service:
+    requests: { memory: 256Mi, cpu: 50m }
+    limits: { memory: 512Mi }
+  transfer-service:
+    requests: { memory: 256Mi, cpu: 50m }
+    limits: { memory: 512Mi }
+  bill-payment-service:
+    requests: { memory: 256Mi, cpu: 50m }
+    limits: { memory: 512Mi }
+  bnpl-service:
+    requests: { memory: 256Mi, cpu: 50m }
+    limits: { memory: 512Mi }
+  family-wallet-service:
+    requests: { memory: 256Mi, cpu: 50m }
+    limits: { memory: 512Mi }
+  fund-service:
+    requests: { memory: 256Mi, cpu: 50m }
+    limits: { memory: 512Mi }
+  investment-fund-service:
+    requests: { memory: 256Mi, cpu: 50m }
+    limits: { memory: 512Mi }
+  loyalty-service:
+    requests: { memory: 256Mi, cpu: 50m }
+    limits: { memory: 512Mi }
+  lucky-money-service:
+    requests: { memory: 256Mi, cpu: 50m }
+    limits: { memory: 512Mi }
+  payment-request-service:
+    requests: { memory: 256Mi, cpu: 50m }
+    limits: { memory: 512Mi }
+  postgres:
+    requests: { memory: 512Mi, cpu: 500m }
+    limits: { memory: 512Mi, cpu: 500m }
+  kafka:
+    requests: { memory: 640Mi, cpu: 500m }
+    limits: { memory: 640Mi, cpu: 500m }
+    heapOpts: "-Xms256m -Xmx384m"
+  zookeeper:
+    requests: { memory: 320Mi, cpu: 200m }
+    limits: { memory: 320Mi, cpu: 200m }
+    heapOpts: "-Xms64m -Xmx192m"
+  mock-bank-gateway:
+    requests: { memory: 32Mi, cpu: 20m }
+    limits: { memory: 64Mi }
+  # ADR-06 (DESIGN.md) — Go, same lightweight precedent as mock-bank-gateway, chosen specifically
+  # so a brand-new Deployment does not worsen the RAM overcommit noted in "Ngân sách RAM" (limits
+  # already ~192Mi over node allocatable before this service existed).
+  notification-service:
+    requests: { memory: 32Mi, cpu: 20m }
+    limits: { memory: 64Mi }
+  shell:
+    requests: { memory: 16Mi, cpu: 10m }
+    limits: { memory: 64Mi }
+  mfe-auth:
+    requests: { memory: 16Mi, cpu: 10m }
+    limits: { memory: 64Mi }
+  mfe-bill-payment:
+    requests: { memory: 16Mi, cpu: 10m }
+    limits: { memory: 64Mi }
+  mfe-topup:
+    requests: { memory: 16Mi, cpu: 10m }
+    limits: { memory: 64Mi }
+  mfe-transfer:
+    requests: { memory: 16Mi, cpu: 10m }
+    limits: { memory: 64Mi }
+  mfe-wallet:
+    requests: { memory: 16Mi, cpu: 10m }
+    limits: { memory: 64Mi }
+
+# Issue #54 (TD-02) — probe tuning that used to live only on the cluster (kubectl patch). Chart is now
+# the source of truth. Applies to both readiness and liveness of the named Deployment.
+probeOverrides:
+  bnpl-service: { failureThreshold: 40 }
+  family-wallet-service: { failureThreshold: 40, timeoutSeconds: 5 }
+  fund-service: { failureThreshold: 40 }
+  investment-fund-service: { failureThreshold: 40 }
+  loyalty-service: { failureThreshold: 40 }
+  lucky-money-service: { failureThreshold: 40 }
+  payment-request-service: { failureThreshold: 20 }
+  transfer-service: { failureThreshold: 20 }
+  user-service: { failureThreshold: 20 }
+  postgres: { timeoutSeconds: 5 }
+
+# Issue #54 — per-Deployment replica override (name -> count). Empty by default (every template's own default).
+replicaOverrides: {}
 

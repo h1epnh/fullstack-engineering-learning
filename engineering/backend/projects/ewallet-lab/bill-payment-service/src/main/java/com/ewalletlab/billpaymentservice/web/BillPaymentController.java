@@ -9,6 +9,7 @@ import com.ewalletlab.billpaymentservice.web.dto.BillLookupResponse;
 import com.ewalletlab.billpaymentservice.web.dto.BillPayRequestDto;
 import com.ewalletlab.billpaymentservice.web.dto.BillPaymentReceiptDto;
 import com.ewalletlab.billpaymentservice.web.dto.RegisterAutoBillRequestDto;
+import com.ewalletlab.billpaymentservice.web.dto.UpcomingBillsRadarResponseDto;
 import com.ewalletlab.billpaymentservice.web.dto.UpdateAutoBillStatusRequestDto;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -68,6 +69,24 @@ public class BillPaymentController {
     @PostMapping("/auto-pay/trigger-run")
     public AutoPayRunSummaryDto triggerAutoPayRun(@RequestParam(required = false, defaultValue = "true") boolean forceAll) {
         return billPaymentService.processAutoBills(forceAll);
+    }
+
+    // --- Issue #89: Upcoming Bills Radar & Bill Spike Protection ---
+
+    @GetMapping("/upcoming-radar")
+    public UpcomingBillsRadarResponseDto getUpcomingRadar(@RequestParam UUID userId,
+                                                          @RequestParam(required = false, defaultValue = "30") int days) {
+        return billPaymentService.getUpcomingRadar(userId, days);
+    }
+
+    @PostMapping("/auto-pay/{id}/approve-spike")
+    public BillPaymentReceiptDto approveSpike(@PathVariable UUID id) {
+        return billPaymentService.approveSpike(id);
+    }
+
+    @PostMapping("/auto-pay/{id}/skip-cycle")
+    public AutoBillRegistrationDto skipCycle(@PathVariable UUID id) {
+        return billPaymentService.skipCycle(id);
     }
 
     /** Issue #15 — see transfer-service's TransferController for the identical fix/reasoning

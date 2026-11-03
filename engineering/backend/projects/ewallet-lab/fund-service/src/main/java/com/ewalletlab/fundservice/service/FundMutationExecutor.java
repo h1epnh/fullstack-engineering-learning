@@ -10,6 +10,8 @@ import com.ewalletlab.fundservice.repository.FundMemberRepository;
 import com.ewalletlab.fundservice.repository.FundRepository;
 import com.ewalletlab.fundservice.repository.FundTransactionRepository;
 import com.ewalletlab.fundservice.repository.OutboxEventRepository;
+import com.ewalletlab.fundservice.domain.RefundedContribution;
+import com.ewalletlab.fundservice.repository.RefundedContributionRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
@@ -60,10 +62,13 @@ class FundMutationExecutor {
     private final FundTransactionRepository fundTransactionRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
+    private final RefundedContributionRepository refundedRepository;
 
     FundMutationExecutor(FundRepository fundRepository, FundMemberRepository fundMemberRepository,
                           FundTransactionRepository fundTransactionRepository,
-                          OutboxEventRepository outboxEventRepository, ObjectMapper objectMapper) {
+                          OutboxEventRepository outboxEventRepository, ObjectMapper objectMapper,
+                          RefundedContributionRepository refundedRepository) {
+        this.refundedRepository = refundedRepository;
         this.fundRepository = fundRepository;
         this.fundMemberRepository = fundMemberRepository;
         this.fundTransactionRepository = fundTransactionRepository;
@@ -75,7 +80,7 @@ class FundMutationExecutor {
      * outboxEventId} is the {@link OutboxEvent} row that will carry the follow-up wallet-service
      * call — both threaded back so {@code FundController}/tests/logging can reference them, though
      * {@code FundService} itself no longer needs to act on either (the relay owns the rest). */
-    record ContributeResult(Fund fund, UUID transactionId, UUID outboxEventId) {
+    record ContributeResult(Fund fund, UUID transactionId, boolean duplicate) {
     }
 
     record WithdrawResult(Fund fund, UUID transactionId, UUID outboxEventId) {
@@ -107,13 +112,23 @@ class FundMutationExecutor {
         return fundMemberRepository.save(new FundMember(fundId, memberUserId, memberPhone, memberName));
     }
 
-    /** Issue #22 — claims the contribution LOCALLY first (optimistically credits {@code
-     * Fund.balance}, same "claim trước" shape {@code withdraw}/{@code dissolve} already used, just
-     * inverted direction) and writes a {@code FUND_CONTRIBUTE_DEBIT} outbox event for {@code
-     * FundOutboxRelay} to actually debit the member's wallet — see {@code FundService#contribute}'s
-     * javadoc for why the step-up GATE still runs synchronously before this is ever called. */
+    /** Issue #60 — runs ONLY after wallet-service has already debited the member (see {@link
+     * FundService#contribute}); credits {@code Fund.balance} and writes the CONTRIBUTION ledger row
+     * in one transaction. No outbox event any more. Idempotent on {@code idempotencyKey}: if a row
+     * with that key already exists (client retry, or the loser of a concurrent same-key race
+     * re-running after a unique-constraint violation) it returns the existing result untouched. */
     @Transactional
-    ContributeResult contributeOnce(UUID fundId, UUID memberUserId, BigDecimal amount, boolean stepUpConfirmed) {
+    ContributeResult contributeOnce(UUID fundId, UUID memberUserId, BigDecimal amount, String idempotencyKey) {
+        fundTransactionRepository.lockKey(idempotencyKey);
+        if (refundedRepository.existsById(idempotencyKey)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "idempotencyKey này đã được hoàn tiền, dùng key mới");
+        }
+        Optional<FundTransaction> existing = fundTransactionRepository.findByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent()) {
+            Fund fund = fundRepository.findById(fundId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy quỹ nhóm này"));
+            return new ContributeResult(fund, existing.get().getId(), true);
+        }
         Fund fund = fundRepository.findById(fundId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy quỹ nhóm này"));
         if (!fundMemberRepository.existsByFundIdAndMemberUserId(fundId, memberUserId)) {
@@ -125,10 +140,26 @@ class FundMutationExecutor {
             throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
         }
         fundRepository.save(fund);
-        FundTransaction tx = fundTransactionRepository.save(new FundTransaction(fundId, memberUserId, FundTransactionType.CONTRIBUTION, amount));
-        OutboxEvent event = outboxEventRepository.save(OutboxEvent.pending(OutboxEventType.FUND_CONTRIBUTE_DEBIT,
-            writePayload(new OutboxPayload(fundId, memberUserId, amount, tx.getId(), stepUpConfirmed))));
-        return new ContributeResult(fund, tx.getId(), event.getId());
+        FundTransaction tx = fundTransactionRepository.save(
+            new FundTransaction(fundId, memberUserId, FundTransactionType.CONTRIBUTION, amount, idempotencyKey));
+        return new ContributeResult(fund, tx.getId(), false);
+    }
+
+    /** Issue #60 R1/R1b — the refund DECISION, in its own short transaction, serialized with {@link
+     * #contributeOnce} on the same advisory lock. Returns {@code true} when the marker was written and
+     * committed (caller may now refund the wallet; any later same-key credit sees the marker and gets
+     * 409). Returns {@code false} when a CONTRIBUTION row for this key already exists (the credit
+     * committed, e.g. a concurrent same-key request or a lost ack): the caller must NOT refund. */
+    @Transactional
+    boolean markRefundedUnlessCredited(String debitKey) {
+        fundTransactionRepository.lockKey(debitKey);
+        if (fundTransactionRepository.findByIdempotencyKey(debitKey).isPresent()) {
+            return false;
+        }
+        if (!refundedRepository.existsById(debitKey)) {
+            refundedRepository.save(new RefundedContribution(debitKey));
+        }
+        return true;
     }
 
     /** Issue #22 — same local-claim-first shape as before (issue #14), but now writes a {@code

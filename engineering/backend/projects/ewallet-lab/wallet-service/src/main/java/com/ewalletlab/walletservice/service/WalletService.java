@@ -60,13 +60,16 @@ public class WalletService {
     private final TransactionRepository transactionRepository;
     private final WalletMutationExecutor mutationExecutor;
     private final StepUpPolicy stepUpPolicy;
+    private final PaymentNotificationPublisher paymentNotificationPublisher;
 
     public WalletService(WalletRepository walletRepository, TransactionRepository transactionRepository,
-                          WalletMutationExecutor mutationExecutor, StepUpPolicy stepUpPolicy) {
+                          WalletMutationExecutor mutationExecutor, StepUpPolicy stepUpPolicy,
+                          PaymentNotificationPublisher paymentNotificationPublisher) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.mutationExecutor = mutationExecutor;
         this.stepUpPolicy = stepUpPolicy;
+        this.paymentNotificationPublisher = paymentNotificationPublisher;
     }
 
     /** Lazily creates a wallet on first use — user-service doesn't need to know wallet-service exists. */
@@ -93,12 +96,23 @@ public class WalletService {
      */
     public Wallet credit(UUID userId, BigDecimal amount, TransactionType type, String reference, String note,
                           String idempotencyKey) {
+        WalletMutationExecutor.MutationResult result;
         try {
-            return withOptimisticLockRetry("credit", userId,
+            result = withOptimisticLockRetry("credit", userId,
                 () -> mutationExecutor.creditOnce(userId, amount, type, reference, note, idempotencyKey));
         } catch (DataIntegrityViolationException e) {
             return idempotentSuccessOrRethrow(userId, idempotencyKey, e);
         }
+        // ADR-06 (DESIGN.md): publish happens HERE — after withOptimisticLockRetry has already
+        // returned, which only happens once mutationExecutor.creditOnce's own @Transactional method
+        // has committed. Deliberately outside any @Transactional scope and fire-and-forget (see
+        // PaymentNotificationPublisher) so a slow/failed AWS call can never delay or fail this
+        // response. result.transaction() is null on an idempotent short-circuit — nothing new to
+        // notify about in that case.
+        if (result.transaction() != null) {
+            paymentNotificationPublisher.publishPaymentCompletedAsync(userId, result.transaction());
+        }
+        return result.wallet();
     }
 
     /** Throws IllegalStateException (mapped to 409 by the controller) if balance is insufficient,
@@ -112,12 +126,18 @@ public class WalletService {
     /** Issue #22 — {@code idempotencyKey} overload, same reasoning as {@link #credit}'s. */
     public Wallet debit(UUID userId, BigDecimal amount, TransactionType type, String reference, String note,
                          boolean stepUpConfirmed, String idempotencyKey) {
+        WalletMutationExecutor.MutationResult result;
         try {
-            return withOptimisticLockRetry("debit", userId,
+            result = withOptimisticLockRetry("debit", userId,
                 () -> mutationExecutor.debitOnce(userId, amount, type, reference, note, stepUpConfirmed, idempotencyKey));
         } catch (DataIntegrityViolationException e) {
             return idempotentSuccessOrRethrow(userId, idempotencyKey, e);
         }
+        // ADR-06 — same reasoning as credit() above.
+        if (result.transaction() != null) {
+            paymentNotificationPublisher.publishPaymentCompletedAsync(userId, result.transaction());
+        }
+        return result.wallet();
     }
 
     /** Only ever reached with a non-null {@code idempotencyKey} (callers that pass {@code null}
@@ -310,7 +330,7 @@ public class WalletService {
                                      BigDecimal singleThreshold, BigDecimal dailyThreshold) {
     }
 
-    private Wallet withOptimisticLockRetry(String op, UUID userId, Supplier<Wallet> attempt) {
+    private <T> T withOptimisticLockRetry(String op, UUID userId, Supplier<T> attempt) {
         for (int i = 1; i <= MAX_ATTEMPTS; i++) {
             try {
                 return attempt.get();

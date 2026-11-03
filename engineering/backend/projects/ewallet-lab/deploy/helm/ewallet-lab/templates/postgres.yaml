@@ -38,6 +38,7 @@ spec:
       containers:
         - name: postgres
           image: {{ .Values.postgres.image }}
+          {{- include "ewallet-lab.resources" (dict "root" $ "name" "postgres") | nindent 10 }}
           # Issue #24 — default max_connections=100 was exhausted twice by ~10 Java services'
           # HikariCP pools (default 10/service = 100+ possible). The postgres image's
           # docker-entrypoint.sh prepends "postgres" to any args that start with "-", so this
@@ -65,10 +66,12 @@ spec:
             exec: { command: ["pg_isready", "-U", "postgres"] }
             initialDelaySeconds: 5
             periodSeconds: 5
+            {{- include "ewallet-lab.probeExtras" (dict "root" $ "name" "postgres") | nindent 12 }}
           livenessProbe:
             exec: { command: ["pg_isready", "-U", "postgres"] }
             initialDelaySeconds: 15
             periodSeconds: 10
+            {{- include "ewallet-lab.probeExtras" (dict "root" $ "name" "postgres") | nindent 12 }}
       volumes:
         - name: data
           persistentVolumeClaim: { claimName: postgres-data }

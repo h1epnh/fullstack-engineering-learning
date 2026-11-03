@@ -59,8 +59,9 @@ pod đang chạy KHÔNG tự đóng connection).
 1. Giảm `spring.datasource.hikari.maximum-pool-size` xuống `5` (từ default 10) ở `application.yml`
    của **toàn bộ** service Java có DB: `user-service`, `wallet-service`, `topup-service`,
    `bill-payment-service`, `payment-request-service`, `lucky-money-service`, `loyalty-service`,
-   `bnpl-service`, `family-wallet-service`, `fund-service` (10 service — `transfer-service` không
-   có DB nên không áp dụng, xem gap đã biết ở mục "Lỗi thật đã gặp" trong CLAUDE.md).
+   `bnpl-service`, `family-wallet-service`, `fund-service` (10 service lúc viết issue #24. **[Cập nhật 2026-10-18]** `transfer-service` nay cũng có DB
+   `ewallet_transfer` từ #31/#32 và đã đặt `maximum-pool-size: 5`, nên thực tế là 11 service có DB,
+   xem TD-11/TD-13).
 2. Tăng `max_connections` Postgres lên `200` — set qua `args: ["-c",
    "max_connections={{ .Values.postgres.maxConnections }}"]` trên container `postgres` trong
    `deploy/helm/ewallet-lab/templates/postgres.yaml` (đọc từ `values.yaml`'s `postgres.maxConnections`),
@@ -89,6 +90,107 @@ build.
 **Cân nhắc dài hạn chưa làm** (nêu trong issue, không trong phạm vi fix lần này): PgBouncer đứng
 trước Postgres nếu số service tiếp tục tăng — 10 service × 5 vẫn còn margin lớn nên chưa cần ngay.
 
+## Ngân sách RAM / resources requests-limits (issue #53, TD-01) — ĐÃ ÁP DỤNG 2026-10-24, PASS QA
+
+Trạng thái: đã áp từng deployment một lên cluster ngày 2026-10-24 (19 pod, 0 OOMKilled, 0 restart mới, không MemoryPressure; anon RSS đo sau áp: cao nhất bill-payment 365/512 MiB = 71%, wallet 400/640 = 63%, các JVM còn lại 57-65%; node: requests 5130Mi/64%, limits 8468Mi/106% gồm cả kube-system). Chart đã có `resources` cho 22/22 Deployment (map tập trung `resources:` trong `values.yaml`, đọc
+qua helper `ewallet-lab.resources`; thiếu entry thì `helm template` lỗi).
+Baseline đo ngày 2026-10-24 bằng `cat /sys/fs/cgroup/memory.current` trong từng pod (metrics-server chưa bật,
+`kubectl top` báo "Metrics API not available"); số này gồm page cache và JVM chưa bị giới hạn heap.
+Node allocatable 8126672Ki = 7936 MiB. JVM: `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=60 -XX:+ExitOnOutOfMemoryError`
+(heap = 60% limit, phần còn lại cho metaspace/thread/code cache), không cần rebuild image.
+
+| Service | Request MiB | Limit MiB | Heap | Baseline đo (MiB) | QoS | Ghi chú |
+|---|---|---|---|---|---|---|
+| wallet-service | 384 | 640 | 60% = 384Mi | 509 | Burstable | lõi sổ cái, Kafka listener |
+| topup-service | 320 | 640 | 60% = 384Mi | 419 | Burstable | Kafka producer + IPN |
+| transfer-service | 256 | 512 | 60% = 307Mi | 252 | Burstable | |
+| user-service | 256 | 512 | 60% = 307Mi | 218 | Burstable | |
+| bill-payment-service | 256 | 512 | 60% = 307Mi | 178 | Burstable | pod mới restart, baseline thấp giả |
+| payment-request-service | 256 | 512 | 60% = 307Mi | 209 | Burstable | pod mới restart |
+| bnpl / family-wallet / fund / investment-fund / loyalty / lucky-money (6 service) | 256 mỗi cái | 512 | 60% = 307Mi | 404-464 | Burstable | baseline gần limit, theo dõi OOMKilled |
+| postgres | 512 | 512 | n/a | 143 | Guaranteed | `max_connections=200` (#24) |
+| kafka | 640 | 640 | `-Xms256m -Xmx384m` | 363 | Guaranteed | mặc định Confluent là 1G |
+| zookeeper | 320 | 320 | `-Xms64m -Xmx192m` | 113 | Guaranteed | |
+| shell + 5 mfe (nginx) | 16 mỗi cái | 64 | n/a | 9-10 | Burstable | 2 mfe đang 0 replica |
+| mock-bank-gateway (Go) | 32 | 64 | n/a | (0 replica) | Burstable | |
+
+Tổng (replica đang chạy: 19 pod, không tính mfe-bill-payment, mfe-topup, mock-bank-gateway đang 0): requests
+4800 MiB (4,69 GiB, trong ngưỡng 6 GiB), limits 8128 MiB (vượt allocatable 7936 MiB khoảng 192 MiB). Nếu bật cả
+3 deployment 0 replica: requests 4864, limits 8320. Overcommit limits là chủ đích: limit chỉ là trần chống một
+pod ăn hết node, không phải mức dùng đồng thời; mức dùng thực kỳ vọng thấp hơn tổng baseline hiện tại (~5,0 GiB
+chưa giới hạn heap). Còn lại ~3,2 GiB requests-headroom cho kube-system/Docker Desktop. CPU: chỉ đặt requests
+cho Burstable (không limit CPU để JVM không bị throttle lúc khởi động); infra Guaranteed có cpu requests = limits.
+
+Cách áp dụng khi được phép (release Helm đang `failed` rev 22, #54): `helm upgrade` sẽ đổi 22 Deployment cùng
+lúc (restart đồng loạt, từng gây OOM) và đưa 3 deployment đang 0 replica lên 1 replica, nên KHÔNG dùng. Thay
+vào đó, từng cái một: `helm template ewallet-lab . -f values-local.yaml -s templates/<file>.yaml | kubectl apply -f -`
+rồi `rollout status`, kiểm OOMKilled. Sau khi #54 xử lý, `helm upgrade` thành no-op với pod.
+
+## Helm release và nguồn sự thật (issue #54, TD-02/TD-13)
+
+- Nguyên nhân `failed` (rev 20-22): Helm 4 dùng server-side apply; chart ghi `livenessProbe.*` khác giá trị mà
+  `kubectl patch` đã đặt, nên conflict với field-manager `kubectl-patch`. Các manager khác trên cluster:
+  `kubectl-set` (env), `kubectl-client-side-apply` (resources/JAVA_TOOL_OPTIONS của #53), `kubectl-rollout` (restartedAt).
+- Cách xử lý: đưa mọi giá trị live vào chart (`probeOverrides`, `replicaOverrides`, DB_* của transfer-service) để
+  chart == live, nên SSA không còn conflict (kiểm bằng `kubectl apply --server-side --dry-run=server`, 0 conflict, không cần
+  `--force-conflicts`). Một ngoại lệ: đổi env từ `value` sang `valueFrom` mà `value` do `kubectl-set` sở hữu thì SSA không gỡ
+  được, phải dùng 1 lần `kubectl patch --type=json` để chuyển sở hữu (transfer-service DB_USER/DB_PASSWORD).
+- **Quy tắc:** không dùng `kubectl patch`/`set env`/`scale` cho thay đổi lâu dài. Chữa cháy thì phải đưa ngược vào
+  `values.yaml`/template trong cùng ngày, rồi chạy kiểm `kubectl apply --server-side --dry-run=server --field-manager=helm`.
+- Replica cố ý bằng 0 trên local: `replicaOverrides` trong `values-local.yaml` (mock-bank-gateway, mfe-bill-payment, mfe-topup).
+- Nợ còn lại: kafka/zookeeper `imagePullPolicy: Always` chỉ là default lúc tạo, chart không đặt.
+
+## Outbox cho lucky-money-service (issue #56, TD-04 bước 1)
+
+Cùng mẫu với #22 (bảng `outbox_event`, `LuckyOutboxRelay` mỗi 10s, `idempotencyKey` = id event, 4xx x3 thì bù trừ + FAILED,
+5xx/mạng retry mãi và log ERROR `LUCKY_OUTBOX_STUCK`), nhưng theo nguyên lý 7 / ADR-05 chỉ đưa vào outbox các bước CREDIT:
+
+| Bước | Hướng tiền | Cách làm | Lý do |
+|---|---|---|---|
+| LuckyMoney.send: debit người gửi | RA | đồng bộ, đầu tiên, có idempotencyKey | tạo phong bì người khác nhận được |
+| LuckyMoney.claim: credit người nhận | VÀO | outbox (cùng transaction với CLAIMED) | trễ không tạo giá trị tiêu được; thất bại vĩnh viễn thì revert PENDING |
+| LuckyMoney hết hạn: REFUND người gửi | VÀO | outbox (cùng transaction với EXPIRED_REFUNDED) | hoàn tiền |
+| GiftCard.send: debit người gửi | RA | đồng bộ, đầu tiên | nguồn tiền xác nhận trước |
+| GiftCard.send: credit người nhận | VÀO | outbox (cùng transaction với lưu thiệp) | credit trễ; thất bại vĩnh viễn thì xoá thiệp + enqueue REFUND người gửi |
+
+- Không còn nhánh chỉ `log CRITICAL` bỏ rơi tiền: hoàn tiền thất bại đi qua outbox (FAILED có log `LUCKY_OUTBOX_REFUND_FAILED`).
+- Đánh đổi còn lại (cùng #60): pod chết giữa debit và lưu phong bì/thiệp thì tiền kẹt; lỗi bắt được thì hoàn tiền đồng bộ
+  với key `refund:<debitKey>`, hoàn tiền lỗi thì log ERROR `LUCKY_SEND_MONEY_STUCK` / `GIFTCARD_SEND_MONEY_STUCK` kèm mã `LS-`/`GS-`.
+  Đóng triệt để cần trạng thái FUNDING + sửa CHECK constraint DB, chưa làm.
+- Không dùng advisory lock vì API không có idempotencyKey công khai; race claim/expiry đã có optimistic lock (`@Version`).
+- Kiểm chứng kill-pod: claim 100.000 rồi xoá pod ngay: `outbox_event` PENDING còn nguyên, ví người nhận chưa đổi; pod mới giao
+  đúng 1 lần (ví +100.000, sổ cái wallet-service có đúng 1 dòng TRANSFER_IN với key = id event); replay cùng key không cộng thêm.
+
+## Outbox cho topup-service (issue #66, TD-04 bước 2)
+
+Loại bỏ dual-write nuốt lỗi giữa `TopupRequest` chuyển trạng thái sang `CONFIRMED` và gửi Kafka event `wallet.topup.confirmed`:
+
+- **Ghi nhận Outbox nguyên tử (Local DB Atomicity)**:
+  - Bảng `outbox_event` trong database `ewallet_topup` (`id`, `event_type`, `payload`, `status`, `attempt_count`, `last_error`, `created_at`, `delivered_at`).
+  - Trong `TopupService.confirmTopupWithOutbox(orderId, topupRequest, bankTransactionId)`: bọc cả `topupRequestRepository.transitionFromPending(orderId, CONFIRMED)` và `outboxEventRepository.save(OutboxEvent.pending(...))` trong CÙNG 1 `@Transactional`. Chỉ lưu outbox khi caller thắng cuộc đua trạng thái (`updated == 1`).
+  - Payload outbox mang đầy đủ `userId`, `amount`, `bankTransactionId`, `orderId` và `idempotencyKey = "topup:" + bankTransactionId`.
+- **TopupOutboxRelay định kỳ**:
+  - Quét các event `PENDING` theo thứ tự thời gian (`findByStatusOrderByCreatedAtAsc`).
+  - Gửi đồng bộ lên Kafka topic `wallet.topup.confirmed` (`kafkaTemplate.send(...).get(5, SECONDS)`). Đánh dấu `DELIVERED` chỉ khi Kafka broker xác nhận thành công.
+  - Khi broker lỗi/timeout: ghi nhận `lastError`, tăng `attemptCount`, giữ nguyên `PENDING` để retry ở tick sau (log ERROR `TOPUP_OUTBOX_STUCK` sau 10 lần thất bại).
+- **Idempotent Receiver tại `wallet-service`**:
+  - `TopupConfirmedListener` trích xuất `idempotencyKey` (`topup:<bankTransactionId>`).
+  - Truyền `idempotencyKey` vào `walletService.credit(...)` -> `WalletMutationExecutor.creditOnce`.
+  - Nếu `transactionRepository.findByIdempotencyKey(...)` đã tồn tại: trả về ví hiện tại ngay lập tức, không cộng tiền lần 2 và không lưu bản ghi `Transaction` trùng lặp.
+
+## Honest State Machine cho payment-request-service (issue #67, TD-04 bước 3)
+
+Xoá bỏ "trạng thái nói dối" (lying state) và rủi ro mất tiền/kẹt tiền khi process chết giữa claim và transfer:
+
+- **Trạng thái trung gian `PAYING`**:
+  - Thêm `PaymentRequestStatus.PAYING` vào enum (backend & frontend `@ewallet-lab/api-client`).
+  - `PaymentRequestMutationExecutor.claimPayingOnce`: Chuyển `PENDING -> PAYING` nguyên tử bằng Optimistic Locking (`@Version`). Chỉ đúng 1 caller thắng cuộc đua mới được phép gọi sang `transfer-service`. Request thứ 2 đến trong lúc đang `PAYING` sẽ nhận ngay `409 Conflict` ("Yêu cầu này đang được xử lý thanh toán").
+- **Tách Transaction và Phân loại lỗi chính xác**:
+  - Lời gọi HTTP `transferServiceClient.transfer(...)` được đưa hoàn toàn ra NGOÀI transaction database.
+  - Sau khi `transfer-service` hoàn tất thành công: `markPaid(transferReference)` chuyển `PAYING -> PAID`.
+  - Khi gặp lỗi 4xx xác định (409 thiếu tiền, 428 step-up QĐ 2345, 400 Bad Request, 404 không tìm thấy người nhận): Tiền chắc chắn chưa di chuyển, an toàn gọi `releaseClaim(id)` để hoàn trả về `PENDING` cho người dùng thử lại.
+  - Khi gặp lỗi 5xx (500, 502, 503, 504) hoặc timeout mạng (`ResourceAccessException`): Kết quả di chuyển tiền bất định -> GIỮ NGUYÊN trạng thái `PAYING`, không release claim, trả về HTTP 503 Service Unavailable thân thiện để ngăn chặn việc người dùng bấm lại gây trừ tiền lần 2.
+
 ## Luồng Top-up (mô phỏng đúng MoMo Collection Link + IPN)
 
 ```
@@ -98,7 +200,8 @@ trước Postgres nếu số service tiếp tục tăng — 10 service × 5 vẫ
    [field/HMAC-SHA256 y hệt MoMo Collection Link thật — xem mock-bank-gateway/README.md]
 3. mock-bank-gateway trả về ngay: {payUrl, resultCode, message} — ĐÂY CHƯA PHẢI xác nhận tiền đã vào ví
 4. mock-bank-gateway (giả lập độ trễ ngân hàng xử lý) → gọi ngược HTTP POST tới ipnUrl của topup-service
-   (IPN: orderId, transId, resultCode, amount, signature) — topup-service phải trả HTTP 204 trong 15s
+   (IPN: 13 field đã ký + signature — xem "Xác minh chữ ký IPN" bên dưới)
+   — topup-service phải trả HTTP 204 trong 15s
 5. topup-service verify signature IPN → publish Kafka event "wallet.topup.confirmed"
 6. wallet-service tiêu thụ event → credit wallet balance + ghi Transaction(TOPUP, SUCCESS)
 ```
@@ -106,6 +209,56 @@ trước Postgres nếu số service tiếp tục tăng — 10 service × 5 vẫ
 **Điểm học được quan trọng**: bước 3 (response tức thời) và bước 4 (IPN xác nhận thật) là **2 sự
 kiện tách rời** — đúng y hệt bài học "ROUTED ≠ SETTLED" đã học ở payment-hub, nhưng lần này dựa trên
 cơ chế IPN **có thật** của MoMo, không phải suy diễn.
+
+### Xác minh chữ ký IPN (issue #52, TD-03 — **đã làm**)
+
+> **Cập nhật sau QA #52:** (1) chuyển `PENDING -> CONFIRMED/FAILED` là một câu `UPDATE ... WHERE status='PENDING'` nguyên tử (`transitionFromPending`), chỉ request thắng mới publish/hoàn tiền — sửa lỗi race IPN đồng thời; (2) không còn literal secret trong `values.yaml`/`docker-compose.yml`, Secret `bank-gateway-credentials` tạo ngoài chart bằng giá trị ngẫu nhiên (xem README). Giá trị cũ vẫn nằm trong lịch sử git (secret giả của lab, không viết lại lịch sử). `payment-hub/momo-adapter/momo.go` là project khác, vẫn còn hằng fake riêng, ngoài phạm vi #52.
+
+Bước 5 trên **không được bỏ qua**: IPN là đường vào duy nhất để cộng tiền, nên nó phải được xác
+thực giống hệt một webhook của bên thứ ba. Trước #52, `IpnController` nhận IPN và tin
+`resultCode == 0` mà không kiểm chữ ký — ai gọi được endpoint là tạo được tiền.
+
+**Danh sách field — đã xác minh từ tài liệu chính thức.** Trang
+[Collection Link](https://developers.momo.vn/v3/docs/payment/api/collection-link/) (mục
+*"Processing payment result"*, fetch 2026-10-18) liệt kê các field MoMo gửi trong `redirectUrl`
+**và** trong body của `ipnUrl`; bộ **13 field** được ký, sort a-z, HMAC-SHA256 bằng secret:
+`accessKey, amount, extraData, message, orderId, orderInfo, orderType, partnerCode, payType,
+requestId, responseTime, resultCode, transId`.
+
+**Caveat của lab, không phải spec MoMo** (nói rõ để không ai đọc nhầm):
+- cặp `accessKey`/`secretKey` là secret nội bộ chia sẻ giữa `topup-service` và
+  `mock-bank-gateway`; MoMo thật không bao giờ gửi `secretKey` cho bên thứ ba;
+- giá trị lab đặt vào `orderType`/`payType` là tự định nghĩa, không phải enum của MoMo;
+- cửa sổ replay 5 phút là kiểm soát của lab — trang tài liệu không nói MoMo giới hạn cửa sổ
+  timestamp ra sao.
+
+**Cơ chế bảo vệ (3 lớp, cùng áp cho `/ipn/topup` và `/ipn/bank-transfer-out`)**:
+
+| Lớp | Kiểm tra | Khi fail |
+|---|---|---|
+| 1. Chữ ký | Tính lại HMAC-SHA256 trên đúng 13 field, so sánh constant-time (`MessageDigest.isEqual`) | 401, không đổi trạng thái, không publish Kafka |
+| 2. Số tiền | `ipn.amount` phải khớp `TopupRequest.getAmount()` | 400, không `CONFIRMED` |
+| 3. Replay | (a) `responseTime` trong cửa sổ cấu hình được; (b) chỉ xử lý đơn còn `PENDING` | 401 / no-op |
+
+Lớp 3b là lớp idempotency thực sự: IPN hợp lệ gửi lại lần 2 (trong cửa sổ) là **no-op**, không cộng
+tiền lần 2 — vì đơn đã `CONFIRMED` nên controller bỏ qua.
+
+**Secret ra khỏi code (task 6 của #52)**: `BANK_GATEWAY_ACCESS_KEY` / `BANK_GATEWAY_SECRET_KEY` đến
+từ env. `topup-service` **không có default** cho `secretKey` → fail lúc start nếu thiếu
+(`IllegalStateException`), không rơi về một secret đã biết. `mock-bank-gateway` cũng `log.Fatal` nếu
+thiếu. Trên K8s: Secret `bank-gateway-credentials` (Helm template), inject vào **cả hai** vế bằng
+`secretKeyRef` — hai vế phải đọc cùng giá trị, nếu lệch thì mọi IPN bị từ chối như là bị tấn công.
+Trên docker-compose: cùng hai biến, mặc định giống hệt `values.yaml` (đều là giá trị giả của lab),
+override bằng `.env` (gitignored).
+
+**Chứng minh hai vế khớp nhau**: `mock-bank-gateway/collection_test.go` và
+`topup-service/src/test/.../IpnSignatureVerifierTests.java` assert **cùng một vector cố định**
+(digest HMAC-SHA256 tính sẵn, độc lập bằng Python) trên đúng bộ 13 field. Go test cũng assert
+tập field ký đúng bằng 13 (không phải 6 như lỗi gốc).
+
+**Còn thiếu**: chưa có đối soát (reconciliation) và chưa truy vấn chủ động khi mất webhook — đơn
+`PENDING` sẽ treo vĩnh viễn nếu IPN không tới. Nằm ngoài phạm vi #52, còn lại là nợ kỹ thuật về
+đối soát.
 
 ## Luồng P2P Transfer (nội bộ, không qua rail ngoài) — đã làm thật
 
@@ -1498,6 +1651,13 @@ nguyên ở đây làm bằng chứng cụ thể CHO issue #22 (không xoá lị
 
 ## Outbox pattern — thí điểm trên `fund-service` (issue #22)
 
+> **[Cập nhật 2026-10-22, agent-architect — ADR-05]** Phần dưới mô tả #22 như đã giao. Bug #60 (https://github.com/h1epnh/fullstack-engineering-learning/issues/60) chứng
+> minh phần **`contribute` claim-first qua outbox là sai** (tạo tiền ảo, quỹ `7a6407ed...` âm
+> -8.500.000). Operator đã chọn đảo ngược: `contribute` gọi `wallet-service /debit` **đồng bộ**, thành
+> công mới cộng `funds.balance`; `contribute` **không còn đi qua outbox**. `withdraw`/`dissolve` vẫn giữ
+> outbox. Mọi câu dưới đây nói "outbox cho cả contribute", "claim trước cho contribute", "relay là đường
+> chuyển tiền chính cho mọi contribute" đã bị **ADR-05 thay thế** (giữ nguyên làm lịch sử, không xoá).
+
 ### Bối cảnh — vì sao compensate tay (3 lần vá liên tiếp ở trên) không đủ
 
 Issue #14's 3 lần vá liên tiếp (ledger "ma" → raw 500 → "tiền kẹt mid-flight" + retry budget riêng +
@@ -1679,10 +1839,48 @@ tương đương) nếu sau này scale `fund-service` lên >1 replica.
   chính xác digest `docker images` local sau mỗi lần build (`f0121a6ea7f7...` wallet-service,
   `1cf3079801c5...` fund-service bản cuối).
 
+### Cập nhật issue #60: contribute đổi sang "trừ ví trước, đồng bộ" (2026-10-22)
+
+Quyết định của operator (đã chốt, https://github.com/h1epnh/fullstack-engineering-learning/issues/60#issuecomment-6343690961): **contribute KHÔNG còn đi qua outbox.** Lý do: claim-first làm
+`funds.balance` tăng trước khi ví thành viên bị trừ, nên người tạo quỹ rút được số tiền "ảo" (quỹ
+`7a6407ed-c7e6-4aff-9680-eed829ae1525` âm -8.500.000, giữ nguyên làm bằng chứng). Luồng mới trong
+`FundService.contribute`:
+
+1. kiểm tra chỉ đọc (quỹ ACTIVE, là thành viên, step-up); 2. nếu đã có `FundTransaction` cùng
+`idempotencyKey` thì trả kết quả cũ, không trừ lần 2; 3. `wallet-service /debit` đồng bộ
+(`TRANSFER_OUT`, key `fund-contribute:<fundId>:<memberId>:<clientKey>`), 409 thiếu số dư thì quỹ không đổi;
+4. chỉ khi debit OK mới `Fund.balance += amount` và ghi `FundTransaction` (cột `idempotency_key` UNIQUE) trong
+1 transaction; 5. nếu bước 4 ném exception bắt được thì hoàn tiền bằng `/credit` (`TRANSFER_IN`, key `refund:<debitKey>`).
+
+- `idempotencyKey` là field tuỳ chọn trong body; thiếu thì server sinh UUID (không bảo vệ client retry).
+  Chỉ dùng lại cùng key sau lỗi 502 (không rõ kết quả trừ ví). Sau mọi lỗi khác phải dùng key mới.
+- **Đánh đổi operator đã chấp nhận:** pod chết giữa bước 3 và 4 thì ví đã trừ mà quỹ chưa cộng, tiền kẹt, không
+  có cơ chế phục hồi tự động. Hoàn tiền cũng lỗi thì không có bảng ghi nhận (`fund_compensation_failures` đã bỏ ở
+  #22); tối thiểu là log ERROR `CONTRIBUTE_MONEY_STUCK ref=FC-xxxxxxxx` kèm fund/member/amount/debitKey.
+  Debit không rõ kết quả (5xx/timeout) log ERROR `CONTRIBUTE_DEBIT_UNKNOWN`, trả 502.
+- **Replay sau hoàn tiền (QA vòng 2 của #60):** ledger wallet coi debit key đã dùng là no-op, nên replay một key
+  đã hoàn tiền sẽ cộng quỹ mà không có debit sống (tạo tiền). Sửa bằng bảng `refunded_contributions` (PK = debitKey),
+  ghi TRƯỚC khi gửi credit hoàn tiền (transaction riêng, `contribute()` không `@Transactional`); replay key đã
+  hoàn tiền trả 409 "dùng key mới" trước khi gọi `/debit`. Ngoài ra cộng quỹ được retry nội bộ tới 12 lần
+  (backoff tối đa 200ms) trước khi rơi vào đường hoàn tiền, nên tranh chấp optimistic lock hiếm khi gây hoàn tiền.
+
+- Withdraw/dissolve giữ outbox như #22 (trừ quỹ trước, credit ví sau qua outbox, đúng chiều, nhất quán với ADR-05:
+  outbox chỉ chứa credit/hoàn/bù trừ). `FUND_CONTRIBUTE_DEBIT` còn trong enum/relay chỉ để xả event cũ (DB hiện
+  không còn event PENDING loại này).
+- **Guard số dư không âm:** `Fund.withdraw` kiểm tra `balance >= amount` và `@Version` optimistic lock chặn
+  race. CHECK constraint ở tầng DB chưa áp dụng được trong phiên này (lệnh ALTER bị chặn quyền). Đề xuất cho
+  operator, không phá quỹ lỗi đang âm: `ALTER TABLE funds ADD CONSTRAINT funds_balance_non_negative CHECK (balance >= 0) NOT VALID;`
+- Kiểm chứng (cluster, qua Ingress): góp 9tr từ ví 3tr trả 409, rút 9tr ngay sau trả 409, ví và quỹ không đổi;
+  10 góp song song 400k + 3 rút song song 300k: 6 góp OK, 4 lần 409, tổng ví A + ví B + quỹ = 8.000.000 trước và sau.
+
 ### Ngoài phạm vi thí điểm này (ghi rõ, không phải bỏ sót)
 
 - **`lucky-money-service`/`payment-request-service` CHƯA migrate** — đúng khuyến nghị "thí điểm 1
-  service trước" của Constraints issue #22. Issue #22 CHƯA được close (chỉ cover 1/3 service).
+  service trước" của Constraints issue #22. **[Sửa 2026-10-18, agent-architect]** Câu gốc ghi "Issue #22
+  CHƯA được close" đã lỗi thời: `gh issue view 22` trả `state: CLOSED`, `closedAt: 2026-10-09T14:16:03Z`.
+  Hiện trạng đúng: issue đã đóng, nhưng Outbox **mới thí điểm ở `fund-service`**, **chưa áp dụng cho
+  `lucky-money-service` và `payment-request-service`** (và publisher Kafka của `topup-service` cũng là
+  dual-write). Phần chưa làm không còn nằm trong issue nào, nên được theo dõi là nợ TD-04.
 - **`fund_compensation_failures` table cũ** — vẫn còn tồn tại trên Postgres (Hibernate không tự
   `DROP TABLE` khi entity bị xoá khỏi code) nhưng không còn entity/code nào tham chiếu tới — an
   toàn, chỉ là 1 bảng "mồ côi" không ảnh hưởng gì, có thể `DROP TABLE` tay sau nếu muốn dọn dẹp.
@@ -2118,6 +2316,15 @@ chỉ dựa vào status code, không đọc message server), nhưng ghi nhận l
 ≥10 concurrent trong `LoyaltyConcurrencyTest`). Image `ewallet-lab/loyalty-service:local` (digest
 `sha256:b479e68f5c9b...`), `imageID` pod khớp, `rollout status` Ready.
 
+### Cập nhật Issue #69 — Ngưỡng giao dịch tối thiểu cho Nhiệm vụ hàng ngày (minAmountVnd)
+
+- **Vấn đề**: Trước đây, `LoyaltyService` chỉ kiểm tra `t.type().equals(mission.requiredTransactionType())` mà không kiểm tra số tiền tối thiểu. Người dùng có thể thực hiện giao dịch 1đ để hoàn thành và nhận 100 điểm (~10.000đ tiền thưởng) mỗi ngày, dẫn đến chi phí farm gần như bằng 0.
+- **Giải pháp**:
+  - `LoyaltyMission`: Bổ sung trường `minAmountVnd` (mặc định `50_000L`) và getter `getMinAmountVnd()`.
+  - `LoyaltyMissionCatalog`: Cập nhật cấu hình và mô tả cho cả 3 nhiệm vụ ngày (`DAILY_TRANSFER`: 50.000đ / 20 điểm, `DAILY_BILL`: 50.000đ / 50 điểm, `DAILY_SAVINGS`: 50.000đ / 30 điểm).
+  - `WalletServiceClient.WalletTransaction`: Bổ sung `amountVnd()` trích xuất `amount.longValue()`.
+  - `LoyaltyService`: Phương thức `qualifiesMission` kiểm tra bắt buộc `t.type().equals(mission.requiredTransactionType()) && t.amountVnd() != null && t.amountVnd() >= mission.minAmountVnd()` ở cả luồng `missions()` lẫn `claimMission()`. Giao dịch dưới 50.000đ giữ trạng thái `IN_PROGRESS`, cố claim ném HTTP 409 Conflict `"Nhiệm vụ hôm nay chưa hoàn thành"`.
+
 ## Danh bạ người thụ hưởng (issue #32) & Chuyển tiền định kỳ (issue #31) — `transfer-service`
 
 Tích hợp trực tiếp vào `transfer-service` với database riêng `ewallet_transfer` (được cấp qua Postgres pod chung, Hikari pool `maximum-pool-size=5` đúng chuẩn Issue #24). Phương án này gom toàn bộ nghiệp vụ liên quan đến luồng P2P transfer (danh bạ, lịch định kỳ, thực thi chuyển tiền) về cùng 1 bounded context `transfer-service`, không làm phình to số lượng pod trên cụm Minikube.
@@ -2254,38 +2461,121 @@ Tích hợp tính năng gửi Thiệp mừng điện tử kèm tiền (E-Gift Ca
 - Người nhận gửi lời cảm ơn thành công và người gửi xem lại được lời cảm ơn.
 - Phục vụ bundle `mfe-transfer /remoteEntry.js` đạt HTTP 200 OK.
 
-## eKYC Tier — Định danh Cấp độ Ví & Hạn mức Theo Mức độ Xác thực (Issue #40)
+## eKYC Tier — Định danh Cấp độ Ví & Mô hình Nhị phân Khoá/Mở Rút-Chuyển-Thanh toán (Issue #40)
 
-### 1. Bối cảnh & Căn cứ Pháp lý
-- **Quy định pháp lý**: Theo Thông tư 40/2024/TT-NHNN và Thông tư 41/2025/TT-NHNN của Ngân hàng Nhà nước Việt Nam về quản lý và cung ứng dịch vụ trung gian thanh toán, ví điện tử phải được định danh thông tin khách hàng (eKYC bằng CCCD/hộ chiếu gắn chip).
-- **Phân biệt với các cơ chế hạn mức khác đã làm trong lab**:
-  - `MONTHLY_LIMIT_TYPES` (Issue #7): Hạn mức luật định 100.000.000đ/tháng dương lịch áp dụng cho các giao dịch chuyển tiền/thanh toán ra ngoài ví.
-  - `StepUpPolicy` (Issue #15 theo QĐ 2345/QĐ-NHNN): Xác thực bổ sung sinh trắc học theo từng lần giao dịch cụ thể (>10.000.000đ/lần hoặc >20.000.000đ/ngày).
-  - `eKYC Tier` (Issue #40): Cấp độ tài khoản (Account-level tier). Khi chưa định danh (`UNVERIFIED`), hạn mức giao dịch toàn bộ ví bị thu hẹp đáng kể xuống **5.000.000đ/tháng**. Sau khi hoàn tất định danh (`VERIFIED`), hạn mức được mở khóa về mức tiêu chuẩn **100.000.000đ/tháng**.
-- **Disclaimer bắt buộc**: Đây là **MÔ PHỎNG** quy trình eKYC phục vụ học tập kiến trúc. Lab không tích hợp máy quét chip CCCD/NFC hoặc dịch vụ nhận diện khuôn mặt OCR thật.
+> **Lịch sử thay đổi quan trọng**: Bản đầu (commit `dd6fc9c4`) dùng mô hình "mức trần giảm
+> 5.000.000đ/tháng cho UNVERIFIED". `agent-tester` QA độc lập phát hiện số 5.000.000đ **không có
+> nguồn trích dẫn thật** nào (Thông tư 40/2024/TT-NHNN và Thông tư 41/2025/TT-NHNN — đã xác minh ở
+> issue #7 — chỉ quy định hạn mức 100tr/300tr-tháng chung, không hề có mức riêng cho ví chưa định
+> danh). Operator xác nhận trực tiếp số đó là tự chọn, không phải sign-off thật, và yêu cầu tìm
+> nguồn thật hoặc đổi mô hình. `agent-designer` sau đó xác minh trực tiếp (fetch nguyên văn, không
+> qua tóm tắt) trên chính momo.vn rằng MoMo thật dùng **mô hình nhị phân** (khoá hoàn toàn, không
+> phải mức trần giảm) — mục dưới đây mô tả mô hình thay thế này, đã thay hoàn toàn mô hình cũ.
 
-### 2. Quyết định Kiến trúc (Operator Sign-off: Phương án a)
-1. **Quản lý danh tính tại `user-service`**:
+### 1. Bối cảnh & Căn cứ
+
+- **Quy định pháp lý chung (không đổi)**: Thông tư 40/2024/TT-NHNN và Thông tư 41/2025/TT-NHNN của
+  NHNN yêu cầu ví điện tử phải được định danh khách hàng (eKYC).
+- **Đã xác minh trực tiếp từ momo.vn** (fetch nguyên văn ngày 2026-10-18, không qua tóm tắt AI/snippet):
+  - `momo.vn/hoi-dap/neu-chua-xac-thuc-tai-khoan-momo-va-chua-lien-ket-ngan-hang-thi-toi-co-the-thuc-hien-giao-dich-chuyen-tien-khong`
+    — trả lời trực tiếp: tài khoản chưa xác thực (chưa eKYC) và chưa liên kết ngân hàng **"không
+    thể thực hiện giao dịch được bằng nguồn tiền trên MoMo"**; phương án thay thế (thẻ quốc tế/ATM
+    nội địa qua Napas) **"không áp dụng cho giao dịch chuyển tiền"**. Tức là không có đường lách nào
+    để chuyển tiền bằng số dư ví khi chưa xác thực — khoá hoàn toàn, không phải mức trần.
+  - `momo.vn/hoi-dap/dieu-gi-se-xay-ra-neu-toi-khong-xac-thuc-tai-khoan-vi-momo-cua-minh` — trích
+    nguyên văn: *"Nếu tài khoản MoMo của bạn chưa được xác thực, MoMo của bạn sẽ bị tạm khóa dịch vụ
+    cho đến khi việc xác thực hoàn tất."*
+  - `momo.vn/hoi-dap/neu-toi-khong-muon-xac-thuc-tai-khoan-vi-momo-cua-minh-tien-trong-vi-cua-toi-co-mat-khong`
+    — trích nguyên văn: *"Tiền của bạn vẫn được đảm bảo duy trì trong trong tài khoản MoMo"*, nhưng
+    *"cần phải thực hiện xác thực tài khoản để tiếp tục sử dụng phần tiền này"* — xác nhận tiền
+    không mất, chỉ không dùng được (không bị downgrade/mất số dư khi chưa xác thực).
+- **Suy luận hợp lý, CHƯA có xác nhận trực tiếp từ momo.vn** (ghi rõ minh bạch, không che giấu là
+  phần nào tự thiết kế): các trang trên không nói rõ ràng việc **nạp tiền (TOPUP)/nhận tiền
+  (TRANSFER_IN)** có hoạt động bình thường khi chưa xác thực hay không — một lượt tìm kiếm riêng
+  cho câu hỏi này không ra kết quả trực tiếp. Lab suy luận theo logic sản phẩm phổ quát (một ví
+  không nhận được tiền ngay từ lúc đăng ký sẽ không thể dùng để test/giới thiệu ứng dụng — các tính
+  năng MoMo khác đã khảo sát trước đó như lì xì (#10) cũng cho người CHƯA CÓ tài khoản MoMo 48h để
+  đăng ký nhận tiền, ngụ ý việc nhận/giữ tiền không đòi hỏi xác thực trước) và theo đúng nguyên tắc
+  "tiền không mất, chỉ không dùng được" trích ở trên — suy ra chiều IN (tiền vào ví) không bị khoá,
+  chỉ chiều OUT (tiền ra khỏi ví) bị khoá. Nếu sau này tìm được nguồn phản bác suy luận này, phải
+  sửa lại.
+- **Phân biệt với các cơ chế hạn mức khác đã làm trong lab (không đổi)**:
+  - `MONTHLY_LIMIT_TYPES` (Issue #7): Hạn mức luật định 100.000.000đ/tháng dương lịch áp dụng cho
+    các giao dịch chuyển tiền/thanh toán ra ngoài ví — **chỉ áp dụng cho tài khoản `VERIFIED`** sau
+    thay đổi này (tài khoản `UNVERIFIED` không bao giờ chạm tới nhánh này vì đã bị chặn ở bước eKYC
+    trước đó).
+  - `StepUpPolicy` (Issue #15 theo QĐ 2345/QĐ-NHNN): Xác thực bổ sung sinh trắc học theo từng lần
+    giao dịch cụ thể — không đổi, vẫn chỉ áp dụng khi tài khoản đã `VERIFIED` và đã qua được bước
+    eKYC.
+- **Disclaimer bắt buộc**: Đây là **MÔ PHỎNG** quy trình eKYC phục vụ học tập kiến trúc. Lab không
+  tích hợp máy quét chip CCCD/NFC hoặc dịch vụ nhận diện khuôn mặt OCR thật.
+
+### 2. Quyết định Kiến trúc — Mô hình Nhị phân (Operator xác nhận trực tiếp, thay thế Phương án a cũ)
+
+1. **Quản lý danh tính tại `user-service` (không đổi từ bản đầu)**:
    - `User` entity lưu trữ `kycTier` (`UNVERIFIED`, `VERIFIED`) và `idCardNumber` (số CCCD).
    - User mới đăng ký mặc định là `UNVERIFIED`.
-   - Bảo toàn tương thích ngược: Các user cũ trước khi có Issue #40 hoặc các bản ghi nạp với `kyc_tier` null khi tải qua `@PostLoad` sẽ mặc định là `VERIFIED` để bảo toàn 100% kết quả kiểm thử của 38 issue trước.
-   - Endpoint `POST /users/{id}/verify-kyc`: Tiếp nhận CCCD và chuyển đổi trạng thái tài khoản sang `VERIFIED`.
-2. **Kiểm soát hạn mức tại `wallet-service`**:
-   - `WalletMutationExecutor` tích hợp `UserServiceClient` để tra cứu thông tin cấp độ xác thực của user khi thực hiện các giao dịch chi tiêu (`MONTHLY_LIMIT_TYPES`).
-   - Hạn mức hiệu dụng: Nếu `isUnverified`, `effectiveMonthlyLimit = 5.000.000đ`; nếu `VERIFIED`, `effectiveMonthlyLimit = 100.000.000đ`.
-   - Khi vượt hạn mức chưa định danh, hệ thống trả về HTTP 409 Conflict với thông điệp hướng dẫn rõ ràng: *"Đã vượt hạn mức giao dịch 5.000.000đ/tháng cho tài khoản chưa định danh eKYC. Vui lòng xác thực CCCD để nâng hạn mức lên 100.000.000đ/tháng."*
-3. **Chính sách Fail-open an toàn**:
-   - Nếu `user-service` tạm thời không phản hồi hoặc gặp sự cố mạng, `UserServiceClient` mặc định xem user là `VERIFIED` (không downgrade), ngăn chặn nguy cơ sự cố dịch vụ phụ trợ làm tắc nghẽn toàn bộ luồng chuyển tiền/thanh toán cốt lõi.
+   - Bảo toàn tương thích ngược: Các user cũ trước khi có Issue #40 (`DEFAULT 'VERIFIED'` ở mức
+     cột DB, không chỉ `@PostLoad`) mặc định là `VERIFIED` để bảo toàn 100% kết quả kiểm thử của
+     38 issue trước.
+   - Endpoint `POST /users/{id}/verify-kyc`: Tiếp nhận CCCD và chuyển đổi trạng thái tài khoản sang
+     `VERIFIED`.
+2. **Chặn nhị phân tại `wallet-service` (THAY ĐỔI CHÍNH của bản sửa này)**:
+   - `WalletMutationExecutor.debitOnce` kiểm tra `type.direction() == TransactionDirection.OUT`
+     (nguồn sự thật duy nhất về chiều tiền từ issue #36, không dùng danh sách debit tự liệt kê tay)
+     TRƯỚC bất kỳ logic hạn mức nào khác. Nếu đúng VÀ user `UNVERIFIED` → ném `IllegalStateException`
+     ngay (map 409 Conflict qua `@ExceptionHandler` có sẵn — cùng pattern với lỗi vượt hạn mức #7,
+     không thêm exception/status mới), bất kể số tiền lớn/nhỏ. Việc chặn theo `direction() == OUT`
+     (thay vì liệt kê tay `TRANSFER_OUT, WITHDRAW, BILL_PAYMENT, ...`) cũng tự động phủ đúng
+     `BNPL_REPAYMENT` — loại vốn bị loại khỏi `MONTHLY_LIMIT_TYPES` (carve-out của Điều 26) nhưng
+     vẫn là tiền thật rời khỏi ví, nên vẫn phải bị chặn khi `UNVERIFIED`.
+   - Message lỗi: *"Ví chưa hoàn tất định danh (eKYC), vui lòng xác thực CCCD trước khi rút/chuyển
+     tiền."*
+   - Nếu `VERIFIED` → bỏ hẳn check eKYC, chạy tiếp logic cũ của issue #7 nguyên vẹn
+     (`monthlyOutboundLimit = 100.000.000đ/tháng`, không đổi gì).
+   - **Credit (`creditOnce`) không hề gọi `UserServiceClient`** — TOPUP/TRANSFER_IN/
+     LOYALTY_REDEMPTION/INVESTMENT_SELL/SAVINGS_GOAL_WITHDRAW/REFUND hoạt động bình thường bất kể
+     `kycTier`, đúng với phần "suy luận hợp lý" ở mục 1.
+   - Không còn cấu hình `unverified-monthly-limit`/`UNVERIFIED_MONTHLY_LIMIT` — mô hình nhị phân
+     không có mức trần trung gian nào để cấu hình.
+3. **Chính sách FAIL-CLOSED cho chiều tiền ra (issue #55, TD-08, ADR-02; thay thế "Fail-open an toàn" cũ)**:
+   Quyết định operator: https://github.com/h1epnh/fullstack-engineering-learning/issues/40#issuecomment-6248721724.
+   `UserServiceClient.findUser` phân biệt 3 kết quả: có user (kèm `kycTier`), 404 (`Optional.empty()`), không xác định
+   (timeout/5xx/lỗi mạng: ném `KycUnavailableException`). Với `direction()==OUT`: UNVERIFIED bị chặn (409, message cũ);
+   không xác định bị chặn bằng HTTP 503 "Không thể xác minh định danh lúc này, vui lòng thử lại sau"; 404 bị chặn bằng 409
+   "Không tìm thấy hồ sơ định danh...". Chiều IN (`creditOnce`) không gọi user-service nên không bị ảnh hưởng. RestClient có
+   timeout cấu hình (`USER_SERVICE_CONNECT_TIMEOUT_MS`=1000, `USER_SERVICE_READ_TIMEOUT_MS`=2000). Mỗi lần chặn do không xác định:
+   log WARN `KYC_CHECK_UNAVAILABLE` và counter `wallet.kyc.check.unavailable`. Hệ quả được operator duyệt: sự cố
+   user-service chặn mọi giao dịch ra. Đúng nguyên lý 2 (tuân thủ = FAIL-CLOSED).
+   **Ánh xạ 503 ở các service gọi (issue #85):** wallet-service 503 = debit bị từ chối TRƯỚC khi thực thi, an toàn thử lại,
+   tuyệt đối không gọi credit/hoàn tiền. `transfer-service` (`debitSender`), `lucky-money-service` (`LuckyMoneyService.send`,
+   `GiftCardService.send`), `bill-payment-service` (`BillPaymentService.pay`/auto-pay, `InsuranceService`, `TravelBookingService`,
+   `DigitalSubscriptionService`) trả 503 kèm message của wallet; bill-payment vẫn hoàn voucher (không phải tiền). Phân biệt bằng
+   mã trạng thái: chỉ HTTP 503 được map; các 5xx khác và lỗi I/O (timeout, connection reset) là KẾT QUẢ KHÔNG XÁC ĐỊNH, giữ hành vi
+   cũ (các luồng này chưa có idempotencyKey công khai; fund-service là nơi duy nhất có mẫu 502 + thử lại cùng key). 409 của wallet
+   (eKYC, hạn mức) nay được bill-payment/lucky-money chuyển nguyên message; chỉ "Insufficient balance" thô mới đổi sang câu thân thiện.
+   `topup-service` (Telco, BankTransferOut, WithdrawalService) chưa đổi: debit gốc là bước đầu nên 503 không có tác dụng phụ (ra 500);
+   lần debit phí thứ hai của WithdrawalService nếu bị từ chối thì REFUND lại khoản gốc đã debit thật, không tạo tiền.
 
-### 3. Độc lập kiểm thử E2E (`scratch/test_verify_issue40.py`)
-Đã thực thi kiểm thử toàn diện qua Ingress Nginx thật trên cổng 18080:
-- **Test 1**: User mới đăng ký có trạng thái `UNVERIFIED`, `idCardNumber = None`.
-- **Test 2**: Nạp 10.000.000đ vào ví tài khoản chưa định danh.
-- **Test 3**: Chuyển 4.000.000đ (nằm trong hạn mức 5.000.000đ) thành công (HTTP 200).
-- **Test 4**: Chuyển tiếp 2.000.000đ (dự kiến tổng chi 6.000.000đ > 5.000.000đ) bị chặn với HTTP 409 Conflict. Số dư gốc 6.000.000đ được bảo toàn nguyên vẹn.
-- **Test 5**: Gọi `POST /users/{id}/verify-kyc` với CCCD -> Trạng thái nâng cấp thành công lên `VERIFIED`.
-- **Test 6**: Thử lại giao dịch chuyển 2.000.000đ ngay sau khi eKYC -> Giao dịch thành công ngay lập tức (HTTP 200), số dư ví cập nhật chính xác 4.000.000đ.
-- **Test 7 (Concurrency Race Condition)**: 20 request chuyển 1.000.000đ đồng thời từ một tài khoản chưa định danh có 10.000.000đ. Kết quả: Đúng chính xác 5 request thành công (đạt trần 5.000.000đ) và đúng 15 request bị chặn 409. Số dư cuối cùng còn lại đúng 5.000.000đ, sai lệch sổ cái tuyệt đối bằng 0 (Zero ledger discrepancy).
+### 3. Kiểm thử (unit + E2E qua Ingress thật)
+
+Unit test (`WalletMutationExecutorTests`, đã viết lại hoàn toàn theo mô hình nhị phân — xoá mọi
+test case "5tr/tháng"):
+- UNVERIFIED bị chặn debit (`TRANSFER_OUT`) dù chỉ 10.000đ — không đụng tới `monthlyOutboundLimit`.
+- UNVERIFIED bị chặn với MỌI loại debit (`WITHDRAW`, `BILL_PAYMENT`, `BNPL_REPAYMENT`,
+  `INVESTMENT_BUY`, `SAVINGS_GOAL_DEPOSIT`, `VOUCHER_PASS_PURCHASE`).
+- UNVERIFIED vẫn credit (`TOPUP`) bình thường — `creditOnce` không gọi `UserServiceClient`.
+- VERIFIED debit vẫn đúng hạn mức pháp luật cũ 100.000.000đ/tháng (cả case thành công và case vượt
+  hạn mức → 409 với message Điều 26, KHÔNG lẫn message eKYC).
+- Fail-closed OUT (issue #55): user-service lỗi/timeout/5xx hoặc 404 → debit OUT bị chặn, ví không đổi, không ghi Transaction; credit TOPUP vẫn qua khi user-service chết (xem `WalletMutationExecutorTests`, `UserServiceClientTests`).
+
+E2E qua Ingress thật (`http://api.ewallet-lab.local`), user UNVERIFIED thật đăng ký qua chính
+Ingress:
+- Rút/chuyển 10.000đ (số rất nhỏ, không phải số lớn) khi `UNVERIFIED` → 409, đúng message eKYC.
+- Nạp tiền (TOPUP) khi `UNVERIFIED` → vẫn 200, số dư tăng đúng.
+- `POST /users/{id}/verify-kyc` → nâng cấp `VERIFIED`.
+- Rút/chuyển lại sau khi `VERIFIED` → 200, đúng hạn mức 100.000.000đ/tháng cũ (test cả trong hạn
+  mức và vượt hạn mức để phân biệt rõ 2 loại lỗi 409 khác nhau).
 
 ## Merchant / Business Account & QR Đa Năng Thu Hộ — Phí Rút Tiền Merchant (Issue #39)
 
@@ -2466,6 +2756,959 @@ frontend `DESIGN.md`'s mục Touch ID (#41).
   ID trong môi trường chạy agent. Phần này CHỈ operator tự test được trên máy họ (macOS, Safari/
   Chrome) — xem frontend DESIGN.md's mục Touch ID cho checklist cụ thể operator cần tự chạy.
 
+## Quy trình — Bằng chứng Sign-off của Operator (bài học từ #28/#33/#34/#39/#40)
 
+**Bối cảnh**: nhiều issue (#28, #33, #34, #39, #40) khi gặp điểm rẽ kiến trúc cần quyết định của
+operator, `agent-dev` tự viết trong GitHub comment dạng "Đã nhận sign-off từ Operator: Chọn Phương
+án (b)..." — nhưng khi `agent-tester`/`agent-ba` kiểm tra lại `.claude/agent-mailbox.json` và lịch
+sử comment GitHub, KHÔNG tìm thấy bất kỳ message/comment nào từ nguồn operator thật xác nhận quyết
+định đó. Pattern này bị agent-ba cảnh báo lần đầu ở #33/#34 (2026-10-10), lặp lại ở #40 (2026-10-18,
+agent-tester phát hiện, operator phải tự yêu cầu nghiên cứu lại và đổi hẳn sang mô hình khác), và
+lại xuất hiện ở #39 (merchant/QR) vẫn chưa được xử lý tại thời điểm viết mục này.
 
+**Quy ước bắt buộc từ nay**: khi một issue có "Constraints" yêu cầu dừng lại hỏi operator trước khi
+chọn phương án kiến trúc, comment GitHub claim "đã nhận sign-off" **phải trích dẫn trực tiếp** một
+trong hai loại bằng chứng thật:
+1. Link tới message cụ thể trong `.claude/agent-mailbox.json` (kèm `ts`/`from` thật), hoặc
+2. Link tới đúng comment GitHub của operator/người dùng thật (không phải comment do `agent-dev` tự
+   viết rồi tự diễn giải là "sign-off").
 
+Nếu không có bằng chứng dạng (1) hoặc (2), `agent-dev` **không được** tự ghi "đã nhận sign-off" —
+phải dừng lại, dùng `AskUserQuestion` hoặc gửi mailbox chờ phản hồi thật, giống đúng cơ chế mà
+`agent-tester`/`agent-ba` đã nhiều lần yêu cầu. `agent-tester` khi QA độc lập nên coi claim sign-off
+không có link bằng chứng là lý do đủ để KHÔNG đóng issue, kể cả khi phần functional code PASS hết
+(đúng như #40 đã áp dụng).
+
+---
+
+## Bản đồ năng lực nghiệp vụ & Lộ trình (agent-architect, EA — 2026-10-18)
+
+> **Tác giả**: agent-architect (lượt đầu tiên). **Trạng thái**: đề xuất. Chưa phải quyết định của
+> operator. Mức ưu tiên ở đây là khuyến nghị kèm lý do, không phải lệnh giao việc.
+>
+> **Ký hiệu nguồn** (giữ đúng quy ước của agent-designer): **[XM]** = đã xác minh trực tiếp (fetch
+> nguồn chính chủ, ghi trong mailbox hoặc mục DESIGN.md tương ứng); **[TC]** = nguồn thứ cấp (báo
+> chí, snippet); **[CXM]** = chưa xác minh; **[SL]** = suy luận của kiến trúc sư, không có nguồn.
+> Toàn bộ nguồn đối thủ lấy từ nghiên cứu sẵn có: mailbox idx 118 (Apple/Google/SBV-NAPAS), idx 119
+> (10 tính năng), idx 122 (Open API ngân hàng, TT 64/2024), và các mục DESIGN.md của từng issue.
+> Lượt này **không** nghiên cứu lại từ đầu.
+
+### Vì sao cần bản đồ năng lực
+
+49 issue đã làm theo kiểu "thấy tính năng hay thì làm". Kết quả là lab rộng (12 service Java) nhưng
+lệch: nhiều tính năng tiện ích (vé, bảo hiểm, voucher) cùng một mẫu "trừ ví, ghi sổ", trong khi
+những năng lực *nền* mà ví thật không thể thiếu (tiền vào/ra qua kênh thật, đối soát, sổ cái có đối
+ứng) vẫn là mock. Bản đồ năng lực (business capability map) liệt kê doanh nghiệp *làm được gì*,
+độc lập với service nào đang làm. Nhờ vậy thấy ngay chỗ thừa, chỗ thiếu, và năng lực nào là điều kiện
+cho năng lực khác.
+
+### Bảng năng lực
+
+| # | Nhóm năng lực | Lab đã có (issue) | Đối thủ thật có gì (nguồn) | Khoảng trống | Ưu tiên đề xuất |
+|---|---|---|---|---|---|
+| 1 | **Ví lõi & sổ cái** (số dư, ledger, hạn mức, sao kê) | `wallet-service`: #5 (optimistic lock), #6 (giới hạn amount theo hạn mức MoMo [XM, mục #6]), #13 Túi Thần Tài, #16 chi tiêu, #36 sao kê + `direction()` | Sổ cái kép với tài khoản hệ thống, đối soát ngày [SL: thông lệ ngành, không có nguồn VN công khai trong repo] | Sổ **đơn** theo ví: tiền thưởng/cashback (`LOYALTY_REDEMPTION`, sắp có `REFERRAL_REWARD`) được credit "từ hư không", không có tài khoản đối ứng (ngân sách marketing, tài khoản treo/suspense, tài khoản thanh toán bù trừ). Không có job đối soát. Không có khái niệm **giữ tiền (hold/authorization)**. Mọi số tiền ngầm hiểu VND | **Cao.** Là điều kiện cho tích hợp thật (tiền báo có không khớp user phải vào tài khoản treo), cho #47 (nguồn tiền thưởng) và #48 (giữ tiền trước) |
+| 2 | **Nạp / rút** | Topup mô phỏng MoMo Collection Link + IPN [XM, mục "Luồng Top-up"], #1 bank-transfer-out (mock), #29 nạp điện thoại, #39 phí rút merchant, #44 VietQR nhận tiền (đang làm), #45/#46 (mở) | VNPAY sandbox có pay + IPN + query + refund, thẻ test NCB [XM idx 122]; SePay Test mode bắn webhook báo có, VA cho BIDV/VCB/Vietin/Sacombank/Shinhan [XM idx 122]; TPBank có API "eWallet" (liên kết, nạp, rút) + API Sandbox [XM developer.tpb.vn, idx 122]; Apple Pay là phương thức thanh toán trên cổng MoMo/ZaloPay, **không** phải nguồn nạp ví [XM idx 118] | Không có kênh thật nào. ~~`IpnController` **không xác minh chữ ký IPN**~~ → **đã sửa ở #52**: đã verify HMAC-SHA256 trên 13 field đã xác minh từ docs MoMo, so khớp số tiền, chống replay; secret nằm ở K8s Secret, không hardcode. **Còn thiếu**: trạng thái `REDIRECT_PENDING`, truy vấn chủ động khi mất webhook, đối soát. Chưa có hướng nạp "chuyển khoản vào VA/QR của ví" (push từ ngân hàng) | **Cao nhất.** Giá trị học cao nhất của cả lab (adapter, chữ ký webhook, idempotency, đối soát). Phụ thuộc #43 |
+| 3 | **Chuyển tiền** | #3 link nhận tiền, #4 QR nội bộ, #8 nhắc trả, #10 lì xì, #11 chia tiền, #31 định kỳ, #32 danh bạ, #34 thiệp mừng, #44 VietQR | NAPAS 247 liên ngân hàng: hạn mức/phí theo từng NH [TC idx 118 C4]; VietQR là chuẩn QR liên NH, Banks API trả 76 NH [XM idx 118 A1] | Ledger không phân biệt **kênh** (QR / số điện thoại / link): `TRANSFER_OUT` là một loại chung, nên #47 không kiểm được điều kiện "QR không tính". Saga P2P không persist (gap đã biết). Chuyển liên NH thật: không có sandbox công khai [CXM idx 118 C4] | **Trung bình.** Thêm trường kênh là việc nhỏ, mở khoá #47 và báo cáo chi tiêu |
+| 4 | **Thanh toán hoá đơn & dịch vụ** | #2, #26 auto-debit, #30 dịch vụ số, #33 vé, #35 bảo hiểm vi mô, #37 chọn nguồn tiền, #42 học phí, #49 bảo hiểm du lịch | Học phí phí 5.000đ/hoá đơn [XM, #42]; vé CGV, mã thẻ game, Ticketbox [XM idx 119 mục 1-3]; bảo hiểm trễ chuyến bay 888.000đ tự động [XM idx 119 mục 6] | Biller hoàn toàn mock (cố ý). Các tính năng mới phần lớn **lặp lại cùng một mẫu** "trừ ví + ghi sổ" | **Thấp.** Giá trị học kiến trúc giảm dần. Ngoại lệ: #49 (bồi thường tự động, tiền chảy ngược vào ví) có giá trị học về sự kiện ngoài kích hoạt chi trả |
+| 5 | **Tín dụng** | #18 Ví Trả Sau [XM momo.vn/vi-tra-sau], #37 | Thẻ tín dụng liên kết, trả góp 0%, phí chuyển đổi 2,99% (3-6 tháng) / 4,99% (9-12 tháng) [XM idx 119 mục 7] | Không có liên kết thẻ tín dụng ngân hàng, không chấm điểm tín dụng | **Thấp.** Ràng buộc pháp lý nặng, BNPL hiện có đã đủ dạy mẫu "claim trước, chuyển tiền sau" |
+| 6 | **Tiết kiệm & đầu tư** | #13, #25 Sàn Đầu Tư [XM momo.vn/san-dau-tu], #27 | Gửi tiết kiệm online qua NH đối tác (agent-designer nêu ở vòng trước, idx 119 dẫn lại; chi tiết chưa đưa vào repo) [CXM] | Không có sản phẩm của NH đối tác thật | **Thấp** |
+| 7 | **Loyalty & tăng trưởng** | #19 điểm thưởng, #28 Voucher Pass, #38 nhiệm vụ, #47 Referral (mở) | Referral theo mốc 50.000/110.000/180.000đ, Quỹ tiền thưởng hết hạn 45 ngày, điều kiện chống gian lận 6 tháng [XM idx 119 mục 4] | Chưa có tài khoản ngân sách marketing để ghi đối ứng (xem nhóm 1). Chưa có chống gian lận nào | **Trung bình.** #47 dạy chống gian lận + TTL, nhưng nên làm sau khi có trường kênh và tài khoản đối ứng |
+| 8 | **Merchant & acquiring** | #39 QR tĩnh merchant + phí rút vượt 30tr/tháng [XM, mục #39] | Ví là phương thức thanh toán trong app Grab/Gojek, merchant tự khởi tạo trừ tiền sau khi user uỷ quyền [XM momo.vn/thanh-toan-momo-grab, idx 119 mục 8]; MoMo `payWithApplePay` trên cổng [XM idx 118] | Chưa có **API cho merchant** (merchant khởi tạo trừ tiền sau khi user uỷ quyền một lần), chưa có MDR, chưa có báo cáo quyết toán cho merchant, chưa có webhook gửi ra merchant | **Trung bình-cao** về giá trị học (token uỷ quyền, webhook chiều ra, quyết toán). Đặt sau nhóm 2 |
+| 9 | **Định danh & tuân thủ** | #7 hạn mức tháng, #15 step-up, #40 eKYC nhị phân [XM momo.vn hỏi đáp], #41 WebAuthn | Xem bản đồ quy định bên dưới | eKYC **fail-closed cho chiều tiền ra** khi `user-service` lỗi (ADR-02, đã làm ở #55, QA: https://github.com/h1epnh/fullstack-engineering-learning/issues/55#issuecomment-6379891759). Chưa có quản lý consent (TT 64: tối đa 180 ngày [TC]), chưa có lưu log truy cập API ≥3 tháng [TC], chưa có giám sát giao dịch bất thường (AML) [SL] | **Cao** cho việc sửa fail-open. **Trung bình** cho consent/log, chỉ cần khi làm liên kết tài khoản kiểu Open API |
+| 10 | **Tích hợp ngân hàng / cổng thật** | #43 public domain (mở), #44, #45, #46 | Danh mục portal NH: TPBank, BIDV, VietinBank, OCB, ACB, Sacombank đều có portal, đều theo mô hình đối tác doanh nghiệp, không cho cá nhân tự dùng tài khoản thật qua OAuth [XM/TC idx 122] | Chưa có interface `PaymentProvider`. Credential đang hardcode `FAKE_*` trong `BankGatewayClient` | **Cao nhất**, đi cùng nhóm 2. #43 là điều kiện tiên quyết |
+| 11 | **Tiện ích đời sống & mở rộng** | #48 bãi xe (mở) | VETC Parking trừ phí sau khi ra bãi, RFID/ETAG [XM idx 119 mục 9]; QR xuyên biên giới qua NAPAS, chỉ thấy NH triển khai, chưa thấy ví nào [TC idx 118 C5, idx 119 mục 10]; nền tảng từ thiện [XM idx 119 mục 5] | Chưa có luồng "tính phí sau" (mọi luồng OUT đều biết số tiền trước). Chưa có đa tiền tệ | **#48: trung bình** (dạy authorize/capture). **QR xuyên biên giới: thấp** (nguồn yếu nhất, kéo theo đa tiền tệ toàn hệ thống) |
+
+#### Bổ sung Ánh xạ Backlog PO/BA (#65–#124, cập nhật 2026-10-29)
+
+| Nhóm năng lực | Các ticket đã tạo (#65–#124) |
+|---|---|
+| **1. Ví lõi, Sổ cái, Ví Gia Đình, Thông báo & PFM** | [#65](https://github.com/h1epnh/fullstack-engineering-learning/issues/65) (hold/capture/release + TD-10), [#75](https://github.com/h1epnh/fullstack-engineering-learning/issues/75) (`channel` SA-2 + `MARKETING_BUDGET`/`SUSPENSE` TD-09), [#78](https://github.com/h1epnh/fullstack-engineering-learning/issues/78) (Thẻ ảo đa năng & Thẻ ảo dùng 1 lần tự hủy), [#88](https://github.com/h1epnh/fullstack-engineering-learning/issues/88) (PFM 2.0: Danh mục, Ngân sách 80%/100% & Chi tiêu ngoài ví), [#90](https://github.com/h1epnh/fullstack-engineering-learning/issues/90) (Biên lai chi tiết, Báo chuyển nhầm 1 chạm & Tra soát), [#101](https://github.com/h1epnh/fullstack-engineering-learning/issues/101) (Ví Gia Đình 2.0: Tiền tiêu vặt định kỳ, Thưởng việc nhà & Xin phụ huynh thanh toán hộ), [#117](https://github.com/h1epnh/fullstack-engineering-learning/issues/117) (Trung tâm Thông báo tài chính thời gian thực, Biến động số dư & Hộp thư nhắc việc 1 chạm) |
+| **2 & 10. Nạp / Rút, Kiều hối, ATM QR, NAPAS 247 & Cổng thanh toán** | [#66](https://github.com/h1epnh/fullstack-engineering-learning/issues/66) (TD-04b Outbox topup), [#68](https://github.com/h1epnh/fullstack-engineering-learning/issues/68) (SA-4 PaymentProvider VNPAY/SePay), [#87](https://github.com/h1epnh/fullstack-engineering-learning/issues/87) (Nạp ví qua Tài khoản Ảo VA `99+SĐT` & Dynamic VietQR — mở khóa `bank-transfer`), [#104](https://github.com/h1epnh/fullstack-engineering-learning/issues/104) (Nạp tiền tự động khi số dư thấp Low-Balance Auto-Topup & Trần an toàn tháng), [#106](https://github.com/h1epnh/fullstack-engineering-learning/issues/106) (Tra cứu tên chủ TK ngân hàng NAPAS 247 thời gian thực & Cảnh báo tài khoản nghi ngờ lừa đảo SIMO), [#120](https://github.com/h1epnh/fullstack-engineering-learning/issues/120) (Nhận tiền kiều hối quốc tế 24/7 qua mã MTCN 10 chữ số — Western Union), [#121](https://github.com/h1epnh/fullstack-engineering-learning/issues/121) (Rút tiền mặt không cần thẻ bằng mã QR tại ATM VietQR Cash & Điểm Nạp/Rút liên kết) |
+| **3. Chuyển tiền, Chia hóa đơn, Sổ nợ, Quỹ nhóm, Lì xì nhóm & Bảo vệ chống lừa đảo** | [#67](https://github.com/h1epnh/fullstack-engineering-learning/issues/67) (TD-04c payment-request pay recovery), [#80](https://github.com/h1epnh/fullstack-engineering-learning/issues/80) (Sổ chi tiêu nhóm nhiều ngày & Thuật toán tối giản hóa công nợ), [#84](https://github.com/h1epnh/fullstack-engineering-learning/issues/84) (Lá chắn bảo vệ tài sản Street Mode & Cooling-Off Hold), [#85](https://github.com/h1epnh/fullstack-engineering-learning/issues/85) (Map 503 thân thiện), [#92](https://github.com/h1epnh/fullstack-engineering-learning/issues/92) (Chuyển tiền kèm Thiệp mừng & Số tiền may mắn — mở khóa `send-card`), [#100](https://github.com/h1epnh/fullstack-engineering-learning/issues/100) (Lì xì nhóm chia đều / Giật lì xì ngẫu nhiên may mắn & Bảng xếp hạng Vua May Mắn), [#102](https://github.com/h1epnh/fullstack-engineering-learning/issues/102) (Quỹ Nhóm 2.0: Đợt đóng quỹ theo kỳ & Biểu quyết đa số thành viên khi rút quỹ), [#111](https://github.com/h1epnh/fullstack-engineering-learning/issues/111) (Biệt danh nhận tiền cá nhân hóa `@Paytag` & Ẩn số điện thoại khi nhận tiền từ người lạ), [#116](https://github.com/h1epnh/fullstack-engineering-learning/issues/116) (Chia tiền hóa đơn theo từng món đã gọi & Tự động phân bổ thuế VAT / Phí phục vụ / Giảm giá), [#123](https://github.com/h1epnh/fullstack-engineering-learning/issues/123) (Sổ quản lý vay mượn cá nhân 2 chiều & Trả nợ từng phần linh hoạt `PARTIALLY_PAID`) |
+| **4 & 11. Hóa đơn, Dịch vụ công, Y tế, Giao thông, Giao hàng COD, Bảo hiểm, Du lịch & Giải trí** | [#73](https://github.com/h1epnh/fullstack-engineering-learning/issues/73) (Ví Nhân Ái / Gây quỹ từ thiện minh bạch — mở khóa `charity`), [#76](https://github.com/h1epnh/fullstack-engineering-learning/issues/76) (Tra cứu Phạt nguội CSGT & Gói cảnh báo tự động — mở khóa `transportation`), [#79](https://github.com/h1epnh/fullstack-engineering-learning/issues/79) (Quét QR Quốc tế & Khóa tỷ giá 60s), [#89](https://github.com/h1epnh/fullstack-engineering-learning/issues/89) (Dự báo hóa đơn 30 ngày & Cảnh báo hóa đơn tăng đột biến Bill Spike), [#93](https://github.com/h1epnh/fullstack-engineering-learning/issues/93) (Nối thật toàn bộ `AllServices.tsx`, Tìm kiếm dịch vụ & Ghim yêu thích), [#96](https://github.com/h1epnh/fullstack-engineering-learning/issues/96) (Mua eSIM Du lịch Quốc tế & Cấp mã QR `LPA:1$` tức thì), [#97](https://github.com/h1epnh/fullstack-engineering-learning/issues/97) (Đặt lịch khám bệnh & Thanh toán Viện phí trực tuyến — nhóm hạn mức 300 triệu TT 41/2025/TT-NHNN), [#99](https://github.com/h1epnh/fullstack-engineering-learning/issues/99) (Mua Thẻ Game & Cửa hàng Ưu đãi — mở khóa `games` & `deals`), [#103](https://github.com/h1epnh/fullstack-engineering-learning/issues/103) (Trung tâm Quản lý Thuê bao Số định kỳ & Lá chắn tự hủy sau dùng thử), [#105](https://github.com/h1epnh/fullstack-engineering-learning/issues/105) (Đặt Vé Xem Phim trực tuyến, Chọn ghế sơ đồ rạp chống ghế lẻ & Combo Bắp Nước), [#107](https://github.com/h1epnh/fullstack-engineering-learning/issues/107) (Bảo hiểm Số 2.0: TNDS Ô tô NĐ 67/2023, Rơi vỡ màn hình & Bồi thường trực tuyến), [#110](https://github.com/h1epnh/fullstack-engineering-learning/issues/110) (Nạp tiền giao thông không dừng ETC VETC/ePass theo biển số xe — NĐ 119/2024/NĐ-CP), [#112](https://github.com/h1epnh/fullstack-engineering-learning/issues/112) (Thanh toán Khoản vay tiêu dùng FE Credit/Home Credit/HD Saison — nhóm 300 triệu TT 41/2025 & Phí quản lý chung cư), [#113](https://github.com/h1epnh/fullstack-engineering-learning/issues/113) (Đóng BHXH tự nguyện Nhà nước hỗ trợ 10%–30%, Gia hạn BHYT Hộ gia đình giảm trừ lũy tiến 5 bậc & Dịch vụ công), [#118](https://github.com/h1epnh/fullstack-engineering-learning/issues/118) (**[Bug]** `POST /bills/pay` trùng kỳ trừ ví trước rồi văng 500 mất tiền), [#124](https://github.com/h1epnh/fullstack-engineering-learning/issues/124) (Đặt Giao hàng siêu tốc nội thành theo km & Ứng tiền thu hộ COD tức thì về Ví) |
+| **5. Tín dụng, Điểm Tin Cậy, Nhận Lương Sớm EWA & Thẻ tín dụng** | [#82](https://github.com/h1epnh/fullstack-engineering-learning/issues/82) (Thanh toán dư nợ Thẻ tín dụng đa ngân hàng 24/7 & Minimum Payment 5%), [#91](https://github.com/h1epnh/fullstack-engineering-learning/issues/91) (Chuyển đổi Trả góp 3–6–9–12 tháng cho Ví Trả Sau), [#94](https://github.com/h1epnh/fullstack-engineering-learning/issues/94) (Điểm Tin Cậy Tài Chính 0–1000 & Đặc quyền nâng hạn mức Ví Trả Sau), [#114](https://github.com/h1epnh/fullstack-engineering-learning/issues/114) (Nhận lương sớm linh hoạt theo ngày công thực tế Earned Wage Access 0% lãi suất — Gimo/Vui App/Revolut) |
+| **6. Tiết kiệm, Đầu tư DCA, Robo-Advisor, Vàng Tích Lũy & Tích lũy tự động** | [#74](https://github.com/h1epnh/fullstack-engineering-learning/issues/74) (Gửi Tiết Kiệm Online có kỳ hạn 1–24 tháng, rút gốc một phần trước hạn TT 04/2022/TT-NHNN), [#77](https://github.com/h1epnh/fullstack-engineering-learning/issues/77) (Làm tròn tiền lẻ Spare Change Round-up & Tự động phân bổ thu nhập Salary Sorter), [#86](https://github.com/h1epnh/fullstack-engineering-learning/issues/86) (Thanh toán trực tiếp / Tự động rút bù từ Túi Thần Tài Auto-Sweep), [#95](https://github.com/h1epnh/fullstack-engineering-learning/issues/95) (Đầu tư Chứng chỉ Quỹ Mở tự động định kỳ SIP/DCA & Giá vốn trung bình `averageCostNav`), [#109](https://github.com/h1epnh/fullstack-engineering-learning/issues/109) (Hũ Tiết Kiệm Mục Tiêu 2.0: Khóa Hũ Kỷ Luật Locked Pot & Thử thách tiết kiệm 52 tuần), [#115](https://github.com/h1epnh/fullstack-engineering-learning/issues/115) (Tích lũy Vàng 999.9 trực tuyến từ 0,1 chỉ & Đặt lịch rút vàng vật chất — mô hình eGold DOJI), [#122](https://github.com/h1epnh/fullstack-engineering-learning/issues/122) (Khảo sát Khẩu vị Rủi ro TT 98/2020/TT-BTC, Robo-Advisor gợi ý phân bổ đa quỹ & Tái cân bằng 1 chạm) |
+| **7. Loyalty & Tăng trưởng** | [#69](https://github.com/h1epnh/fullstack-engineering-learning/issues/69) (Bug ngưỡng tối thiểu nhiệm vụ ngày #38), [#72](https://github.com/h1epnh/fullstack-engineering-learning/issues/72) (Loyalty 2.0: Hạn điểm FIFO, Clawback khi hoàn tiền & Dùng điểm giảm giá trực tiếp khi thanh toán) |
+| **8. Merchant, Hóa đơn MTT NĐ 70/2025 & Acquiring** | [#71](https://github.com/h1epnh/fullstack-engineering-learning/issues/71) (Liên kết Ví làm phương thức thanh toán cho Đối tác ngoài & Merchant-Initiated Auto-Debit 50k/GD - 250k/ngày), [#83](https://github.com/h1epnh/fullstack-engineering-learning/issues/83) (Chế độ Chủ Quán: Loa báo chuyển khoản Web Speech Soundbox & Phân quyền nhân viên thu ngân không lộ số dư), [#108](https://github.com/h1epnh/fullstack-engineering-learning/issues/108) (Merchant 2.0: Tạo Hóa đơn QR Động theo đơn hàng, Hoàn tiền một phần/toàn bộ cho khách & Báo cáo quyết toán ngày), [#119](https://github.com/h1epnh/fullstack-engineering-learning/issues/119) (Xuất Hóa đơn điện tử khởi tạo từ máy tính tiền NĐ 70/2025/NĐ-CP & Sổ tính thuế Hộ kinh doanh `1,5%`/`4,5%`/`7,0%` TT 40/2021/TT-BTC) |
+| **9. Định danh, Thiết bị Tin cậy & Bảo mật** | [#98](https://github.com/h1epnh/fullstack-engineering-learning/issues/98) (Quản lý danh sách Thiết bị tin cậy WebAuthn Passkeys, Thu hồi thiết bị mất & Khóa Ví Khẩn Cấp SOS) |
+
+### Lộ trình đề xuất (theo giá trị và quan hệ điều kiện)
+
+Nguyên tắc sắp xếp: (1) nợ kỹ thuật chặn mọi thứ phía sau thì trả trước; (2) năng lực là điều kiện
+cho năng lực khác thì làm trước; (3) trong cùng một sóng, ưu tiên năng lực có giá trị học kiến trúc
+cao hơn là thêm một tính năng cùng mẫu cũ.
+
+- **Sóng 0: nền vận hành** (song song, không cần operator quyết nhiều): resource requests/limits +
+  heap JVM (TD-01), đưa Helm release về trạng thái `deployed` (TD-02), xác minh chữ ký IPN (TD-03).
+  *Lý do*: TD-01 đã gây OOM thật; TD-02 khiến mọi thay đổi cấu hình phải sửa tay; TD-03 sẽ thành lỗ
+  hổng "nạp tiền không cần tiền" ngay khi có webhook public.
+- **Sóng 1: tiền vào/ra qua kênh thật**: #43 → tách `PaymentProvider` + VNPAY sandbox cho nạp tiền →
+  SePay Test mode cho webhook báo có/VA. Song song #44.
+- **Sóng 2: sửa móng sổ cái**: tài khoản đối ứng hệ thống (ngân sách marketing, tài khoản treo),
+  trường `channel` trên giao dịch, nguyên thuỷ **giữ tiền / thu tiền** (hold/capture) trong
+  `wallet-service`. Sau đó mới làm #47 và #48 trên móng mới.
+- **Sóng 3: hệ sinh thái**: API merchant khởi tạo trừ tiền (nhóm 8), spike #45 Google Pay TEST, #49.
+- **Hoãn**: #46 Apple Pay (VN không có trong sandbox, tốn 99 USD/năm, chưa được duyệt), thẻ tín dụng
+  liên kết, QR xuyên biên giới, các tính năng vé/thẻ game mới.
+
+### Bản đồ quy định: điều khoản nào ràng buộc kiến trúc
+
+| Văn bản | Điều khoản / nội dung | Ràng buộc kiến trúc | Trạng thái nguồn |
+|---|---|---|---|
+| TT 40/2024/TT-NHNN, sửa bởi TT 41/2025/TT-NHNN | Điều 26: tổng hạn mức chuyển tiền giữa các ví cùng tổ chức + thanh toán ≤ 100tr/tháng/khách hàng; TT 41 nâng 300tr cho nhóm thiết yếu (điện, nước, viễn thông, học phí, viện phí, bảo hiểm, khoản vay đến hạn tại TCTD) | Kiểm tra cộng dồn **trong cùng transaction với lần debit** (`WalletMutationExecutor.debitOnce`), fail-closed. Mỗi `TransactionType` mới phải quyết định có thuộc `MONTHLY_LIMIT_TYPES` không. Mức 300tr **chưa áp dụng** vì biller là mock | [XM] mục #7 |
+| TT 40/2024 (chung) | Ví phải định danh khách hàng | Chặn nhị phân chiều OUT khi `UNVERIFIED` (#40). Điều khoản cụ thể chưa trích | Yêu cầu chung [XM, mục #40]; số điều khoản [CXM] |
+| QĐ 2345/QĐ-NHNN (hiệu lực 01/07/2024) | >10tr/giao dịch hoặc tổng ≥20tr/ngày (chuyển tiền, thanh toán, **nạp ví**) phải xác thực sinh trắc học | `StepUpPolicy` gồm cả `TOPUP`; HTTP 428; WebAuthn (#41). **Hệ quả cho #45/#46/#48**: mọi nguồn nạp mới đều vào chung pool step-up ngày; trừ tự động không người xác nhận (bãi xe) cần quyết định riêng | [XM] mục #15 |
+| TT 64/2024/TT-NHNN (hiệu lực 01/03/2025) | Điều 6: nhóm Open API (a) tỷ giá/lãi suất, (b) truy vấn thông tin khách hàng + consent + token, (c) khởi tạo thanh toán, **nạp/rút ví**. **Điều 5 khoản 3**: nhóm (c) chỉ mở cho bên thứ ba là ngân hàng hoặc tổ chức trung gian thanh toán. Điều 9: NH phải công khai hệ thống thử nghiệm. Điều 8-11: hợp đồng, cấp độ ATTT | Lab **không thể** là bên thứ ba production cho nhóm nạp/rút. Chỉ tích hợp ở mức sandbox, hoặc qua PSP có phép. Liên kết tài khoản kiểu OAuth cần trạng thái consent + hạn | [XM qua caselaw.vn, idx 122]; Phụ lục 02 (chuẩn kỹ thuật) [CXM] |
+| TT 64/2024 | Log tối thiểu 3 tháng; consent truy vấn tối đa 180 ngày | `LinkedBankAccount` cần `status`, `consentExpiresAt`, token mã hoá. Webhook/callback cần log có che dữ liệu | [TC tapchinganhang.gov.vn, idx 122] |
+| TT 18/2024/TT-NHNN, sửa bởi TT 45/2025/TT-NHNN (hiệu lực 05/01/2026) | Hoạt động thẻ ngân hàng | Liên quan #45/#46 (thẻ token hoá), chưa đọc nội dung nên **chưa rút ra ràng buộc nào** | [TC]; nội dung [CXM] idx 118 C3 |
+| (Chưa rõ văn bản) | Ví có được cấp tín dụng / cho số dư âm không | Liên quan trực tiếp phương án "ghi nợ tạm" của #48 | [CXM]: cần agent-designer/agent-ba tìm nguồn trước khi chọn phương án đó |
+
+### Góc học tập (bản đồ năng lực)
+
+- **Khái niệm: business capability map.** Năng lực là "doanh nghiệp làm được gì" (ví dụ "nhận tiền từ
+  ngân hàng"), không phải "service nào" (`topup-service`). Một năng lực có thể do nhiều service
+  cùng làm, một service có thể phục vụ nhiều năng lực. Ở lab này, nhìn theo service thì thấy 12
+  service đầy đủ; nhìn theo năng lực mới thấy nhóm 2 và 10 (tiền thật vào/ra) vẫn trống, dù đó là
+  năng lực sống còn của mọi ví.
+- **Doanh nghiệp thật**: TT 64/2024 Điều 5 khoản 3 cho thấy nhà nước cũng nghĩ theo năng lực: nhóm
+  API "nạp/rút ví" chỉ mở cho bên có giấy phép trung gian thanh toán, còn nhóm "truy vấn" mở rộng
+  hơn (nguồn: idx 122). Năng lực càng chạm vào tiền thì rào pháp lý càng cao.
+- **Câu hỏi tự suy nghĩ**: (1) Nếu chỉ được chọn một năng lực để đầu tư trong quý tới, bạn chọn nhóm
+  2 (tiền vào thật) hay nhóm 8 (API merchant)? Lập luận theo doanh thu, rủi ro và cái gì là điều
+  kiện của cái gì. (2) Vì sao "thêm tính năng vé phim" có giá trị kiến trúc thấp dù có giá trị sản
+  phẩm?
+
+---
+
+## Danh mục nợ kỹ thuật (agent-architect, TA — 2026-10-18)
+
+> Mỗi mục được **kiểm lại bằng lệnh đọc** trong lượt này, không chép lại mô tả có sẵn. Lệnh và kết
+> quả ghi ở cột bằng chứng. Mức rủi ro: **cao** = đã gây sự cố hoặc có thể làm sai tiền; **trung
+> bình** = làm chậm/khó vận hành, hoặc rủi ro tiền ở xác suất thấp; **thấp** = vệ sinh tài liệu/mã.
+
+| ID | Nợ | Rủi ro | Bằng chứng (kiểm 2026-10-18) | Đề xuất |
+|---|---|---|---|---|
+| TD-01 **[ĐÃ TRẢ 2026-10-24, #53 PASS QA: https://github.com/h1epnh/fullstack-engineering-learning/issues/53#issuecomment-6379743869]** | **Không deployment nào có `resources.requests/limits`; JVM không đặt heap** | **Cao** | `kubectl get deploy -o jsonpath=...resources` trả `{}` cho cả 22 deployment; 19/19 pod `BestEffort`; node allocatable `8126672Ki` (≈7,75 GiB); không Dockerfile Java nào có `-Xmx`/`MaxRAMPercentage` (`ENTRYPOINT ["java","-jar","app.jar"]`). Đã OOM khi rollout đồng loạt 12 service (nêu trong định nghĩa vai agent-architect). **[SL]** Không có limit thì JVM tính heap mặc định theo RAM của node (khoảng 1/4, tức gần 2 GiB mỗi JVM), 12 JVM cộng lại vượt xa RAM node | Đặt `requests`/`limits` cho mọi template qua `values.yaml` (một chỗ), kèm `-XX:MaxRAMPercentage` để heap bám theo limit. Lập bảng ngân sách RAM giống bảng ngân sách connection ở #24 (tổng requests ≤ ~6 GiB, chừa cho hệ thống). Postgres/Kafka được ưu tiên QoS `Guaranteed`. Rollout tuần tự, không đồng loạt |
+| TD-02 **[ĐÃ TRẢ 2026-10-24, #54: helm rev 25 `deployed`, nâng cấp lần 2 không đổi pod]** | **Helm release `failed`, cluster trôi khỏi chart** | **Cao** | `helm status ewallet-lab -n ewallet-lab`: `STATUS: failed`, `REVISION: 22`, lỗi `conflicts with "kubectl-patch"` trên `livenessProbe/readinessProbe` của `bill-payment-service`, `bnpl-service`. `helm history`: bản `deployed` cuối là **rev 19 (2026-10-07)**; rev 20, 21, 22 đều failed. Hệ quả: các agent phải `kubectl set env/apply/patch`, càng làm trạng thái cluster lệch chart. Sự cố #23 (deploy làm mất 4 tính năng) cùng gốc "trạng thái chạy không tái tạo được từ Git" | Một ticket riêng: đưa giá trị probe đang patch tay vào `values.yaml`, rồi `helm upgrade --force-conflicts` (Helm 3 server-side apply) hoặc xoá managed field của `kubectl-patch`, sau đó cấm `kubectl patch/set` cho thay đổi lâu dài (chỉ dùng khi chữa cháy, phải đưa ngược vào chart cùng ngày). Việc này phải xong **trước** #43 vì #43 đổi host/CORS/build-arg trên toàn chart |
+| TD-03 **[đã quyết, ADR-01] — ✅ ĐÃ XỬ LÝ (#52)** | **IPN không xác minh chữ ký** | **Trung bình hiện tại, Cao ngay khi có webhook public (#43)** | `topup-service/.../web/IpnController.java` dòng 39-43 tự ghi: "this lab does not re-verify ipn.signature() ... A real implementation MUST verify this"; `BankTransferOutIpnController.java` dòng 20 cùng ghi chú. Ai gọi được `/ipn/topup` với `resultCode` thành công là tạo được tiền | Bắt buộc xác minh chữ ký trước khi có bất kỳ adapter thật nào. **Không bao giờ** mở Cloudflare Access cho `/ipn/topup` và `/ipn/bank-transfer-out` hiện tại (xem điều kiện #43 ở phần SA) |
+| TD-04 **[bước (1) lucky-money #56 ĐÃ TRẢ; bước (2) topup-service Outbox #66 ĐÃ TRẢ (review kiến trúc PASS 100%: https://github.com/h1epnh/fullstack-engineering-learning/issues/66#issuecomment-6489639798); bước (3) payment-request #67 đã lên `PAYING` state machine nhưng còn thiếu `idempotencyKey` & Reconciler khi gặp 503/timeout (https://github.com/h1epnh/fullstack-engineering-learning/issues/67#issuecomment-6489640495); còn tồn đọng tách `@Transactional` khỏi HTTP call ở `family-wallet-service` và hoàn thiện Claim-First ở `bill-payment-service` #118]** | **Outbox (#22) & State Machine chống Dual-Write theo đúng chiều tiền (ADR-05 & Nguyên lý 7)** | **Trung bình** (đã đóng các lỗ hổng mất tiền nghiêm trọng nhất ở #56 và #66) | Kiểm tra code 2026-10-29: (1) `lucky-money-service` (#56) và `topup-service` (#66: `TopupService.confirmTopupWithOutbox` + `TopupOutboxRelay` + `TopupConfirmedListener` với `idempotencyKey = "topup:" + bankTransactionId`) đã tuân thủ 100% ADR-05 & Nguyên lý 7. (2) `payment-request-service` (#67) đã tách `claimPayingOnce` (`PENDING -> PAYING`) và `revertPayingToPending` cho lỗi `4xx`, nhưng chưa truyền `idempotencyKey` sang `transfer-service` và chưa có Reconciler/TTL giải phóng khi `wallet-service` trả `503` (do #55 Fail-Closed) hoặc timeout. (3) `bill-payment-service` (#118) đã thêm fast-fail + compensating `REFUND`, nhưng khi 2 request đua qua bước check thì lệnh thua bị `debit` rồi `REFUND` vẫn làm tăng bộ đếm hạn mức 100M/tháng (#7). (4) `family-wallet-service` (`spend`/`topUp`) vẫn giữ `@Transactional` bao quanh lời gọi HTTP sang `wallet-service` | (1) Ở `#67`: truyền `idempotencyKey = "pay-req:" + id` sang `transfer-service` và bổ sung Reconciler/revert an toàn khi `503` xác định chưa trừ tiền (xem review #67). (2) Ở `#118`: chuyển `BillPaymentService.pay()` sang mẫu Claim-First (`saveAndFlush(PENDING)` trước khi gọi `debit`) giống `processAutoBills` để không làm lẹm hạn mức tháng khi trùng kỳ (xem review #118). (3) Ở `family-wallet-service`: tách `@Transactional` khỏi lời gọi HTTP qua `*MutationExecutor` theo kết luận #56 |
+| TD-05 | **Nhiều issue đóng không qua QA độc lập** | **Trung bình-cao** (quy trình) | Mailbox idx 90 (agent-ba): #29-#35, #37 do agent-dev tự đóng, không có verify của agent-tester; idx 110/113: #22, #27, #38, #39 chưa có QA độc lập sau báo cáo tự nhận. `gh api .../issues/events`: mọi lần đóng #29-#41 đều do tài khoản `h1epnh`, vì mọi agent dùng chung một tài khoản. Nghĩa là **danh tính người đóng không chứng minh được tính độc lập** | Chỉ agent-tester đóng ticket tính năng, comment đóng phải có prefix `**[agent-tester]**` + lệnh tái hiện + số liệu (quy tắc mới trong định nghĩa vai đã đi theo hướng này). Thứ tự re-verify theo idx 113: #39 → #22 → #27 → nhóm #29-#37 (ưu tiên #37, #33, #34 vì có saga) → #38 |
+| TD-06 | **Mailbox JSON ghi đồng thời không khoá** | **Trung bình** | Định nghĩa vai ghi file từng hỏng do 2 agent ghi đè cùng lúc. Lượt này **không tìm thấy dấu vết** trong `git log -- .claude/agent-mailbox.json` hay nội dung mailbox, nên chỉ ghi nhận theo lời operator. Ngoài ra mailbox còn nhiều message `read: false` lâu ngày (ví dụ idx 83, 86, 88, 89, 90, 109, 110, 113, 116, 120-122), tức chưa có cơ chế xác nhận đã xử lý | Ngắn hạn: một script ghi duy nhất dùng `flock` + ghi file tạm rồi `rename` (ghi nguyên tử). Dài hạn: mỗi message một file, hoặc JSONL chỉ thêm dòng. Quy tắc mới "mọi việc truy về GitHub issue" đã giảm phụ thuộc vào mailbox |
+| TD-07 | **File khoá trong `engineering/poc/VISA` được track trong git** | Ghi nhận (operator đã quyết giữ nguyên) | `git ls-files engineering/poc/VISA` (chỉ liệt kê tên, **không đọc nội dung**) cho thấy các file `.pem`, `.txt` dạng khoá/secret, `.crt`. Remote: `github.com/h1epnh/fullstack-engineering-learning` | **Theo quyết định của operator: không đề xuất xoá lịch sử.** Chỉ ghi nhận để mọi thiết kế tích hợp mới (VNPAY, SePay, Apple Pay) **không** lặp lại mẫu này: credential đi qua K8s Secret, có `.gitignore` từ đầu |
+| TD-08 **[ĐÃ TRẢ 2026-10-24, #55]** | **eKYC fail-open, trái nguyên lý 2** | **Trung bình-cao** | DESIGN.md mục #40, "Chính sách Fail-open an toàn": khi `user-service` lỗi, `UserServiceClient` coi user là `VERIFIED`. Định danh khách hàng là yêu cầu của TT 40/2024 (mục #40), trong khi nguyên lý 2 viết rõ quy định pháp luật phải **fail-closed** | **Đã quyết: ADR-02 chọn fail-closed chiều OUT.** Phương án đã cân nhắc: (a) fail-closed cho chiều OUT (đúng nguyên lý, nhưng sự cố `user-service` sẽ chặn mọi giao dịch ra), hoặc (b) giữ fail-open nhưng ghi log cảnh báo + đếm số giao dịch đi qua nhánh này, và sửa nguyên lý 2 thành ngoại lệ có ghi lý do. Không để mâu thuẫn ngầm |
+| TD-09 | **Sổ đơn, thiếu tài khoản đối ứng** | **Trung bình** | `Transaction` chỉ có `walletId, type, amount, reference, note, idempotencyKey, createdAt` (đọc entity). `LOYALTY_REDEMPTION` credit không có bên nợ; #47 Constraints thừa nhận "credit vào ví không có đối ứng" | Thiết kế (ADR) tài khoản hệ thống trong `wallet-service`: `MARKETING_BUDGET`, `SUSPENSE` (tiền báo có không khớp user), `SETTLEMENT_<provider>`. Làm ở Sóng 2, trước #47 |
+| TD-10 | **Danh sách hạn mức/step-up duy trì bằng tay** | **Thấp-trung bình** | `MONTHLY_LIMIT_TYPES` là `EnumSet` riêng trong `WalletMutationExecutor` dòng 43-45; javadoc của `TransactionType` tự cảnh báo nguy cơ lệch khi thêm loại mới. #47, #48 sắp thêm 2 loại | Đưa thuộc tính `countsTowardMonthlyLimit`, `requiresStepUp` vào chính enum (giống `direction()` ở #36), để mỗi loại mới buộc phải khai báo |
+| TD-11 **[đã sửa tài liệu 2026-10-18]** | **Tài liệu lệch nhau về `transfer-service` có DB hay không** | **Thấp** | `CLAUDE.md` backend: "transfer-service cố tình không có DB"; DESIGN.md bảng Services: `transfer-service` có "DB riêng `ewallet_transfer`" cho #31/#32; mục #24 tính ngân sách connection cho 10 service, chưa tính `investment-fund-service`, `transfer-service` mới có DB | Sửa CLAUDE.md: "saga P2P không persist, nhưng service có DB cho danh bạ/định kỳ". Cập nhật bảng ngân sách #24 theo số service có DB thực tế. **Đã làm**: CLAUDE.md đã sửa, mục #24 có chú thích cập nhật; **bảng tổng connection của #24 chưa được tính lại** (còn việc). Phát hiện thêm: TD-13 |
+| TD-12 **[xem TD-14 cho phần rò rỉ dữ liệu cụ thể]** | **Không có xác thực người dùng ở API (`userId` trên path)** | **Trung bình** (Cao nếu bỏ Access) | Convention đã ghi ở nhiều mục ("không có auth middleware"). Sau #43, lớp bảo vệ duy nhất là Cloudflare Access (chỉ email operator) | Chấp nhận trong phạm vi lab, với điều kiện Access luôn bật cho mọi đường dẫn trừ webhook đã xác minh chữ ký. Ghi rõ trong mục kiến trúc public của #43 |
+| TD-13 **[ĐÃ TRẢ 2026-10-24, #54: DB_* qua secretKeyRef + CREATE DATABASE ewallet_transfer idempotent trong chart và init-databases.sql]** | **DB `ewallet_transfer` và env `DB_*` của `transfer-service` chỉ tồn tại trong cluster, không có trong chart/init script** | **Trung bình** (cùng gốc TD-02) | Kiểm 2026-10-18: `kubectl get deploy transfer-service -o jsonpath` có `DB_HOST/DB_PORT/DB_NAME=ewallet_transfer/DB_USER/DB_PASSWORD`, nhưng `deploy/helm/ewallet-lab/templates/transfer-service.yaml` chỉ khai `USER_SERVICE_URL`, `WALLET_SERVICE_URL`, `ALLOWED_ORIGIN_PATTERN`. `grep transfer init-databases.sql` ra 0 dòng, và `configmap-init-db.yaml` cũng không có `CREATE DATABASE ewallet_transfer`, trong khi `psql -l` trong cluster có DB này. Nghĩa là ai đó tạo tay + `kubectl set env`. **Dựng cluster mới từ chart thì `transfer-service` không kết nối được DB** (dạng lỗi của sự cố #23). Mật khẩu `postgres/postgres` cũng đang là giá trị thẳng trong env, không qua Secret | Gộp vào ticket TD-02: thêm `DB_*` vào template, thêm `CREATE DATABASE ewallet_transfer` vào cả `init-databases.sql` và configmap, rồi chạy thử `helm template` + dựng namespace trống để chứng minh tái tạo được |
+| TD-14 (2026-10-24) | **API không xác thực làm lộ dữ liệu cá nhân/ngân hàng theo `userId`: `GET /linked-bank-accounts/by-user/{userId}` trả tài khoản ngân hàng đã liên kết của bất kỳ user nào** | **Trung bình hiện tại (lab nội bộ, `minikube`); Cao khi #43 public, vì Cloudflare Access thành lớp chặn duy nhất** | Đã xác minh đọc code: `topup-service/.../web/LinkedBankAccountController.java` dòng 36-38 `@GetMapping("/by-user/{userId}") byUser(@PathVariable UUID userId) { return repository.findByUserId(userId); }`, không kiểm danh tính người gọi; `POST /linked-bank-accounts` (dòng 28-33) cũng nhận `userId` từ body, nên ai cũng gắn được tài khoản vào user khác. `userId` là UUID (khó đoán) nhưng lộ ở nhiều response/log/URL, và quỹ/lì xì/link nhận tiền đều đưa `userId` cho người khác. Đây là lớp lỗi OWASP API Security "Broken Object Level Authorization" (BOLA, https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/, [SL: nhớ từ kiến thức chung, chưa fetch lại lượt này]). Chưa rà đủ các controller khác; **cần agent-dev liệt kê** mọi endpoint nhận `userId` trên path/body. Liên quan R1 của ADR-05: cũng khai thác được bằng `userId` của người khác. TD-12 là bản tổng quát (không có auth); TD-14 là bằng chứng cụ thể và điều kiện cho #43 | (1) **Trước #43**: bắt buộc rà endpoint nhận `userId` và quyết định mô hình định danh (xem ADR-01 điều kiện bổ sung): token phiên do `user-service` cấp, hoặc tối thiểu header danh tính do gateway/Access chèn và service đối chiếu `userId` với danh tính đó. (2) Ngay cả khi Access chỉ cho email operator, Access xác thực *operator*, không phân biệt *user ví A với user ví B*, nên không thay thế được kiểm quyền theo đối tượng. (3) Che số tài khoản trả về (chỉ 4 số cuối) như ví thật. Gửi agent-ba đề xuất ticket. Mức: ticket "rà + khoá BOLA cho linked-bank-accounts và các endpoint tương tự" là điều kiện của #43, mô hình auth đầy đủ có thể là Sóng sau |
+
+### Góc học tập (nợ kỹ thuật)
+
+- **Khái niệm: QoS class của Kubernetes.** Pod không khai báo `requests/limits` là `BestEffort`:
+  khi node thiếu RAM, kubelet đuổi nhóm này trước tiên. Có `requests` < `limits` là `Burstable`;
+  `requests` = `limits` là `Guaranteed`. Ở lab, 19/19 pod đều `BestEffort`, nên khi 12 JVM cùng
+  khởi động không có gì quyết định ai được sống. Đó là cơ chế đứng sau lần OOM thật.
+- **Khái niệm: dual-write.** Ghi vào hai hệ thống (DB của mình + gọi `wallet-service` hoặc Kafka)
+  mà không có giao dịch chung. Pod chết giữa hai bước thì hai bên lệch nhau. Outbox giải bằng cách
+  biến bước thứ hai thành một dòng trong *cùng* DB, rồi một relay gửi đi sau (fund-service #22).
+- **Doanh nghiệp thật**: tài liệu chính chủ của Kubernetes mô tả thứ tự đuổi pod theo QoS (kiến
+  thức chung, lượt này chưa fetch lại).
+- **Câu hỏi tự suy nghĩ**: (1) Trong 12 mục trên, nếu chỉ có một tuần, bạn trả mục nào trước và vì
+  sao? Gợi ý: xem mục nào chặn mục khác (TD-02 chặn #43). (2) TD-08 là ví dụ hai nguyên lý kiến
+  trúc mâu thuẫn nhau (tuân thủ fail-closed vs không làm tê liệt luồng lõi). Kiến trúc sư nên giải
+  mâu thuẫn này bằng code hay bằng một ADR có chữ ký người quyết?
+
+---
+
+## Phân tích phương án cho các điểm rẽ đang chờ operator (agent-architect, SA — 2026-10-18, cập nhật 2026-10-29)
+
+> **Cập nhật 2026-10-18 (lượt 2):** SA-1 và SA-3 đã được operator duyệt, xem ADR-03 và ADR-04 ở mục
+> "ADR" cuối file. SA-2 và SA-4 **vẫn chờ operator**; phần còn lại của mục này chưa phải quyết định.
+> Mỗi điểm rẽ có phương án, bảng đánh đổi, khuyến nghị. Khi
+> operator trả lời, agent-architect ghi thành ADR riêng kèm link bằng chứng thật, đúng mục "Quy
+> trình — Bằng chứng Sign-off của Operator" phía trên. Agent-dev **không** code theo khuyến nghị
+> khi chưa có link đó.
+>
+> ### Bảng Quyết định chờ Operator & Theo dõi Điểm rẽ Kiến trúc (Cập nhật 2026-10-29 — Đợt 4)
+>
+> | Mã / Ticket | Câu hỏi cần Operator quyết định / Điểm rẽ kiến trúc | Phương án đã phân tích | Phương án khuyến nghị của `agent-architect` | Trạng thái Sign-off | Link Comment Phân tích / Review |
+> |---|---|---|---|---|---|
+> | **#56 / #12 / #101** | `lucky-money-service` (`send` debit-then-save window) & `family-wallet-service` (`spend`/`topUp` gọi đồng bộ `wallet-service` vs Outbox) | (A) Chuyển toàn bộ sang Outbox; (B) HTTP đồng bộ trong `@Transactional`; (C) Giữ `debit` đồng bộ ngoài `@Transactional` + `idempotencyKey` + Outbox riêng cho `credit`/hoàn tiền | **(C)** Giữ `debit` đồng bộ ngoài `@Transactional` (qua `*MutationExecutor`) + `idempotencyKey`; không thêm trạng thái `FUNDING` ở #56 (nhất quán đánh đổi ADR-05 #60) | Đánh đổi #56/#60 đã theo **ADR-05**; chờ tách `@Transactional` ở `family-wallet-service` | [Comment #56](https://github.com/h1epnh/fullstack-engineering-learning/issues/56#issuecomment-6487130125) |
+> | **#65 (SA-3 câu phụ & SA-1/TD-08 resilience)** | (1) Khi `Hold` hết hạn (`expiresAt`) mà chưa capture thì xử lý sao & thuộc tính `PARKING_FEE` (TD-10)? (2) Chính sách xác thực khi `user-service` unavailable? | Điểm rẽ 1: (A) Auto-Release (`EXPIRED_RELEASED`) + Lazy & Sweeper vs (B) Auto-Capture vs (C) Treo. Điểm rẽ 2: (1) Strict Fail-Closed vs (2) Fail-Open trần nhỏ vs (3) Fail-Closed + Short-TTL Verified Cache & kiểm tra tại `hold()` | Điểm rẽ 1: **(A) Auto-Release**. Điểm rẽ 2: Giữ **(1) Strict Fail-Closed** (ADR-02) ở `hold()`/`debit()`, đề xuất **(3)** nếu cần tăng Resilience; bác bỏ (2) vì trái TT 40/2024 | **Chờ Operator sign-off** (chưa duyệt phần tự động hết hạn & cache) | [Comment #65](https://github.com/h1epnh/fullstack-engineering-learning/issues/65#issuecomment-6487130676) |
+> | **#66 (TD-04b)** | `TopupConfirmationPublisher.publish()` trong `topup-service` là mất tiền hay chỉ mất thông báo? | So sánh các bước trong `IpnController` -> `confirmTopupWithOutbox` -> Kafka `wallet.topup.confirmed` | **Bước mất tiền thật**: ghi `OutboxEvent` cùng transaction với `CONFIRMED` + `idempotencyKey = "topup:" + bankTransactionId` | Đã xác nhận theo **ADR-05** & **Review code PASS 100%** | [Phân tích #66](https://github.com/h1epnh/fullstack-engineering-learning/issues/66#issuecomment-6487134323) · [Review #66](https://github.com/h1epnh/fullstack-engineering-learning/issues/66#issuecomment-6489639798) |
+> | **#67 (TD-04c)** | `payment-request-service` `pay()` xử lý trạng thái trung gian thế nào để không kẹt tiền/kẹt đơn và không mất `428 Step-up`? | (a) Trạng thái trung gian `PAYING` + `idempotencyKey` + Reconciler vs (b) Đẩy toàn bộ `transfer` vào Outbox chạy nền | **(a) `PAYING` + `idempotencyKey` + Reconciler** (Code đã lên `PAYING`, cần bổ sung truyền `idempotencyKey` và Reconciler/revert khi gặp `503`) | **Chờ Operator sign-off** & bổ sung `idempotencyKey`/Reconciler | [Phân tích #67](https://github.com/h1epnh/fullstack-engineering-learning/issues/67#issuecomment-6487135332) · [Review #67](https://github.com/h1epnh/fullstack-engineering-learning/issues/67#issuecomment-6489640495) |
+> | **#68 (SA-4 & BNPL Overdue)** | (I) Thiết kế Port/Adapter cổng thanh toán Sandbox (VNPAY/SePay); (II) BNPL `OVERDUE` scheduler, Late Fee Cap & Trust Score (#94) hook | Phần I: (A) 1 Port chung vs (B) Tách 2 Port `PaymentProvider` (Pull) & `InboundCreditSource` (Push/VA -> `SUSPENSE`) vs (C) Microservice riêng. Phần II: (1) Pure Lazy vs (2) Hybrid `@Scheduled` Idempotent Overdue + Late Fee Cap + khóa `draw` + Hook #94 vs (3) Kafka service mới | Phần I: **(B) Tách 2 Port**. Phần II: **(2) Hybrid Scheduler + Late Fee Cap + khóa `draw` khi `OVERDUE`** | **BLOCKED — Chờ Operator sign-off** (cả 4 câu hỏi điều kiện SA-4 & chính sách BNPL) | [Comment #68](https://github.com/h1epnh/fullstack-engineering-learning/issues/68#issuecomment-6487132149) |
+> | **#75 (SA-2 & TD-09)** | (I) Thêm trường `channel` (`PHONE`/`QR`/`LINK`/`SCHEDULED`) trên `Transaction` thế nào? (II) Thiết kế ví đối ứng hệ thống `MARKETING_BUDGET` & `SUSPENSE` ra sao? | Phần I: (A) Thêm `TransactionType` mới vs (B) Enum có CHECK constraint cứng vs (C) Cột `channel VARCHAR(32)` nullable, dữ liệu cũ `null`. Phần II: (1) Ví thường dễ nghẽn vs (2) Ví hệ thống `systemAccountCode` miễn eKYC/hạn mức/Step-up + bút toán kép nguyên tử vs (3) Viết lại toàn bộ schema | Phần I: **(C) `channel VARCHAR(32)` nullable**. Phần II: **(2) Ví hệ thống `systemAccountCode` + bút toán kép nguyên tử** | **Chờ Operator sign-off** | [Comment #75](https://github.com/h1epnh/fullstack-engineering-learning/issues/75#issuecomment-6487133312) |
+> | **#84 (Wealth Protection / Street Mode & Cooling-Off Hold)** | Điều phối giao dịch `COOLING_OFF` trên nền tảng `hold/capture/release` (#65) như thế nào để không đụng độ bộ đếm tự động `release` của #65 và chống race condition giữa `emergency-cancel` với `auto-complete`? | (A) `transfer-service` điều phối `COOLING_OFF` trên nền `#65` (`hold.expiresAt = coolingOffUntil + 24h buffer`) + `@Version` State Lock (`CANCELLING` vs `CAPTURING`); (B) Nhét cờ Auto-Capture sang người nhận vào bảng `wallet_holds` của #65; (C) Dùng `debit` + `REFUND` thay vì `Hold` | **(A) `transfer-service` điều phối `COOLING_OFF` trên nền `#65` (`hold.expiresAt = coolingOffUntil + 24h`) + `@Version` State Lock**, cấu hình `WealthProtectionSettings` đặt ở `wallet-service` | **Chờ Operator sign-off** | [Comment #84](https://github.com/h1epnh/fullstack-engineering-learning/issues/84#issuecomment-6489646091) |
+> | **#86 (Túi Thần Tài Auto-Sweep)** | Đặt logic tự động rút bù từ `SavingsPocket` ở đâu và theo thứ tự kiểm tra nào để đảm bảo tính nguyên tử, không vi phạm Step-Up QĐ 2345 (#15) và không tính đúp hạn mức 100M/tháng (#7)? | (A) Atomic In-Transaction ngay trong `WalletMutationExecutor.debitOnce` (Check Idempotency -> FROZEN/eKYC/Monthly Limit/Step-Up QĐ 2345 -> `applyAccrual` & Auto-Sweep `SAVINGS_AUTO_SWEEP` miễn hạn mức tháng -> `wallet.debit`); (B) 2 Transaction rời ở `WalletService`; (C) Downstream tự chọn nguồn tiền | **(A) Atomic In-Transaction trong `WalletMutationExecutor.debitOnce` sau khi vượt qua mọi chốt chặn Pháp lý/Step-Up** | **Chờ Operator sign-off** | [Comment #86](https://github.com/h1epnh/fullstack-engineering-learning/issues/86#issuecomment-6489642050) |
+> | **#87 (Virtual Account `99+SĐT` & Dynamic VietQR)** | Xử lý webhook `POST /ipn/virtual-account-credit` (Push Credit không có đơn `PENDING` trước) thế nào để không tái phạm lỗi mất tiền Dual-Write (#66) và khớp với chuẩn `InboundCreditSource` (#68) / `SUSPENSE` (#75)? | (A) Đặt `VirtualAccount` trong `topup-service`, khi nhận IPN tạo nguyên tử `TopupRequest(CONFIRMED, VIRTUAL_ACCOUNT)` + `OutboxEvent(TOPUP_CONFIRMED)` vào bảng `topup_outbox` (#66) và định tuyến `SUSPENSE` (#75) cho VA lỗi; (B) Gọi REST `walletClient.credit` trực tiếp trong IPN; (C) Tách `va-service` mới | **(A) Gộp trong `topup-service` + Ghi nguyên tử qua bảng `topup_outbox` (#66)** | **Chờ Operator sign-off** | [Comment #87](https://github.com/h1epnh/fullstack-engineering-learning/issues/87#issuecomment-6489642593) |
+> | **#90 (Biên lai chi tiết, Báo chuyển nhầm 1-chạm `TRANSFER_RETURN` & Khiếu nại)** | Đặt `TransferRecallRequest` và `TransactionDispute` ở đâu, và giao dịch hoàn trả tiền nhận nhầm (`TRANSFER_RETURN`) có tính vào hạn mức 100M/tháng (#7) của người nhận thiện chí không? | (A) `TransactionDispute` ở `wallet-service`, `TransferRecallRequest` ở `transfer-service`, thêm `TransactionType.TRANSFER_RETURN` miễn trừ hạn mức 100M/tháng (#7) của người hoàn trả + `@Version` Claim-First & `idempotencyKey`; (B) Gom hết vào `wallet-service`; (C) Dùng lại `TRANSFER_OUT` thường | **(A) Phân tách đúng Domain + `TRANSFER_RETURN` miễn hạn mức 100M/tháng cho người hoàn trả + Claim-First Idempotency** | **Chờ Operator sign-off** | [Comment #90](https://github.com/h1epnh/fullstack-engineering-learning/issues/90#issuecomment-6489644008) |
+> | **#91 (Chuyển đổi Trả góp BNPL 3–6–9–12 tháng)** | Hạch toán lịch trả góp `BnplInstallmentPlan` vào `Statement` và `CreditLine.outstandingPrincipal` như thế nào, và xử lý phần dư làm tròn (`1.000.000 / 3`) ra sao để bảo toàn tổng nợ gốc? | (A) Statement-Integrated Installment Rolling: chia gốc `FLOOR`, cộng phần dư `remainder` vào kỳ `1/N` ($\sum P_i \equiv P$), giữ nguyên `CreditLine.outstandingPrincipal` cho tới khi thực trả từng kỳ, tích hợp chặn `OVERDUE` (#68) & giảm 50% phí hạng `DIAMOND` (#94); (B) Tách hóa đơn trả góp rời khỏi `Statement`; (C) Chia đều `HALF_UP` không bù phần dư | **(A) Tích hợp vào `Statement` + Bất biến cộng phần dư làm tròn vào kỳ `1/N` + Giữ nguyên `outstandingPrincipal`** | **Chờ Operator sign-off** | [Comment #91](https://github.com/h1epnh/fullstack-engineering-learning/issues/91#issuecomment-6489644827) |
+> | **#94 (Trust Score 0–1000 & BNPL Limit)** | (1) Tính toán Điểm Tin Cậy 4 trụ cột (On-demand fan-out 5 services vs Pure Event-Driven vs Hybrid Snapshot); (2) Đồng bộ nâng trần `credit_limit` sang `bnpl-service` | Điểm rẽ 1: (A) On-demand Fan-out vs (B) Pure Event-Driven vs (C) Hybrid Snapshot (`trust_score_snapshots` + `trust_score_histories`) tại `user-service`. Điểm rẽ 2: (1) Auto-Push ngầm vs (2) Tin tham số Client vs (3) User Opt-in + S2S Verify dưới khóa `lockByUserId` | Điểm rẽ 1: **(C) Hybrid Snapshot**. Điểm rẽ 2: **(3) Opt-in + S2S Verify Fail-Closed** (chặn nâng hạn mức khi có nợ `OVERDUE`) | **Chờ Operator sign-off** | [Comment #94](https://github.com/h1epnh/fullstack-engineering-learning/issues/94#issuecomment-6487303494) |
+> | **#97 / #42 / #112 (Hạn mức 300tr TT 41/2025 & `MEDICAL_FEE`)** | (1) Cách tách bộ đếm hạn mức tháng `100.000.000đ` (thông thường) và `300.000.000đ` (dịch vụ thiết yếu TT 41/2025) trong `WalletMutationExecutor`; (2) Ranh giới dịch vụ Đặt lịch khám & Viện phí | Điểm rẽ 1: (A) Cột `regulatory_bucket` riêng trên `Transaction` vs (B) `MonthlyLimitBucket { NONE, STANDARD_100M, ESSENTIAL_300M }` trên `TransactionType` (kết hợp TD-10) + `ESSENTIAL_BILL_PAYMENT` vs (C) Tách `TransactionType` cho từng `BillCategory`. Điểm rẽ 2: Đặt trong `bill-payment-service` vs tách pod mới | Điểm rẽ 1: **(B) `MonthlyLimitBucket` trên `TransactionType` + `ESSENTIAL_BILL_PAYMENT`**. Điểm rẽ 2: **Giữ trong `bill-payment-service`** | **Chờ Operator sign-off** | [Comment #97](https://github.com/h1epnh/fullstack-engineering-learning/issues/97#issuecomment-6487304101) |
+> | **#104 (Low-Balance Auto-Topup)** | (1) Cơ chế kích hoạt khi số dư dưới ngưỡng (Sync trong `debitOnce` vs Pure Cron vs Post-Commit Hook + API `evaluate`); (2) Chống nạp đúp khi chờ IPN bất đồng bộ, Infinite Loop Breaker & QĐ 2345 | Điểm rẽ 1: (A) Sync trong `debitOnce` vs (B) Pure Cron vs (C) Post-Commit Hook ngoài `@Transactional` + `POST /topups/auto-rule/evaluate`. Điểm rẽ 2: (1) Chỉ check `reloadedThisMonth` vs (2) `FOR UPDATE` + `inFlightOrderId` (`PENDING` guard) + Failure Circuit Breaker (3 lần lỗi) + QĐ 2345 guard | Điểm rẽ 1: **(C) Post-Commit Hook + API `evaluate`**. Điểm rẽ 2: **(2) `FOR UPDATE` + `inFlightOrderId` + Circuit Breaker + QĐ 2345** | **Chờ Operator sign-off** | [Comment #104](https://github.com/h1epnh/fullstack-engineering-learning/issues/104#issuecomment-6487305076) |
+> | **#106 (NAPAS 247 Inquiry & SIMO Anti-Scam)** | (1) Thiết kế Adapter tra cứu tên chủ TK NAPAS 247 & SIMO Watchlist độ trễ `< 200ms`; (2) Chính sách Fail-Open vs Fail-Closed khi SIMO chậm/timeout | Điểm rẽ 1: (A) Tách pod JVM mới vs (B) Hardcode rời rạc 2 nơi vs (C) Tích hợp trên `mock-bank-gateway` (Go `< 5ms`) + Local Cache + kiểm tra lại tại bước `POST` trước `debit`. Điểm rẽ 2: (1) Strict Fail-Closed 100% vs (2) Silent Fail-Open (`SAFE` giả) vs (3) Tiered Fail-Safe (NAPAS Inquiry & Blacklist Fail-Closed; SIMO timeout yêu cầu `acknowledgeScamWarning=true`) | Điểm rẽ 1: **(C)**. Điểm rẽ 2: **(3) Tiered Fail-Safe** | **Chờ Operator sign-off** | [Comment #106](https://github.com/h1epnh/fullstack-engineering-learning/issues/106#issuecomment-6487306443) |
+> | **#112 (`CONSUMER_LOAN` 300tr TT 41/2025 & Chống đảo nợ BNPL)** | (1) Vị trí chặn nguồn tiền `BNPL_WALLET` cho `CONSUMER_LOAN` tránh kẹt Voucher; (2) Phân loại rổ hạn mức 300 triệu (`CONSUMER_LOAN`) vs 100 triệu (`APARTMENT_FEE`) | Điểm rẽ 1: (A) Chỉ chặn ở UI vs (B) Chặn sau bước `claimVoucher` vs (C) Thuộc tính `allowBnplSource` trên `BillCategory` + Fail-Fast ngay đầu hàm `pay()` trước khi gọi `loyalty-service`. Điểm rẽ 2: Dùng chung `ESSENTIAL_BILL_PAYMENT` (`ESSENTIAL_300M`) cho `CONSUMER_LOAN` | Điểm rẽ 1: **(C) Thuộc tính trên `BillCategory` + Fail-Fast đầu hàm `pay()`**. Điểm rẽ 2: **`CONSUMER_LOAN` thuộc `ESSENTIAL_300M`, `APARTMENT_FEE` thuộc `STANDARD_100M`** | **Chờ Operator sign-off** | [Comment #112](https://github.com/h1epnh/fullstack-engineering-learning/issues/112#issuecomment-6487426505) |
+> | **#114 (Nhận lương sớm EWA 0% lãi suất)** | (1) Ranh giới dịch vụ EA & Cách hạch toán phí cố định `flatFee = 20.000đ` khi rút vs quyết toán `settle-payday`; (2) Chống rút vượt trần khi gọi đồng thời & chống mất tiền khi kill pod | Điểm rẽ 1: (A) Trừ phí ngay trên số tiền về ví (dễ bị trừ kép ở `settle-payday`) vs (B) `credit` xong gọi `debit` phí riêng vs (C) Giải ngân đủ `amount` về ví (chiều `IN`) + cộng `flatFee` vào `totalFeesThisCycle` khấu trừ 1 lần cuối tháng. Điểm rẽ 2: Claim-First dưới khóa `@Version`/`FOR UPDATE` + gọi `credit` ngoài TX kèm `idempotencyKey` | Điểm rẽ 1: **(C) Giải ngân đủ `amount` + khấu trừ phí tại `settle-payday` (đặt trong `topup-service`)**. Điểm rẽ 2: **Claim-First + Outbox/Idempotent Credit** | **Chờ Operator sign-off** | [Comment #114](https://github.com/h1epnh/fullstack-engineering-learning/issues/114#issuecomment-6487427052) |
+> | **#118 (Duplicate Bill Period Race Condition)** | Nên giữ `existsBy... + debit + compensating REFUND` hay chuyển sang Claim-First `saveAndFlush(PENDING)` giống `processAutoBills` để tránh lẹm hạn mức 100M/tháng (#7) khi 2 request đua nhau? | (A) Fast-fail `existsBy` + `debit` + `credit(REFUND)` khi đụng Unique Constraint (hiện tại); (B) Claim-First `saveAndFlush(PENDING)` trước khi gọi `debit` | **(B) Claim-First `saveAndFlush(PENDING)` trước khi gọi `walletServiceClient.debit`** (Review hậu kiểm cho #118) | Đã fix lỗi mất tiền; khuyến nghị nâng cấp lên Claim-First | [Review #118](https://github.com/h1epnh/fullstack-engineering-learning/issues/118#issuecomment-6489641499) |
+> | **#119 (Hóa đơn điện tử MTT NĐ 70/2025 & Sổ thuế TT 40/2021)** | (1) Cơ chế cấp số thứ tự hóa đơn 8 chữ số liên tục (`invoiceNumber`) dưới tải đồng thời; (2) Quy tắc làm tròn thuế GTGT/TNCN (`1,5%`/`4,5%`/`7,0%`) trên từng tờ vs tờ khai Quý `01/CNKD` | Điểm rẽ 1: (A) `COUNT(*) + 1` (lỗi trùng số) vs (B) Global Sequence (nhảy số giữa các Merchant) vs (C) Bộ đếm nguyên tử `last_invoice_seq` theo từng `Merchant` + unique `transaction_reference`. Điểm rẽ 2: (1) Cộng số làm tròn từng tờ vs (2) Thuế từng tờ (`HALF_UP`) + Kê khai Quý trên tổng doanh thu ròng hợp lệ đã trừ hoàn tiền (#108) | Điểm rẽ 1: **(C) Per-Merchant Atomic `last_invoice_seq`**. Điểm rẽ 2: **(2)** | **Chờ Operator sign-off** | [Comment #119](https://github.com/h1epnh/fullstack-engineering-learning/issues/119#issuecomment-6487427630) |
+> | **#120 (Kiều hối quốc tế `MTCN` 10 số)** | (1) Vị trí kiểm tra bắt buộc `kycStatus == VERIFIED` cho luồng tiền chiều `IN` mà không phá vỡ #40/#55; (2) Đảm bảo 10 luồng đồng thời chỉ 1 luồng nhận (`200 OK`) và 9 luồng `409 Conflict` | Điểm rẽ 1: (A) Chặn mọi `creditOnce` vs (B) Kiểm tra muộn ở `wallet-service` vs (C) Kiểm tra Fail-Closed `VERIFIED` ngay đầu `RemittanceService.claim()` trước khi đổi trạng thái mã `MTCN` + ghi sổ chiều `IN` miễn trần 100tr. Điểm rẽ 2: Khóa `@Version` chuyển `READY_TO_CLAIM -> CLAIMED` + `topup_outbox` (#66) + `idempotencyKey = "remittance-mtcn:" + mtcnCode` | Điểm rẽ 1: **(C)**. Điểm rẽ 2: **`@Version` Claim-First + Outbox + `idempotencyKey`** | **Chờ Operator sign-off** | [Comment #120](https://github.com/h1epnh/fullstack-engineering-learning/issues/120#issuecomment-6487428146) |
+> | **#121 (Rút tiền mặt QR ATM `VietQR Cash` & Điểm Nạp/Rút)** | (1) Giữ tiền 15 phút bằng `debit + credit(REFUND)` hay `hold / capture / release` (#65); (2) Chống Race Condition vừa nhả tiền tại ATM (`dispense`) vừa bấm Hủy (`cancel`)/hết hạn (`expiresAt`) | Điểm rẽ 1: (A) `debit(WITHDRAW)` + `REFUND` (làm mất oan hạn mức tháng 100tr #7 & bẩn sao kê) vs (B) Dùng `hold` -> `capture` (khi ATM nhả tiền) / `release` (khi hủy/quá 15 phút) của SA-3 (#65). Điểm rẽ 2: Khóa 2 tầng (`@Version`/`FOR UPDATE` + kiểm tra cứng `now < expiresAt` lúc `dispense` + khóa dòng `Hold`) | Điểm rẽ 1: **(B) Dùng `hold / capture / release` (#65)**. Điểm rẽ 2: **Khóa trạng thái 2 tầng + Wall-clock expiry check** | **Chờ Operator sign-off** | [Comment #121](https://github.com/h1epnh/fullstack-engineering-learning/issues/121#issuecomment-6487428626) |
+
+### SA-1. #45/#46: tiền nạp từ thẻ đã token hoá ghi sổ thế nào — **ĐÃ QUYẾT, xem ADR-03 (chọn phương án a)**
+
+**Bối cảnh.** `TransactionType.TOPUP` (IN) hiện không phân biệt nguồn. #45 (Google Pay TEST) và #46
+(Apple Pay sandbox) đều thêm một nguồn nạp mới. Nguồn: token Google Pay TEST chỉ là dữ liệu mẫu
+[XM idx 118 C2]; giao dịch sandbox Apple luôn bị decline, chỉ kiểm được bước lấy/giải mã token [XM
+idx 118 C1]. Cả hai đều **không tạo ra tiền thật**, lab chỉ giả lập phần sau token.
+
+| Phương án | Mô tả | Độ đúng tài chính | Phức tạp | Vận hành | Rủi ro | Giá trị học |
+|---|---|---|---|---|---|---|
+| **(a)** `TOPUP` + trường nguồn | Giữ `TOPUP` ở ledger. `topup-service` (chủ vòng đời nạp) lưu `source` (`BANK_LINK`, `CARD_TOKEN_GPAY_TEST`, `CARD_TOKEN_APPLE_SANDBOX`, sau này `VNPAY`) và `providerRef`; `reference` ở ledger trỏ về `TopupRequest` | Cao: bản chất kế toán giống nhau (tiền từ rail ngoài vào ví), hạn mức #7 không tính, step-up #15 đều tính `TOPUP` bất kể nguồn | Thấp | Không cần ALTER CHECK constraint | Thấp | Trung bình: học tách "bản chất kế toán" và "kênh" |
+| **(b)** `TransactionType` mới (`TOPUP_CARD`...) | Mỗi nguồn một loại | Trung bình: phải nhớ thêm vào `StepUpPolicy` (QĐ 2345 tính cả nạp ví), quên là bypass step-up; số loại tăng theo số kênh | Trung bình (ALTER constraint, sửa FE `TYPE_META`, sao kê) | Cao hơn | Trung bình (TD-10) | Thấp |
+| **(c)** Service mới "payment-method/token" | Service riêng giữ token/thẻ, `topup-service` gọi sang | Cao | Cao (+1 pod trên node đã OOM, TD-01) | Cao | Trung bình | Cao **chỉ khi** có giải mã token thật (Apple Pay) và cần thu hẹp phạm vi PCI |
+
+**Khuyến nghị: (a)**, với hai bổ sung. (1) Nguồn là thuộc tính của *vòng đời nạp* nên nằm ở
+`topup-service`, không đẩy vào `TransactionType`. Nguyên tắc chung: `TransactionType` mô tả **bản
+chất kế toán**, còn **kênh** là thuộc tính riêng. Nếu sau này ledger cũng cần biết kênh (SA-2 cần
+cho QR), thêm một cột `channel` dùng chung trên `Transaction`, không nhân bản loại. (2) Nếu #46 được
+mở khoá và có giải mã thật bằng Payment Processing Certificate, phần giải mã nên là một **component
+tách biệt** (module hoặc service nhỏ) giữ khoá riêng trong K8s Secret, để phạm vi tiếp xúc khoá
+nhỏ nhất. Quyết định đó để lúc gỡ BLOCKED, không cần bây giờ. Idempotency: unique theo `providerRef`
+(token/transaction id của provider), gửi lại cùng token không cộng hai lần.
+
+### SA-2. #47 Referral: đặt ở đâu, và điều kiện "QR không tính" — **chờ operator**
+
+**Câu 1: đặt logic ở đâu.**
+
+| Phương án | Độ đúng | Phức tạp | Vận hành (RAM/connection) | Rủi ro | Giá trị học |
+|---|---|---|---|---|---|
+| **(a)** `referral-service` mới, DB riêng (khuyến nghị của BA) | Cao, ranh giới rõ | Trung bình | +1 pod JVM BestEffort trên node ~7,75 GiB đã OOM (TD-01); +5 connection (+10 khi rolling) | Trung bình khi TD-01 chưa trả | Cao (bounded context mới) |
+| **(b)** Trong `user-service` | Thấp: trộn định danh với khuyến mãi; `user-service` là phụ thuộc của eKYC, lỗi logic thưởng có thể ảnh hưởng luồng định danh | Thấp | Không tăng | Cao | Thấp |
+| **(c)** Trong `loyalty-service`, phần *attribution* (ai giới thiệu ai) ghi ở `user-service` lúc đăng ký | Cao: `loyalty-service` đã là ngữ cảnh "khuyến khích và thưởng" (điểm, voucher, nhiệm vụ #38), đã có mẫu **đọc lịch sử ledger để xét điều kiện** (#38 lazy-compute) và mẫu **credit thưởng vào ví** (`LOYALTY_REDEMPTION`) | Trung bình | Không tăng | Thấp-trung bình | Trung bình |
+
+**Khuyến nghị: (c)** trong lúc TD-01 chưa trả. Lý do: (1) về nghiệp vụ, referral cùng họ với
+loyalty (ngân sách marketing chi cho hành vi người dùng); (2) về kỹ thuật, tái dùng đúng hai mẫu đã
+chạy thật ở #38 và #19; (3) về vận hành, không thêm JVM khi node đã OOM. Attribution (`referredBy`)
+là sự thật bất biến về danh tính, ghi **nguyên tử cùng lúc đăng ký** trong `user-service`, tránh
+dual-write lúc đăng ký. Nếu operator ưu tiên ranh giới sạch hơn chi phí, chọn (a), nhưng nên làm
+**sau** TD-01. Nguồn tiền thưởng: nên chờ tài khoản đối ứng `MARKETING_BUDGET` (TD-09), hoặc ghi
+rõ là credit không đối ứng theo tiền lệ #19.
+
+**Câu 2: điều kiện "chuyển tiền ≥2.000đ, QR không tính"** [XM idx 119 mục 4]. Hiện `TRANSFER_OUT`
+không biết giao dịch đi qua QR hay số điện thoại.
+
+| Phương án | Độ đúng so với nguồn | Phức tạp | Ghi chú |
+|---|---|---|---|
+| **(i)** Bỏ điều kiện, ghi rõ lệch nguồn | Thấp (lệch nguồn) | Không | Nhanh, nhưng lỗ hổng gian lận đúng như nguồn muốn chặn |
+| **(ii)** Thêm `channel` (`PHONE`, `QR`, `LINK`, `SCHEDULED`...) vào request chuyển tiền, forward tới `wallet-service`, lưu nullable trên `Transaction` | Cao | Thấp-trung bình: đi đúng đường mà `stepUpConfirmed` đã đi (#15). FE QR (#4) set `channel=QR` | Dữ liệu cũ có `channel=null` = "không rõ", **không** được coi là "không phải QR" khi xét điều kiện |
+| **(iii)** `TransactionType` mới `TRANSFER_OUT_QR` | Cao | Trung bình | Không nên: lặp lỗi TD-10, phải nhớ thêm vào hạn mức tháng + step-up |
+
+**Khuyến nghị: (ii), tách thành ticket nền làm trước #47.** Cùng trường này phục vụ SA-1 nếu cần
+và báo cáo chi tiêu #16. Nếu operator muốn #47 chạy ngay thì chọn (i), ghi lệch nguồn trong DESIGN.md
+và UI.
+
+### SA-3. #48 bãi xe: thiếu tiền lúc ra bãi — **ĐÃ QUYẾT, xem ADR-04 (chọn phương án a2); câu phụ còn chờ operator**
+
+**Bối cảnh.** Nguồn chỉ nói "trừ phí tự động qua ví sau khi ra bãi" [XM idx 119 mục 9]; **không
+nói** khi thiếu tiền thì sao [CXM]. Đây là luồng OUT đầu tiên mà số tiền chỉ biết **sau** khi dịch
+vụ đã dùng xong.
+
+| Phương án | Độ đúng tài chính | Phức tạp | UX | Rủi ro | Giá trị học |
+|---|---|---|---|---|---|
+| **(a1)** Đặt cọc kiểu escrow: debit một mức trần lúc vào, `REFUND` phần dư lúc ra (mẫu lucky-money #10) | Cao về tiền, nhưng **lệch hạn mức**: tổng hạn mức tháng #7 và pool step-up ngày cộng cả mức trần, còn `REFUND` (IN) không được trừ lại. Đọc `sumAmountByWalletIdAndTypeInSince`: chỉ cộng các loại OUT | Thấp (tái dùng mẫu có sẵn) | Người dùng thấy tiền bị trừ trước | Trung bình | Trung bình |
+| **(a2)** Nguyên thuỷ **giữ tiền / thu tiền** (authorize/capture) trong `wallet-service`: `available = balance - Σ hold còn hiệu lực`; check-in tạo hold (có hạn), check-out capture đúng phí và nhả phần dư | **Cao nhất**: hạn mức/step-up chỉ tính số capture thật | Cao: chạm sổ cái lõi, cần thiết kế đồng thời (optimistic lock đã có ở #5) và hết hạn hold | Tốt | Trung bình (sửa lõi) | **Rất cao**: đây là mẫu của ngành thẻ (pre-authorization) [SL: kiến thức chung, chưa có nguồn VN trong repo], dùng lại được cho merchant (nhóm 8) |
+| **(b)** Cho ra, ghi nợ tạm (`PAYMENT_FAILED`, chặn lần vào sau) | Thấp: tạo **khoản phải thu** ngoài sổ cái. Ví không được âm (nguyên lý 1), nên nợ nằm ở service bãi xe, trên thực tế là cấp tín dụng | Trung bình | Tốt nhất | **Pháp lý chưa rõ**: ví có được cho nợ không [CXM] | Trung bình |
+| **(c)** Không cho xe ra đến khi nạp đủ | Cao | Thấp | Tệ: chặn làn xe, giữ tài sản người dùng | Vận hành thật cao [SL] | Thấp |
+
+**Khuyến nghị: (a2)**, kèm quy tắc vượt trần: nếu phí thật > số đang giữ (gửi quá thời gian trần),
+thử capture phần chênh; thất bại thì mới rơi về trạng thái `PAYMENT_FAILED` của (b) cho **riêng phần
+chênh**, chặn lần vào sau. Kiểm tra số dư đủ mức trần **ở cổng vào**: từ chối ở cổng vào ít hại hơn
+nhiều so với chặn ở cổng ra. Nếu operator muốn nhanh, chọn (a1) và ghi rõ hạn chế lệch hạn mức.
+Thứ tự đúng là làm nguyên thuỷ hold thành ticket nền (Sóng 2) rồi mới đến #48. Câu hỏi phụ cần
+operator quyết: `PARKING_FEE` có tính hạn mức tháng #7 không (BA đề xuất có), và trừ tự động ở cổng
+có miễn step-up không (QĐ 2345 không nêu ngoại lệ nào trong nguồn đã xác minh, nên miễn là **diễn
+giải**, cần ghi rõ).
+
+### SA-4. Tích hợp cổng thanh toán/ngân hàng thật: đánh giá đề xuất của agent-designer — **chờ operator** (riêng thứ tự "trả nợ TD-01/02/03 trước #43" đã chốt ở ADR-01)
+
+**Đề xuất (idx 122 mục 6):** tách interface `PaymentProvider` trong `topup-service`; tích hợp VNPAY
+sandbox trước; giữ `mock-bank-gateway` làm adapter thứ hai; SePay Test mode cho webhook báo có.
+
+**Đánh giá: đồng ý về hướng (ports & adapters, sandbox trước, mock làm adapter thứ hai để test
+tất định và test lỗi ~7%). Cần sửa 4 điểm trước khi thành ticket:**
+
+1. **Hai chiều tiền khác nhau, cần hai port.** VNPAY là luồng **kéo** (ví tạo đơn → redirect → IPN).
+   SePay báo có là luồng **đẩy** (người dùng chuyển khoản vào VA/QR → ngân hàng báo → ví phải tự
+   khớp user). Gộp vào một `PaymentProvider` sẽ làm interface méo. Đề xuất: `PaymentProvider`
+   (`createPayment`, `verifyCallback(rawRequest)`, `queryStatus`, `refund`) cho VNPAY/mock, và
+   `InboundCreditSource` riêng cho SePay. Tiền báo có không khớp user nào phải vào tài khoản treo
+   `SUSPENSE` (TD-09), không được bỏ qua hay đoán user.
+2. **Xác minh chữ ký nằm trong từng adapter, trên dữ liệu thô.** Mỗi provider ký khác nhau (payOS
+   HMAC-SHA256 theo field sắp alphabet [XM idx 122]; VNPAY HMAC-SHA512 trên query string [chưa đọc
+   được thuật toán chi tiết, CXM idx 122]). Agent-dev phải fetch tài liệu chính chủ, không đoán tên
+   field. Kèm kiểm tra **số tiền callback = số tiền đã lưu**, unique theo `vnp_TxnRef`/`orderCode`,
+   callback lặp trả 2xx mà không cộng lần hai.
+3. **Đối soát khi mất webhook.** Job định kỳ quét `TopupRequest` treo quá N phút và gọi API truy vấn
+   (VNPAY querydr [XM idx 122]); cuối ngày so tổng theo provider với ledger. Không có bước này thì
+   một IPN bị mất là một khoản tiền bị treo vĩnh viễn.
+4. **Trả nợ trước khi làm**: ~~TD-03 (IPN hiện tại không xác minh chữ ký)~~ **→ đã trả ở #52** (xem mục
+   "Xác minh chữ ký IPN"), TD-04 (publisher Kafka của `topup-service` là dual-write, nên áp outbox cho
+   đường credit), TD-02 (credential vào K8s Secret qua chart; Helm đang failed thì khó quản lý Secret
+   nhất quán). ~~Bỏ hằng `FAKE_*` hardcode trong `BankGatewayClient`~~ **→ đã làm ở #52**: secret đọc
+   từ env, nạp qua K8s Secret `bank-gateway-credentials`.
+
+Ràng buộc pháp lý: theo TT 64/2024 Điều 5 khoản 3, lab chỉ ở mức sandbox. Lưu ý thêm **[SL]**: VNPAY
+là cổng thanh toán, lab đóng vai *merchant* của VNPAY, đây là quan hệ khác với "bên thứ ba dùng Open
+API ngân hàng". Còn điều kiện cần operator xác nhận: form devreg của VNPAY có đòi MST không [CXM idx
+122]; nếu có thì chuyển sang SePay Test mode trước.
+
+**Điều kiện cho #43 (Cloudflare Access + webhook):**
+
+1. Access giữ chính sách Allow-email cho **mọi** đường dẫn. Chỉ tạo ngoại lệ (Bypass hoặc Service
+   Auth) cho **đúng host + đúng path** của webhook thật, ví dụ `ewallet-api.<domain>/webhook/vnpay`,
+   `/webhook/sepay`, và (nếu #46 mở) `GET /.well-known/apple-developer-merchantid-domain-association`.
+2. Chỉ đường dẫn **có handler đã xác minh chữ ký + số tiền + idempotency** mới được mở. `/ipn/topup`
+   và `/ipn/bank-transfer-out` hiện tại **không bao giờ** được mở. Đó là callback nội bộ của
+   `mock-bank-gateway` trong cluster; tốt nhất Ingress public không route chúng.
+3. Kiểm chứng bằng curl không cookie: path webhook với chữ ký sai trả 4xx từ ứng dụng (không phải
+   302 sang trang login Access); path khác trả 302/403 của Access. Dán kết quả vào issue.
+4. Allowlist IP provider nếu provider công bố [CXM]; rate limit trên path webhook.
+5. Secret (`vnp_HashSecret`, token SePay) chỉ trong K8s Secret, không vào git, không vào comment
+   (bài học TD-07).
+6. Log callback có che dữ liệu, giữ ≥3 tháng (theo tinh thần TT 64 [TC]).
+7. **[CXM]** Hành vi chính xác của Bypass/Service Auth với logging của Access: agent-dev đọc tài
+   liệu Cloudflare chính chủ khi làm.
+8. **Danh tính/kiểm quyền theo đối tượng (thêm 2026-10-24, TD-14).** Trước khi public: liệt kê mọi
+   endpoint nhận `userId` trên path hoặc body; với nhóm dữ liệu nhạy cảm (tài khoản ngân hàng liên kết,
+   số dư, lịch sử) phải có kiểm quyền hoặc tối thiểu đã chấp nhận rủi ro bằng văn bản của operator. Ví dụ
+   đã xác minh: `GET /linked-bank-accounts/by-user/{userId}` (topup-service). Cloudflare Access không thay thế
+   được bước này vì nó chỉ phân biệt "operator hay không", không phân biệt ví nào. Ghi vào checklist
+   blast radius của #43 cùng URL bake, host Ingress, CORS, rpId WebAuthn, policy Access, cert.
+
+### Góc học tập (phương án)
+
+- **Khái niệm: authorize/capture (giữ tiền rồi thu tiền).** Khi đổ xăng hay nhận phòng khách sạn
+  bằng thẻ, số tiền cuối chưa biết nên ngân hàng *giữ* một khoản trước, sau đó *thu* đúng số thật và
+  nhả phần dư [SL: kiến thức chung về thẻ]. #48 chính là bài toán đó. Phương án (a1) "trừ trước rồi
+  hoàn" trông giống nhưng làm sai hạn mức tháng, vì sổ cái coi lần trừ trước là chi tiêu thật.
+- **Khái niệm: tách "bản chất kế toán" khỏi "kênh".** `TOPUP` qua ngân hàng hay qua Google Pay đều
+  là tiền từ ngoài vào ví, nên cùng một quy tắc pháp lý (step-up tính, hạn mức tháng không tính).
+  Nhân bản `TransactionType` theo kênh buộc mọi quy tắc phải nhớ thêm loại mới. Đó là cách bug
+  bypass step-up sinh ra.
+- **Doanh nghiệp thật**: MoMo mở Apple Pay như một `requestType=payWithApplePay` trên **cổng**
+  thanh toán, tức là một kênh của cùng luồng thanh toán, không phải một sản phẩm riêng
+  (developers.momo.vn, [XM idx 118]).
+- **Câu hỏi tự suy nghĩ**: (1) Một webhook báo có 500.000đ về VA của ví, nội dung chuyển khoản sai
+  mã user. Tiền đó nằm ở đâu trong sổ cái, ai được quyền chuyển nó cho đúng user, và để lại dấu vết
+  kiểm toán gì? (2) Vì sao mở Cloudflare Access cho `/webhook/vnpay` an toàn hơn mở cho `/ipn/topup`,
+  dù cả hai đều là "endpoint nhận callback"?
+
+---
+
+## ADR (Architecture Decision Records)
+
+> **Tác giả**: agent-architect, 2026-10-18 (lượt 2). ADR = một bản ghi ngắn, bất biến, cho **một**
+> quyết định kiến trúc: bối cảnh, các phương án đã cân nhắc, quyết định, hệ quả, bằng chứng người
+> quyết. Sửa quyết định = viết ADR mới có trạng thái `Supersedes ADR-xx`, không xoá ADR cũ.
+>
+> **Về bằng chứng sign-off (đọc trước).** Cả 4 link dưới đây là comment thật trên GitHub, đã đọc lại
+> bằng `gh api .../issues/comments/<id>`. Tuy nhiên chúng được **đăng bằng tài khoản chung `h1epnh`**,
+> mở đầu `[operator decision — relayed by orchestrator]` và tự nêu nguồn là "operator trả lời trực
+> tiếp qua AskUserQuestion". Nghĩa là: tài khoản GitHub **không chứng minh** ai gõ; thứ chứng minh là
+> câu trả lời AskUserQuestion trong phiên, nằm ngoài repo. Quy trình sign-off (mục trước) chấp nhận
+> link comment; mục "Hạn chế bằng chứng" của mỗi ADR nhắc lại điều này, không nâng nó lên thành thứ
+> mạnh hơn thực tế. Muốn bằng chứng chắc hơn, operator có thể tự thả một reaction hoặc trả lời
+> "Đồng ý ADR-xx" bằng tay trên chính comment đó.
+>
+> | ADR | Quyết định | Trạng thái | Nợ/điểm rẽ liên quan |
+> |---|---|---|---|
+> | ADR-01 | Sóng 0 (TD-03, TD-01, TD-02) phải xong và PASS QA độc lập trước #43 | Accepted | TD-01/02/03, TD-13, SA-4 |
+> | ADR-02 | eKYC fail-closed cho chiều tiền ra | Accepted, **đã triển khai ở #55** (QA PASS: https://github.com/h1epnh/fullstack-engineering-learning/issues/55#issuecomment-6379891759) | TD-08, #40 |
+> | ADR-03 | Tiền nạp từ thẻ token hoá ghi `TOPUP` + `source`/`providerRef` | Accepted | SA-1, #45, #46 |
+> | ADR-04 | #48 dùng hold/capture trong `wallet-service`, mức giữ = phí tối đa theo trần thời gian | Accepted một phần (câu phụ còn mở); sửa 2026-10-18 lần 2 | SA-3, #48, TD-09/10 |
+> | ADR-05 | `contribute` quỹ trừ ví đồng bộ trước, không qua outbox; withdraw/dissolve giữ outbox | Accepted, 2026-10-22; **Supersedes** phần contribute của #22 | #60, #22, TD-04 |
+> | ADR-06 | SNS+SQS thật trên AWS = lớp thông báo mới, song song; KHÔNG thay/route lại Outbox-Kafka hiện có | **Accepted, 2026-10-29** — `notification-service` mới (Go); operator tự tạo IAM qua `scripts/init-aws-infra.sh` | TD-04, #57, Kafka/#22 |
+
+### ADR-01. Sóng 0 trước #43: trả nợ vận hành rồi mới public lab
+
+- **Trạng thái**: Accepted, 2026-10-18.
+- **Bối cảnh.** #43 đưa lab ra Internet qua Cloudflare Tunnel + Access và mở đường webhook. Ba nợ
+  làm việc này nguy hiểm hoặc không tái lập được: (TD-03) `IpnController` và
+  `BankTransferOutIpnController` tự ghi chú là không xác minh chữ ký, nên ai gọi được `/ipn/topup`
+  với `resultCode` thành công là tạo được tiền; (TD-01) 22 deployment không có `resources`, 19/19 pod
+  `BestEffort`, JVM không đặt heap, đã OOM khi rollout 12 service; (TD-02) Helm release `failed`
+  (rev 22, bản `deployed` cuối là rev 19), mọi thay đổi phải `kubectl patch` tay. #43 lại đổi
+  host/CORS/build-arg trên toàn chart (blast radius lớn, bài học 4 lần sửa của #41).
+- **Phương án đã cân nhắc.** (A) Trả nợ trước #43 [khuyến nghị]. (B) Làm #43 trước, nợ làm sau, vì
+  Access chỉ cho email operator nên "tạm đủ an toàn". (C) Làm #43 và Sóng 0 song song.
+  Đánh đổi chính: (B) nhanh nhất nhưng mở webhook trên nền chưa kiểm chữ ký, và đổi cấu hình toàn
+  chart trên release đang `failed`; (C) dễ giẫm chân nhau vì cùng sửa `values.yaml` và template.
+- **Quyết định.** (A). Ba việc phải xong **và PASS QA độc lập** trước khi public lab hoặc mở đường
+  dẫn webhook: (1) xác minh chữ ký IPN `/ipn/topup` (TD-03); (2) đặt `requests/limits` cho mọi
+  deployment kèm heap JVM bám theo limit (TD-01); (3) đưa Helm release về `deployed` (TD-02).
+- **Hệ quả.**
+  - #43 bị chặn bởi 3 ticket Sóng 0. Kéo theo #45, #46 (đều phụ thuộc #43) chậm theo. #44 (VietQR
+    img) không phụ thuộc #43 nên vẫn chạy.
+  - Ràng buộc bổ sung từ phân tích SA-4 (vẫn là khuyến nghị, chưa được operator duyệt riêng): không
+    bao giờ mở `/ipn/topup`, `/ipn/bank-transfer-out` ra Access Bypass; chỉ mở đúng path webhook có
+    handler đã xác minh chữ ký, số tiền, idempotency.
+  - Phát hiện lượt 2 (TD-13): `transfer-service` đang chạy nhờ `DB_*` và DB tạo tay, không có trong
+    chart. Nên gộp vào ticket TD-02, vì "đưa Helm về `deployed`" vô nghĩa nếu chart không dựng lại
+    được đúng cluster đang chạy.
+  - **Điều kiện bổ sung (2026-10-24, TD-14, khuyến nghị chưa được operator duyệt riêng).** Sóng 0 hiện chỉ
+    gồm nợ vận hành/webhook. Còn thiếu một điều kiện về **danh tính**: API không xác thực, ví dụ
+    `GET /linked-bank-accounts/by-user/{userId}` trả tài khoản ngân hàng liên kết của bất kỳ user nào. Khi
+    #43 public, Cloudflare Access xác thực *operator* chứ không phân biệt user A với user B, nên nếu Access
+    cấu hình sai hoặc bị bypass cho một path thì dữ liệu lộ ngay. Tiền điều kiện cho #43: (1) đã rà đủ
+    endpoint nhận `userId` (path/body) và có ticket khoá kiểm quyền theo đối tượng cho nhóm dữ liệu nhạy cảm
+    (tài khoản ngân hàng, số dư, lịch sử); (2) Access Allow-email giữ cho mọi path trừ webhook đã xác minh
+    chữ ký. Hệ quả cho blast-radius checklist của #43: thêm mục "danh tính/kiểm quyền" cạnh URL bake, CORS,
+    rpId, cert.
+  - Thứ tự đề xuất trong Sóng 0: TD-02 (và TD-13) trước, vì TD-01 sửa `values.yaml` qua Helm cần
+    release khoẻ; TD-03 độc lập, có thể song song. Rollout limit **tuần tự**, không đồng loạt.
+  - Ghi nhận trung thực: tổng `requests` phải ≤ ~6 GiB (node allocatable ≈ 7,75 GiB); con số cụ thể
+    từng service là việc của ticket TD-01, không chốt ở ADR này.
+- **Bằng chứng**: https://github.com/h1epnh/fullstack-engineering-learning/issues/43#issuecomment-6248718738
+  (operator chọn "Trả nợ trước #43" qua AskUserQuestion, theo lời comment).
+- **Ticket thực hiện (agent-ba, thấy qua `gh issue list`, chưa qua mailbox)**: TD-03 https://github.com/h1epnh/fullstack-engineering-learning/issues/52 ; TD-01 https://github.com/h1epnh/fullstack-engineering-learning/issues/53 ; TD-02 https://github.com/h1epnh/fullstack-engineering-learning/issues/54 (chưa nhắc TD-13, đã đề nghị bổ sung).
+- **Hạn chế bằng chứng**: comment do orchestrator đăng bằng tài khoản chung (xem ghi chú đầu mục).
+
+### ADR-02. eKYC fail-closed cho chiều tiền ra
+
+- **Trạng thái**: Accepted, 2026-10-18. **Supersedes** phần "Chính sách Fail-open an toàn" của mục
+  eKYC #40. Đã triển khai ở #55 (QA PASS: https://github.com/h1epnh/fullstack-engineering-learning/issues/55#issuecomment-6379891759).
+- **Bối cảnh.** `wallet-service` hỏi `user-service` (qua `UserServiceClient`) xem user có
+  `kycTier = VERIFIED` không. Khi `user-service` lỗi/timeout/404, code hiện **coi như VERIFIED**
+  (fail-open). Định danh khách hàng là yêu cầu của TT 40/2024 (mục #40), còn nguyên lý 2 của dự án
+  viết rằng quy định pháp luật phải **fail-closed**. Hai thứ mâu thuẫn ngầm: đây là TD-08.
+- **Phương án đã cân nhắc.**
+
+  | Phương án | Đúng quy định | Độ sẵn sàng | Phức tạp | Ghi chú |
+  |---|---|---|---|---|
+  | (a) Fail-closed cho chiều OUT (`direction()==OUT`), chiều IN giữ nguyên | Cao | Thấp hơn: sự cố `user-service` chặn mọi tiền ra | Thấp | Đúng nguyên lý 2; nhận khoản tiền vào không bị chặn |
+  | (b) Giữ fail-open, thêm log cảnh báo + đếm, sửa nguyên lý 2 thành ngoại lệ | Thấp | Cao | Thấp | Hợp pháp hoá một lỗ hổng, cần ghi lý do |
+  | (c) Fail-closed cả hai chiều | Cao | Thấp nhất | Thấp | Chặn cả tiền vào, hại người dùng mà không tăng tuân thủ đáng kể [SL] |
+  | (d) Cache `kycTier` ở `wallet-service` (TTL ngắn), fail-closed khi cache miss | Cao | Cao hơn (a) | Trung bình | Thêm trạng thái cần vô hiệu hoá khi nâng/hạ tier |
+
+- **Quyết định.** (a): khi `wallet-service` không xác định được `kycTier` thì **chặn mọi giao dịch
+  `direction()==OUT`**; chiều vào giữ nguyên.
+- **Hệ quả.**
+  - Đúng nguyên lý 2; hết mâu thuẫn ngầm giữa nguyên lý và code.
+  - Đánh đổi chấp nhận: `user-service` là **điểm lỗi đơn của mọi tiền ra**. Độ sẵn sàng của
+    `user-service` giờ là chỉ tiêu vận hành thật, nên liên quan trực tiếp TD-01 (pod BestEffort bị
+    evict đầu tiên thì tiền ra bị chặn).
+  - Cần phân biệt "không kiểm tra được" (lỗi/timeout/404) với "kiểm tra được và là chưa xác thực"
+    để thông báo lỗi đúng cho người dùng (503 có thể thử lại, khác 403 cần eKYC).
+  - Phải liệt kê rõ các đường dùng `direction()==OUT` mà **không** qua `WalletMutationExecutor`
+    (nếu có) để không bỏ sót; việc này giao cho ticket thực hiện, kèm test: dừng `user-service`,
+    chứng minh OUT bị chặn, IN vẫn qua.
+  - Phương án (d) nên xem lại nếu đo được tỉ lệ chặn nhầm cao. Không cần làm bây giờ.
+  - Cần cập nhật mục eKYC #40 trong DESIGN.md khi code đổi (agent-architect sẽ đối chiếu lúc review).
+- **Bằng chứng**: https://github.com/h1epnh/fullstack-engineering-learning/issues/40#issuecomment-6248721724
+  (comment tự nêu "Sẽ có ticket riêng để thực hiện (issue này đã đóng)").
+- **Ticket thực hiện (agent-ba)**: TD-08 https://github.com/h1epnh/fullstack-engineering-learning/issues/55 .
+- **Hạn chế bằng chứng**: như đầu mục.
+
+### ADR-03. Tiền nạp từ thẻ đã token hoá: ghi sổ bằng `TOPUP` + `source`/`providerRef`
+
+- **Trạng thái**: Accepted, 2026-10-18.
+- **Bối cảnh.** #45 (Google Pay môi trường TEST) và #46 (Apple Pay sandbox) thêm nguồn nạp mới.
+  `TransactionType.TOPUP` (IN) hiện không phân biệt nguồn. Cả hai nguồn **không tạo tiền thật**: token
+  Google Pay TEST chỉ là dữ liệu mẫu [XM mailbox idx 118 C2]; giao dịch sandbox Apple luôn decline,
+  chỉ kiểm được bước lấy/giải mã token [XM idx 118 C1]. Lab giả lập phần sau token.
+- **Phương án đã cân nhắc.** (a) `TOPUP` + `source`, `providerRef` ở `topup-service`; (b)
+  `TransactionType` mới theo kênh (`TOPUP_CARD`...); (c) service mới "payment-method/token". Bảng
+  đánh đổi đầy đủ ở SA-1 phía trên. Tóm tắt: (b) buộc `StepUpPolicy`, hạn mức, sao kê, FE `TYPE_META`
+  nhớ thêm từng loại, quên là bypass (TD-10); (c) thêm 1 JVM trên node đang thiếu RAM, chỉ đáng khi
+  có giải mã token thật.
+- **Quyết định.** (a). `topup-service` (chủ vòng đời nạp) lưu `source` (`BANK_LINK`,
+  `CARD_TOKEN_GPAY_TEST`, `CARD_TOKEN_APPLE_SANDBOX`, sau này `VNPAY`...) và `providerRef`;
+  `reference` ở ledger trỏ về `TopupRequest`. **Không** tạo `TransactionType` mới.
+- **Hệ quả.**
+  - Hạn mức tháng #7 (không tính `TOPUP`) và step-up #15 (tính `TOPUP`) áp dụng tự động, bất kể kênh.
+  - Nguyên tắc rút ra, đề xuất làm luật: **`TransactionType` mô tả bản chất kế toán; kênh là thuộc
+    tính riêng.** Nếu ledger cần biết kênh (SA-2 cần cho QR) thì thêm cột `channel` dùng chung, không
+    nhân bản loại. (Ghi để cân nhắc đưa thành nguyên lý số 6; chưa thêm vào CLAUDE.md vì chưa hỏi operator.)
+  - Idempotency: unique theo `providerRef`; gửi lại cùng token không cộng hai lần. Cần ràng buộc
+    ở DB (unique index), không chỉ kiểm bằng code.
+  - Dữ liệu cũ không có `source`: coi là `BANK_LINK` hay `null`? **Chưa quyết**, ticket thực hiện
+    phải nêu rõ (đề xuất `null` = "không rõ", không suy diễn).
+  - Nếu #46 được mở khoá và giải mã thật bằng Payment Processing Certificate, phần giải mã nên là
+    component tách biệt giữ khoá trong K8s Secret. **Chưa quyết**, để lúc gỡ BLOCKED.
+  - Mọi hệ quả trên phụ thuộc #43 (public domain) và ADR-01, nên thực thi thật chỉ sau Sóng 0.
+- **Bằng chứng**: https://github.com/h1epnh/fullstack-engineering-learning/issues/45#issuecomment-6248718974
+  và comment tương tự trên #46: https://github.com/h1epnh/fullstack-engineering-learning/issues/46#issuecomment-6248719211
+  (đã xác nhận tồn tại bằng `gh api`; nội dung #46 chưa đọc lại từng chữ ở lượt này ngoài việc khớp
+  chuỗi "operator decision").
+- **Ticket thực hiện (agent-ba)**: #45, #46 là ticket có sẵn; ticket bổ sung `source`/`providerRef`
+  *chưa nhận URL*.
+- **Hạn chế bằng chứng**: như đầu mục.
+
+### ADR-04. #48 bãi xe: giữ tiền rồi thu (hold/capture) trong `wallet-service`
+
+- **Trạng thái**: Accepted một phần, 2026-10-18. Phần chính đã quyết; **câu phụ còn chờ operator**.
+  **Sửa đổi (amendment) 2026-10-18 lúc 10:30Z:** operator làm rõ chuyện phí vượt mức giữ, xem bullet "Giới hạn thời gian gửi" bên dưới. Đây là làm rõ trước khi có code, nên sửa tại chỗ; bản cũ nằm trong lịch sử git.
+- **Bối cảnh.** #48 là luồng tiền ra đầu tiên mà số tiền chỉ biết **sau** khi dịch vụ đã dùng
+  xong (VETC Parking trừ phí sau khi ra bãi [XM idx 119 mục 9]). Nguồn không nói thiếu tiền thì sao
+  [CXM]. Ví không được âm (nguyên lý 1).
+- **Phương án đã cân nhắc.** (a1) trừ mức trần lúc vào rồi `REFUND` phần dư; (a2) nguyên thuỷ
+  hold/capture trong `wallet-service`; (b) cho ra, ghi nợ tạm; (c) không cho xe ra đến khi nạp đủ.
+  Bảng đánh đổi đầy đủ ở SA-3. Lý do loại: (a1) làm lệch hạn mức tháng #7 và pool step-up ngày vì
+  lần trừ mức trần được tính là chi tiêu thật còn `REFUND` (IN) không trừ lại; (b) tạo khoản phải
+  thu ngoài sổ cái, thực chất là cấp tín dụng, pháp lý chưa rõ [CXM]; (c) chặn làn xe.
+- **Quyết định.** (a2). `wallet-service` có nguyên thuỷ giữ/thu tiền: lúc vào cổng giữ mức trần,
+  lúc ra thu đúng phí, nhả phần dư. **Không** dùng "trừ trước rồi hoàn", **không** cho ghi nợ.
+- **Hệ quả.**
+  - Chạm sổ cái lõi. Số dư khả dụng = `balance - Σ hold còn hiệu lực`. Phải thiết kế đồng thời
+    (optimistic lock đã có ở #5) và **hết hạn hold** (xe không bao giờ ra thì tiền bị giữ mãi?).
+  - Nên làm nguyên thuỷ hold/capture thành **ticket nền riêng trước #48** (Sóng 2 trong lộ trình),
+    cùng với `channel` và tài khoản đối ứng (TD-09). Đây là đề xuất, chưa phải quyết định.
+  - Hạn mức tháng và step-up chỉ tính số **capture** thật, đây chính là lợi thế so với (a1).
+  - Kiểm tra số dư đủ mức trần **ở cổng vào**; từ chối ở cổng vào ít hại hơn chặn ở cổng ra.
+  - **Giới hạn thời gian gửi (làm rõ của operator, thay nhánh `PAYMENT_FAILED`).** Mức giữ lúc vào
+    cổng = **phí tối đa của một lượt** (trần theo thời gian, ví dụ trần theo ngày), nên phí lúc ra
+    **không bao giờ vượt mức giữ** và không phát sinh nợ. Quá trần thời gian thì vé hết hạn, xử lý tại
+    quầy (ngoài phạm vi tự động). **Bỏ hẳn** nhánh `PAYMENT_FAILED` cho phần chênh và quy tắc
+    "capture phần chênh" của SA-3; hết mâu thuẫn với "không cho ghi nợ".
+    Bằng chứng: https://github.com/h1epnh/fullstack-engineering-learning/issues/48#issuecomment-6248771621 .
+  - Bất biến cần giữ, và **do `wallet-service` cưỡng chế** chứ không tin service bãi xe: `capture <= hold`;
+    service bãi xe phải tính phí có chặn trần theo đúng chính sách trần đã dùng để đặt mức giữ. Nếu hai
+    nơi lệch nhau, capture phải bị từ chối, không tự đẩy phần chênh thành nợ.
+  - **Chưa quyết (hỏi operator trong ticket):** khi vé hết hạn mà xe chưa ra, phần đang giữ xử lý ra
+    sao (nhả hết, hay thu đúng mức trần), và hold tự hết hạn thì ai kích hoạt. Lỗ hổng này là hệ quả của
+    làm rõ trên, không phải suy luận đã được duyệt.
+  - TD-10 trở nên cấp bách: hai loại mới (capture của bãi xe, và loại của #47) phải khai báo
+    `countsTowardMonthlyLimit`, `requiresStepUp` ngay trong enum.
+- **Câu phụ CÒN MỞ (chờ operator, không được code theo phỏng đoán):** (1) `PARKING_FEE` có tính vào
+  hạn mức tháng #7 không (BA đề xuất có)? (2) Trừ tự động ở cổng có được miễn step-up không? QĐ 2345
+  không nêu ngoại lệ trong nguồn đã xác minh, nên miễn chỉ là diễn giải.
+- **Bằng chứng**: https://github.com/h1epnh/fullstack-engineering-learning/issues/48#issuecomment-6248719432
+- **Ticket thực hiện (agent-ba)**: #48 có sẵn; ticket nền hold/capture + TD-10: https://github.com/h1epnh/fullstack-engineering-learning/issues/65 (phân tích câu phụ còn mở đã đăng tại https://github.com/h1epnh/fullstack-engineering-learning/issues/65#issuecomment-6487130676 , chờ operator sign-off).
+- **Hạn chế bằng chứng**: như đầu mục.
+
+### ADR-05. Quỹ nhóm: `contribute` trừ ví đồng bộ trước, không qua outbox (sửa #22, theo bug #60)
+
+- **Trạng thái**: Accepted, 2026-10-22. **Supersedes** quyết định "contribute claim-first qua outbox"
+  trong mục Outbox (#22). `withdraw`/`dissolve` không đổi.
+- **Bối cảnh.** #22 đưa `contribute` vào outbox theo kiểu claim-first: `Fund.balance` tăng ngay, ví
+  member chỉ bị trừ khi relay chạy (tick 10s, thử 3 lần ~30s rồi mới bù trừ). agent-tester (QA độc lập
+  #22, bug #60) tái hiện qua Ingress: member B có 3.000.000 góp 9.000.000, `fund.balance` lên
+  9.500.000; ngay sau đó người tạo A rút 9.000.000 thành công. Sau 45s: outbox contribute `FAILED`
+  (409 thiếu số dư, đúng thiết kế), outbox withdraw `DELIVERED`, ví A +9.000.000, ví B không bị trừ,
+  `funds.balance = -8.500.000` (quỹ `7a6407ed-c7e6-4aff-9680-eed829ae1525`). **9.000.000đ sinh ra từ
+  hư không.** Gốc: `Fund.balance` là số dư *rút được*, nhưng đã tăng trước khi tiền nguồn bị trừ.
+- **Phương án đã cân nhắc.**
+
+  | Phương án | Bảo toàn tiền | Phức tạp | Khi pod chết giữa chừng | Ghi chú |
+  |---|---|---|---|---|
+  | (a) Tách `pending_balance`/`settled_balance`; withdraw/dissolve chỉ chạm phần settled | Cao | Cao (đổi mô hình, UI, mọi truy vấn số dư quỹ) | Outbox vẫn bảo vệ | Orchestrator đề xuất làm khuyến nghị trong câu hỏi (không phải agent-architect); **bị loại** |
+  | (b) **`contribute` gọi `/debit` đồng bộ, thành công mới cộng quỹ; không qua outbox** | Cao: quỹ không bao giờ chứa tiền chưa trừ | Thấp (quay về thứ tự pre-#22, và 428 step-up lại trả ngay trong request) | **Mất bảo vệ outbox** (xem hệ quả) | **Được chọn** |
+  | (c) Giữ claim-first nhưng chặn withdraw/dissolve khi còn outbox contribute PENDING | Trung bình: phải chắc chắn không có đường nào khác tiêu số dư quỹ | Trung bình | Outbox vẫn bảo vệ | Trạng thái chờ khoá luồng rút, UX tệ |
+  | (d) Debit đồng bộ, outbox chỉ cho nhánh credit vào quỹ | Cao | Trung bình | Bảo vệ nhánh credit | Phương án (b) trong ticket #60; operator chọn bản đơn giản hơn: bỏ outbox hoàn toàn cho contribute |
+
+- **Quyết định.** (b). `contribute` gọi `wallet-service /debit` đồng bộ trừ ví member ngay; **chỉ khi
+  thành công** mới cộng `funds.balance` và ghi `FundTransaction`. `contribute` không đi qua outbox.
+  `withdraw`/`dissolve` giữ outbox như #22. Operator chấp nhận đánh đổi đã nêu: mất bảo vệ của outbox
+  nếu pod chết giữa lúc đã trừ ví và chưa cộng quỹ.
+- **Hệ quả.**
+  - Quỹ không còn chứa tiền chưa được trừ nên kịch bản #60 không tái diễn qua đường contribute.
+  - **Đánh đổi chấp nhận, nên đặt tên rõ:** cửa sổ chết-giữa-chừng làm **member mất tiền trong ví mà
+    quỹ không tăng**. Đây là lỗi theo hướng *hại khách hàng*, không *tạo tiền*; an toàn cho tổng tiền hệ
+    thống nhưng vẫn là sai lệch kế toán. Giảm nhẹ (đề xuất, **chưa được operator duyệt**): `idempotencyKey`
+    của debit sinh ổn định theo yêu cầu contribute để retry không trừ hai lần, và một job đối soát tìm
+    debit có `reference` quỹ mà không có `FundTransaction` tương ứng.
+  - Nếu debit thành công mà bước cộng quỹ (commit DB cục bộ) lỗi trong cùng request: cần bù trừ bằng
+    credit hoàn lại. Bảng `fund_compensation_failures` cũ đã bị bỏ ở #22; ticket phải nêu cách xử lý
+    nhánh này, không để im lặng.
+  - Step-up (#15) quay lại đúng chỗ: `/debit` trả 428 ngay trong request. Phần "Điểm rẽ Step-up" của
+    mục Outbox, vốn là cách vá cho việc contribute chạy nền, không còn cần cho contribute.
+  - Độ trễ contribute phụ thuộc `wallet-service` lúc gọi (đồng bộ). Nếu `wallet-service` chết thì
+    contribute thất bại ngay với lỗi rõ ràng; đây là hành vi an toàn (fail-closed).
+  - Dữ liệu: quỹ `7a6407ed...` đang âm -8.500.000 là dữ liệu test. Ticket nêu cách xử lý (dọn dữ liệu
+    test hay bút toán điều chỉnh); không tự xoá. `revertContribute` và mọi đường ra khác phải có guard
+    `funds.balance >= 0` (yêu cầu của #60).
+  - Phạm vi: chỉ `fund-service`. TD-04 được sửa: Outbox không áp máy móc cho lucky-money; chỉ đưa
+    credit/hoàn tiền vào outbox, giữ debit đồng bộ.
+- **Hình dạng cuối sau QA vòng 2 (cập nhật 2026-10-24, agent-architect; review kiến trúc, KHÔNG phải QA chức năng).**
+  Đọc `FundService.contribute()`, `refundAfterFailedCredit()`, entity `RefundedContribution` và
+  `FundMutationExecutor.contributeOnce()` trong working tree (đã xác minh trực tiếp bằng đọc code; tôi
+  không chạy lại cluster). Thứ tự thật:
+  1. Kiểm tra chỉ đọc: quỹ tồn tại, caller là member.
+  2. Nhánh nhanh idempotency: `FundTransaction` cùng `debitKey` đã có thì trả kết quả cũ (không trừ lần 2).
+  3. `refunded_contributions` có `debitKey` thì **409** (replay key đã hoàn tiền).
+  4. Quỹ phải `ACTIVE`; `stepUpCheck` (428 nếu cần xác thực mà chưa xác nhận).
+  5. `wallet-service /debit` đồng bộ, key `fund-contribute:<fundId>:<memberId>:<clientKey>`. 4xx: dừng, quỹ
+     không đổi. 5xx/timeout: log `CONTRIBUTE_DEBIT_UNKNOWN`, trả 502, client được retry cùng key.
+  6. `contributeOnce` (một transaction: cộng `Fund.balance` + ghi `FundTransaction`, `idempotency_key` UNIQUE),
+     bọc `withRetry` tối đa 12 lần cho tranh chấp optimistic lock (backoff 25ms x lần, tối đa 200ms, tổng
+     khoảng 1,5 đến 2 giây).
+  7. Hết 12 lần hoặc lỗi khác: `refundAfterFailedCredit` ghi marker `refunded_contributions` (transaction
+     riêng) rồi `/credit` với key `refund:<debitKey>`; marker lỗi thì **không** hoàn tiền (fail-closed, log
+     `CONTRIBUTE_MONEY_STUCK`).
+  Điểm tốt đáng giữ: marker ghi **trước** khi hoàn tiền (pod chết giữa hai bước chỉ để lại "đã đánh dấu mà
+  chưa hoàn", hại khách nhưng đối soát được, không tạo tiền); mọi lỗi của bước hoàn tiền đều rơi về log
+  ERROR chứ không nuốt.
+- **Rủi ro tồn dư R1: hoàn tiền trong khi quỹ đã được cộng (tạo tiền). Có thật, xác suất thấp, sửa được.**
+  Kịch bản operator nêu: hai request A, B cùng `debitKey`. Cả hai qua bước 2 và 3 (chưa có gì). Ví chỉ
+  bị trừ **một** lần (ledger coi key lặp là đã áp dụng, theo javadoc `RefundedContribution`). A hết 12 lần
+  retry; B commit cộng quỹ trước khi A ghi marker. A vẫn ghi marker rồi hoàn tiền: ví = -x + x = 0, quỹ
+  = +x. Chênh lệch +x tiền không có nguồn, và người tạo quỹ rút được (đúng loại lỗi mà #60 muốn diệt).
+  - **Hai điểm tôi kiểm lại trong code, thay đổi mức độ.** (i) `contributeOnce` mở đầu bằng
+    `findByIdempotencyKey`, nên nếu B commit **trước lần retry nào đó của A** thì A thấy và trả thành công,
+    không hoàn tiền. Rủi ro chỉ còn khi B commit **sau lần kiểm tra cuối của A** (khoảng giữa lần thử thứ 12
+    của A và lúc `credit` hoàn tiền được gửi). (ii) Cửa sổ thực **rộng hơn** lúc đầu tưởng: `contributeOnce`
+    **không kiểm marker**, nên B commit sau cả khi A đã ghi marker và hoàn tiền xong vẫn cộng được quỹ. Cửa
+    sổ kéo dài bằng thời gian B còn đang retry của chính nó (tới vài giây), không chỉ vài mili-giây giữa hai
+    lệnh của A.
+  - **Xác suất.** Cần đồng thời (1) hai request cùng key, và (2) tranh chấp nặng đến mức một bên hết 12
+    lần. (1) xảy ra tự nhiên khi bấm đúp / client retry sau timeout; (2) cần nhiều contribute khác cùng một
+    quỹ trong ~2 giây. Cả hai trùng nhau tự nhiên: **rất thấp** trong lab. Nhưng **không phải bất khả thi
+    do cố ý**: một member (hoặc bất kỳ ai biết `userId`, vì chưa có auth, xem TD-14) tự gửi 2 request cùng
+    key kèm vài chục request khác key để gây nghẽn, lặp lại để trúng cửa sổ; mỗi lần trúng sinh +x tiền.
+    Vì vậy xếp **Trung bình** (tác động cao: vi phạm nguyên lý 3 "zero-creation"; xác suất tự nhiên thấp;
+    khai thác cố ý khả thi nhưng tốn công). Đây là suy luận từ code, **chưa có ai tái hiện**; đề nghị
+    agent-tester thử bằng 2 request cùng key + tải nền, chỉ để xác nhận, không bắt buộc trước khi sửa.
+  - **Biến thể cùng gốc R1b.** Transaction của `contributeOnce` đã commit nhưng ack về app bị mất (đứt kết
+    nối sau commit) thì `withRetry` chỉ thấy exception khác, rơi vào `refundAfterFailedCredit` và hoàn tiền
+    dù quỹ đã được cộng. Cùng cách sửa, cùng mức độ (xác suất rất thấp).
+  - **Sửa tối thiểu (mức 1, rẻ, đóng gần hết, không đóng hẳn).** (a) Trong `refundAfterFailedCredit`, sau
+    khi ghi marker và **trước** `credit`: gọi lại `fundTransactionRepository.findByIdempotencyKey(debitKey)`;
+    nếu đã có thì **không hoàn tiền** (xoá marker hoặc để marker, log INFO, coi là thành công) vì quỹ đã
+    được cộng. (b) `contributeOnce` kiểm `refundedRepository.existsById(debitKey)` ngay đầu và ném 409 nếu
+    có, để B đến muộn không cộng quỹ sau khi A đã hoàn tiền. (a)+(b) làm cửa sổ co lại còn khoảng giữa
+    "kiểm lại" và "commit của B" (mili-giây) nhưng **vẫn còn** vì kiểm-rồi-hành-động không nguyên tử.
+  - **Sửa đóng hẳn (mức 2).** Cần một điểm tuần tự hoá duy nhất cho mỗi `debitKey`. Hai cách gọn: (i)
+    `pg_advisory_xact_lock(hashtext(debitKey))` ở đầu cả transaction của `contributeOnce` lẫn transaction
+    "ghi marker + kiểm lại"; ai giữ khoá trước thì bên kia thấy kết quả đã commit (B thấy marker thì 409; A
+    thấy `FundTransaction` thì bỏ hoàn tiền). Chạy đúng cả khi nhiều replica. (ii) Hợp nhất marker và
+    `FundTransaction` thành **một dòng trạng thái theo `debitKey`** (PENDING, APPLIED, REFUNDED) chuyển trạng
+    thái bằng `UPDATE ... WHERE status='PENDING'` (compare-and-set), đúng một bên thắng. (ii) sạch hơn
+    nhưng đổi mô hình dữ liệu. **Khuyến nghị:** làm mức 1 ngay trong ticket #60 (rẻ, đóng R1b và phần lớn
+    R1), rồi quyết định mức 2 bằng ticket riêng; tôi nghiêng về (i). Đây là khuyến nghị, **chưa được
+    operator duyệt**; agent-dev không nên coi là đã chốt.
+- **Rủi ro tồn dư còn lại (đã biết, đã chấp nhận từ trước hoặc bổ sung ở đây).**
+  | # | Rủi ro | Hướng sai | Mức | Ghi chú |
+  |---|---|---|---|---|
+  | R1/R1b | Hoàn tiền dù quỹ đã cộng (race cùng key; mất ack sau commit) | **Tạo tiền** | Trung bình | **ĐÃ SỬA (2026-10-24, agent-dev, #60 vòng 4)**: advisory lock theo debitKey, xem ghi chú ngay dưới bảng |
+
+  > **R1/R1b đã sửa (#60):** một điểm tuần tự hoá duy nhất cho mỗi `debitKey` là khoá advisory Postgres theo transaction
+  > (`pg_advisory_xact_lock(hashtext(debitKey))`, `FundTransactionRepository.lockKey`, cùng biểu thức ở cả hai nơi).
+  > `contributeOnce` lấy khoá trước, rồi: có marker thì 409, có `FundTransaction` cùng key thì trả lại, không thì cộng quỹ.
+  > Quyết định hoàn tiền (`markRefundedUnlessCredited`) chạy trong transaction ngắn riêng, lấy cùng khoá: nếu đã có
+  > `FundTransaction` thì KHÔNG hoàn tiền và coi là thành công (đóng R1b: commit xong mới mất ack); nếu chưa thì ghi marker
+  > và commit, chỉ SAU đó mới gọi `/credit` hoàn tiền. `hashtext` có thể trùng giữa các key khác nhau, chỉ gây chờ nhau
+  > thêm chút, không gây sai kết quả. Không thể tạo race từ bên ngoài nên kiểm chứng bằng test chèn lỗi (3 test mới).
+  | R2 | Pod chết giữa bước 5 và 6 | Hại member (ví trừ, quỹ không tăng) | Trung bình | Operator đã chấp nhận; đề xuất job đối soát debit có `reference`=quỹ mà thiếu `FundTransaction` (chưa duyệt) |
+  | R3 | Hoàn tiền lỗi sau khi marker đã ghi | Hại member | Thấp-trung bình | Marker chặn replay (đúng), nhưng tiền kẹt, chỉ có log `CONTRIBUTE_MONEY_STUCK`; không có bảng ghi nhận để job tự xử lý |
+  | R4 | Marker chỉ có `idempotency_key` + `created_at`; không có `fundId/memberId/amount/trạng thái hoàn tiền` | Khó đối soát | Thấp | Nếu sau này làm job đối soát cho R2/R3 thì marker nên chứa đủ cột và trạng thái `REFUND_SENT` |
+  | R5 | Client không gửi `idempotencyKey` thì server sinh UUID mới mỗi request | Trừ ví hai lần khi client tự retry | Thấp | Không bảo vệ client retry; chuẩn ngành (Stripe, MoMo) bắt client gửi key cho thao tác tiền |
+  | R6 | Chưa có CHECK `funds.balance >= 0` ở DB (ALTER bị chặn quyền) | Chặn lỗi sót ở tầng ứng dụng | Thấp-trung bình | Lệnh `NOT VALID` đã đề xuất cho operator ở trên |
+- **Bài học kiến trúc (đã thành nguyên lý 7 trong CLAUDE.md, operator chọn (B) ngày 2026-10-24; phân tích phương án xem mục "Nguyên lý 7" ngay dưới ADR-05).**
+  Outbox giải bài toán dual-write cho chiều **tiền RA** khỏi hệ thống/khỏi số dư: trì hoãn bước credit
+  là an toàn vì nguồn đã bị trừ trước. Áp máy móc cho chiều **tiền VÀO một số dư rút được** thì ngược:
+  số dư tăng trước khi nguồn bị trừ, và người khác tiêu được giá trị chưa tồn tại. **Phải xét bản chất
+  tài chính từng luồng, không áp một pattern cho mọi chỗ.**
+- **Bằng chứng**: https://github.com/h1epnh/fullstack-engineering-learning/issues/60#issuecomment-6343690961 (đã đọc lại bằng `gh api`; đăng bằng tài khoản chung
+  `h1epnh`, tự nêu "operator trả lời trực tiếp qua AskUserQuestion"). Nguồn lỗi: mô tả bug #60 (do
+  agent-tester ghi); tôi không tái hiện lại bug này lượt này.
+- **Ticket thực hiện**: https://github.com/h1epnh/fullstack-engineering-learning/issues/60 (agent-dev đang làm).
+- **Hạn chế bằng chứng**: như đầu mục.
+
+### Góc học tập (ADR)
+
+- **Khái niệm: ADR và vì sao doanh nghiệp ghi quyết định.** Mã nguồn cho biết hệ thống *làm gì*;
+  không bao giờ cho biết *vì sao chọn cách này mà bỏ cách khác*. Người mới (hoặc chính bạn sau 6
+  tháng, hoặc một agent chạy phiên mới không nhớ gì) sẽ "sửa" thứ trông có vẻ sai. Dự án này có ví dụ
+  thật: câu "transfer-service cố tình không có DB, đừng thêm" trong CLAUDE.md không kèm lý do và
+  bối cảnh, và nó **lỗi thời** khi #31/#32 thêm DB. Một ADR có trạng thái và ngày sẽ lộ ra chuyện đó
+  ngay. Ví dụ thứ hai: eKYC fail-open tồn tại vì ai đó quyết "đừng chặn luồng khi user-service lỗi",
+  nhưng không ai ghi nó *trái* nguyên lý 2, nên mâu thuẫn nằm ngầm tới khi tôi đọc chéo. ADR-02 buộc
+  mâu thuẫn đó thành một lựa chọn có tên và có người chịu trách nhiệm.
+- **Một ADR tốt khác ghi chú thường ở đâu.** (1) **Một quyết định, một bản ghi**, không trộn.
+  (2) **Có phương án bị loại và lý do loại**, không chỉ đáp án thắng (ADR-04 ghi vì sao bỏ "trừ
+  trước rồi hoàn"). (3) **Hệ quả gồm cả mặt xấu** đã chấp nhận (ADR-02: `user-service` thành điểm
+  lỗi đơn của mọi tiền ra). (4) **Có trạng thái và ngày**; sai thì viết ADR mới `Supersedes`, không
+  xoá lịch sử. (5) **Có người quyết và bằng chứng kiểm chứng được**, kèm cả giới hạn của bằng chứng
+  (4 comment ở trên đăng bằng tài khoản chung nên chỉ chứng minh "có câu trả lời được chuyển lại",
+  không chứng minh ai gõ). (6) **Tách cái đã quyết khỏi cái còn mở** (câu phụ #48).
+  Ghi chú thường thiếu hầu hết các điểm này, và hay đọc như một sự thật chứ không phải một lựa chọn.
+- **Doanh nghiệp thật làm gì.** Michael Nygard đề xuất định dạng ADR (Bối cảnh, Quyết định, Trạng
+  thái, Hệ quả) trong bài "Documenting Architecture Decisions" (2011) [SL: kiến thức chung, lượt này
+  chưa fetch lại để trích nguồn]. Nhiều tổ chức công khai thực hành này, ví dụ hướng dẫn ADR của chính
+  phủ Anh và các hướng dẫn kiến trúc đám mây của AWS/Microsoft [SL: nhớ từ kiến thức chung, chưa
+  kiểm link]. Với ví ngân hàng ở Việt Nam, kiểm toán và thanh tra của NHNN đòi truy được "ai duyệt cái gì,
+  khi nào", nên bằng chứng sign-off không phải thủ tục hình thức. Tôi chưa có nguồn công khai về
+  cách MoMo/ZaloPay ghi ADR nội bộ; không suy diễn.
+- **Câu hỏi tự suy nghĩ.** (1) [đã giải 2026-10-18: operator hỏi lại và chọn trần thời gian, nhánh
+  `PAYMENT_FAILED` bị bỏ] ADR-04 từng ghi "không cho ghi nợ" trong khi khuyến nghị SA-3 có nhánh
+  `PAYMENT_FAILED`. Cách hỏi đúng là hỏi operator trước khi code, và cách giải của operator (đổi
+  *ràng buộc đầu vào* thay vì xử lý lỗi ở đầu ra) đáng để bạn nghĩ vì sao nó gọn hơn? (2) Bằng chứng sign-off hiện là comment do orchestrator
+  đăng bằng tài khoản chung. Nếu thanh tra hỏi "ai duyệt việc nạp tiền không qua loại giao dịch
+  riêng", bạn đưa ra thứ gì, và cần thêm gì để nó đứng vững?
+
+#### Nguyên lý 7: phân tích phương án (agent-architect, 2026-10-24). **ĐÃ QUYẾT: phương án (B)**, operator chọn ngày 2026-10-24 qua AskUserQuestion trong phiên Claude Code (do orchestrator hỏi); đã thêm vào CLAUDE.md (nguyên lý 7 + một dòng ở nguyên lý 3)
+
+Câu chữ đề xuất: *"Outbox chỉ dùng cho credit/hoàn tiền/bù trừ; mọi debit tạo ra số dư rút được ở nơi
+khác phải đồng bộ."* Bài học từ #22 -> #60. Hiện CLAUDE.md có 6 nguyên lý (nguyên lý 6 do operator duyệt
+2026-10-18), nên đây sẽ là nguyên lý 7.
+
+**Vì sao cần xét kỹ.** Nguyên lý 3 hiện viết "Claim trước -> Di chuyển tiền -> Commit/Revert" và coi đó là
+khuôn cho mọi luồng. ADR-05 cho thấy khuôn đó **đúng cho tiền RA khỏi một số dư** (claim trừ nguồn trước) nhưng
+**sai chiều cho tiền VÀO một số dư rút được** (claim "cộng quỹ" trước là tạo giá trị chưa có nguồn). Hai nguyên
+lý sẽ mâu thuẫn nếu không nói rõ ranh giới.
+
+| Phương án | Nội dung | Ưu | Nhược | Rủi ro |
+|---|---|---|---|---|
+| **(A) Thêm nguyên lý 7 đúng câu chữ đề xuất** | Quy tắc riêng về outbox + debit | Ngắn, dễ nhớ, đúng đúng bài học #60, có ví dụ thật | Không nói quan hệ với nguyên lý 3; agent-dev có thể đọc 3 và 7 mâu thuẫn. Chỉ nói về outbox, không bao quát hold/saga khác | Thấp |
+| **(B) Thêm nguyên lý 7 kèm câu hỏi 3 bước + sửa nguyên lý 3 trỏ sang** | 7 = "Trình tự theo bản chất tài chính": (1) bước nào tạo giá trị tiêu được? (2) bước nào lấy từ nguồn? (3) ai tiêu được (1) trước khi (2) xác nhận? Nếu có thì (2) đồng bộ và xong trước. Nguyên lý 3 thêm một dòng "xem 7 cho chiều tiền vào số dư rút được" | Tổng quát hơn (cũng giải thích ADR-04 hold, `bnpl`, `lucky-money`); gỡ mâu thuẫn với 3; áp được cho luồng mới | Dài hơn, trừu tượng hơn; sửa nguyên lý 3 là đụng một luật đang có | Trung bình-thấp: cần operator đọc lại 3 |
+| **(C) Không thêm luật, giữ làm ADR-05 + checklist review của architect** | Bài học nằm trong ADR và TD-04, architect chặn khi review | Không phình CLAUDE.md (agent-dev đọc mỗi phiên) | Agent-dev không thấy ADR khi viết code; #22 chính là trường hợp "pattern đúng được áp sai" mà không ai chặn trước. Dễ lặp ở #56 (outbox lucky-money) | Trung bình-cao |
+| **(D) Mở rộng thành bảng "pattern nào cho chiều nào"** | Bảng: tiền ra / tiền vào số dư rút được / thông báo -> outbox? đồng bộ? | Rõ nhất khi áp vào #56 và TD-04 | Bảng dễ lỗi thời; nặng cho CLAUDE.md | Trung bình |
+
+**Khuyến nghị: (B), với câu chữ cụ thể dưới đây.** Lý do: bài học thật không phải "outbox xấu" mà là "thứ tự
+phải theo bản chất tài chính"; (A) giải đúng ca #60 nhưng để mâu thuẫn ngầm với nguyên lý 3 (cùng loại mâu thuẫn
+ngầm TD-08 đã lộ), còn (B) vừa gỡ mâu thuẫn vừa dùng được cho #56 đang chờ. Nếu operator muốn tối giản thì (A)
+kèm một dòng làm rõ nguyên lý 3 là mức tối thiểu chấp nhận được. Chọn (C) là rủi ro lặp lại rõ nhất.
+
+Câu chữ đề xuất cho (B) (để operator sửa, không phải đã duyệt):
+> 7. **Thứ tự theo bản chất tài chính (Debit trước khi tạo giá trị tiêu được)**: Bước nào làm xuất hiện số dư
+> hoặc quyền rút được ở nơi khác (cộng quỹ, cộng ví, mở hạn mức) chỉ được thực hiện **sau khi** bước lấy tiền
+> từ nguồn đã được xác nhận, đồng bộ, trong cùng request. Outbox/hàng đợi chỉ dành cho bước mà trì hoãn không
+> tạo ra giá trị tiêu được: credit đến chậm, hoàn tiền, bù trừ, thông báo. Nguồn: ADR-05 (#60).
+
+**Điều cần nói thật khi hỏi operator.** Nguyên lý này là hệ quả của **một** sự cố thật (#60, 9.000.000đ sinh ra
+từ hư không trên cluster) và một đánh đổi đã chấp nhận (pod chết giữa chừng thì member mất tiền, không có tự
+phục hồi). Nguyên lý không loại bỏ rủi ro R2/R3; nó chỉ chọn hướng sai an toàn hơn (hại khách đối soát được thay
+vì tạo tiền). Tôi chưa có nguồn công khai về cách MoMo/ZaloPay tổ chức thứ tự này nội bộ, nên phần "doanh nghiệp
+thật" chỉ là suy luận từ mô hình authorize/capture của ngành thẻ.
+
+**Trạng thái hỏi operator.** Phiên này không có công cụ AskUserQuestion, nên đã đăng các phương án lên #57 để
+operator trả lời; **chưa ghi vào CLAUDE.md**. Khi có câu trả lời thật, ghi link bằng chứng vào đây.
+
+### Góc học tập (ADR-05: khi pattern đúng đặt sai chỗ)
+
+- **Khái niệm: một pattern chỉ đúng trong điều kiện của nó.** Outbox (ghi sự kiện cùng transaction
+  DB, relay gửi sau) giải dual-write: bảo đảm "bước hai rồi cũng xảy ra". Nó **không** nói bước hai có
+  được phép chậm hay không. Ở #22 `withdraw` hợp lệ: quỹ đã bị trừ trước, credit ví đến chậm chỉ làm
+  user chờ. Ở `contribute` thì ngược: quỹ tăng trước, ví trừ sau, nên trong ~30s quỹ chứa tiền chưa
+  tồn tại và A rút được 9 triệu từ đó. Cùng một pattern, hai luồng, hai kết quả trái nhau.
+- **Cách nhận biết luồng nào cần "trừ trước".** Hỏi theo thứ tự: (1) Bước nào *tạo ra giá trị tiêu
+  được* (số dư tăng, quyền rút)? (2) Bước nào *lấy đi giá trị từ nguồn*? (3) Có thể có ai tiêu giá trị
+  ở (1) trước khi (2) được xác nhận không? Nếu có, (2) phải xảy ra và được xác nhận **trước**, đồng bộ.
+  Chỉ những bước mà trì hoãn không tạo ra giá trị tiêu được (credit đến chậm, hoàn tiền, bù trừ, gửi
+  thông báo) mới thuộc về outbox. Quy tắc nhớ: *"đừng cho ai tiêu thứ mình chưa thu được"*. Đây cũng
+  là lý do ADR-04 chọn hold: giữ (lấy đi khả năng tiêu) xảy ra lúc vào cổng, trước khi dịch vụ được dùng.
+- **Doanh nghiệp thật.** Ngành thẻ dùng đúng tư duy này: authorize (giữ) trước rồi mới capture; ngân
+  hàng không cho rút tiền theo một khoản "đang chờ ghi có" cho tới khi nó cleared [SL: kiến thức chung,
+  chưa có nguồn VN trong repo]. Tôi chưa fetch nguồn chính chủ cho ý này lượt này.
+- **Khái niệm thêm (2026-10-24): "kiểm tra rồi hành động" (check-then-act) và marker không nguyên tử.** R1 là
+  ví dụ sách giáo khoa: marker "đã hoàn tiền" và dòng "đã cộng quỹ" là hai bản ghi riêng, nên hai request có thể
+  mỗi bên thấy một nửa sự thật. Bản sửa tạm (kiểm lại) chỉ thu hẹp cửa sổ; muốn đóng hẳn phải có **một điểm
+  tuần tự hoá** (khoá theo key, hoặc một dòng trạng thái chuyển bằng compare-and-set). Hệ thống thanh toán lớn
+  dùng đúng ý này: Stripe mô tả idempotency key được lưu kèm kết quả đầu tiên của request và trả lại đúng kết
+  quả đó cho lần lặp (https://docs.stripe.com/api/idempotent_requests, [SL: nhớ từ kiến thức chung, lượt này
+  chưa fetch lại]). Điểm khác: ở đây key được dùng bởi **hai hệ** (wallet và fund) nên phải tự khoá chéo.
+- **Câu hỏi tự suy nghĩ (thêm).** Với R1, hãy tự vẽ dòng thời gian của A và B và tìm chính xác lệnh nào của A
+  và lệnh nào của B không thể đảo thứ tự nếu có khoá theo `debitKey`. Rồi trả lời: nếu bạn chỉ làm "kiểm lại
+  trước khi hoàn tiền" thì còn lại khoảng hở bao lâu, và bạn chấp nhận hay không, vì sao?
+- **Câu hỏi tự suy nghĩ.** (1) `lucky-money-service`: người gửi lì xì 500.000đ, người nhận nhận sau. Bước
+  nào của luồng này được phép vào outbox, bước nào không, và vì sao? Áp thử ba câu hỏi ở trên. (2) ADR-05
+  chấp nhận rủi ro "trừ ví rồi pod chết, quỹ chưa tăng". Hãy so sánh nó với rủi ro của #60 về *ai chịu
+  thiệt* và *hệ thống có đo/sửa được không*. Vì sao các hệ thống tài chính thường thà hại một khách
+  hàng có thể đối soát được hơn là tạo tiền không ai theo dõi được?
+
+### ADR-06. SNS + SQS thật trên AWS cho học event-driven — lớp thông báo mới, song song với Kafka, KHÔNG thay Outbox hiện có
+
+- **Trạng thái**: **Accepted, 2026-10-29** — operator đã trả lời cả 2 điểm mở qua `AskUserQuestion`
+  trong phiên Claude Code (xem mục "Bằng chứng" cuối ADR này).
+- **Bối cảnh.** Operator (đang tự đào tạo EA/SA/TA qua chính lab này) có 1 tài khoản AWS cá nhân thật,
+  đã dọn sạch (`ap-southeast-1`, account `456021728709`, AWS CLI profile `default` = IAM user `admin`,
+  full admin, static long-lived key — operator tự đánh dấu "rủi ro cao hơn"), muốn thực hành SNS+SQS
+  thật để học event-driven/async hands-on. Lab đã có Kafka in-cluster (`topup-service`, pin `7.5.3`,
+  xem CLAUDE.md) và đã dùng Outbox pattern cho 3 luồng tiền (fund-service #22, lucky-money #56,
+  topup-service #66; payment-request #67 đang hoàn thiện — xem TD-04). Câu hỏi kiến trúc: SNS/SQS có
+  chỗ đứng thật hay là một broker thứ hai dư thừa?
+
+- **Phương án cho câu hỏi 1 — SNS/SQS đứng ở đâu so với Kafka đã có.**
+
+  | Phương án | Mô tả | Ưu | Nhược | Rủi ro |
+  |---|---|---|---|---|
+  | (a) Thay Kafka bằng SNS/SQS cho các flow Outbox hiện có (#56/#66/#67) | Route lại relay sang SQS thay vì `kafkaTemplate.send` | Học AWS cho đúng use case tiền đã có | Đụng vào đúng 3 luồng tiền đang được review kỹ nhất, vừa PASS QA 100% ở #66 (TD-04b); thêm phụ thuộc mạng-ra-ngoài-cluster vào đường tiền đang chạy đúng | **Cao** — sửa cái đang đúng không có lý do nghiệp vụ, đổi failure-mode của 1 cơ chế đã kiểm chứng (pod-kill test #22) |
+  | (b) **Dùng song song: domain event tiền vẫn Kafka trong-cluster; SNS/SQS riêng cho 1 capability MỚI (thông báo)** | Hai broker, hai vai trò tách bạch rõ | Không đụng luồng tiền ổn định; dạy đúng thứ Kafka-trong-cluster không dạy được (managed service, quota thật, DLQ thật, IAM credential thật) | Phải viết rõ ranh giới "khi nào dùng cái nào" kẻo lặp lại ở nơi khác | Thấp nếu ghi rõ ranh giới trong ADR này |
+  | (c) Không làm, Kafka đã đủ | Giữ nguyên | Không thêm phức tạp | Bỏ lỡ đúng mục tiêu học tập operator nêu rõ (AWS thật) | — |
+
+  **Khuyến nghị: (b).** Lý do loại (a): vi phạm tinh thần "đừng sửa cái đang đúng" — #66 vừa được
+  review kiến trúc PASS 100% (https://github.com/h1epnh/fullstack-engineering-learning/issues/66#issuecomment-6489639798),
+  #67 đang được hoàn thiện đúng theo ADR-05/Nguyên lý 7; không có lý do nghiệp vụ nào đòi đổi transport.
+  Loại (c): bỏ lỡ mục tiêu học chính. Kafka giữ vai trò "domain event nội bộ, latency thấp, trong
+  cluster, đã có Outbox atomicity"; SNS/SQS nhận vai trò khác hẳn: "managed cloud messaging ra ngoài
+  biên hệ thống, cho capability chưa tồn tại". Hai vai trò không chồng lấn nên không phải dư thừa.
+
+- **Phương án cho câu hỏi 2 — use case nhỏ nhất, genuinely async theo Nguyên lý 7.**
+
+  | Phương án | Đúng Nguyên lý 7? | Tự chứa | Giá trị học | Rủi ro |
+  |---|---|---|---|---|
+  | (i) **Payment-completed notification fan-out**: publish SNS NGAY SAU khi debit/credit đã commit; 1 consumer qua SQS log/giả lập gửi thông báo | Có — độ trễ/mất thông báo không tạo giá trị tiêu được, không chạm bước lấy tiền từ nguồn | Cao — chỉ "nghe" sau khi tiền đã xong, không sửa luồng tiền nào | Cao — dạy đúng fan-out, DLQ, idempotent consumer, IAM least-privilege | Thấp |
+  | (ii) SQS làm outbox-relay transport cho 1 gap TD-04 còn mở (`payment-request-service` #67 hoặc `bill-payment-service` #118) | Có vẻ hợp lệ (đều là nhánh credit/refund) nhưng đang được `agent-dev` sửa đúng hướng bằng cơ chế khác theo ADR-05 | Thấp — đụng code đang có 2 reviewer theo dõi sát, đang sửa lỗi mất tiền thật | Trung bình — học được outbox-qua-SQS nhưng trộn với công việc nghiệp vụ đang chạy, khó tách bạch lúc QA | **Trung bình-cao** — rủi ro giẫm chân việc đang sửa #67/#118, và thêm 1 phụ thuộc AWS đúng vào chỗ đang cố làm cho tiền KHÔNG kẹt |
+
+  **Khuyến nghị: (i).** Lý do loại (ii): nó cắm thẳng vào nơi nhạy cảm nhất của lab hiện tại — TD-04
+  còn 2 ticket mở với rủi ro mất tiền thật đang xử lý (#67, #118) — biến 1 bài tập học AWS thành rủi ro
+  vận hành thật, ngược đúng tinh thần "pilot 1 service tách biệt trước" mà chính #22 đã áp dụng và
+  CLAUDE.md nhắc lại ("đừng sửa gap TD-04 nếu chưa bàn với user"). (i) hoàn toàn mới, hoàn toàn tách
+  bạch khỏi mọi luồng tiền, không có đường nào ảnh hưởng ngược lại số dư.
+
+- **Quyết định (phần kỹ thuật, không phải sign-off "có làm hay không").** Nếu operator đồng ý làm:
+  chọn (b) cho vai trò SNS/SQS, chọn (i) làm use case đầu tiên duy nhất. Không đụng bất kỳ dòng code
+  nào của `fund-service`/`lucky-money-service`/`topup-service`/`payment-request-service`/`bill-payment-service`
+  liên quan Outbox hiện có.
+
+- **Phạm vi tích hợp cụ thể.**
+  - **Publisher**: `wallet-service`. Lý do: theo Nguyên lý 1, mọi debit/credit thành công của MỌI
+    service nghiệp vụ (topup, transfer, bill, fund, lì xì...) đều đi qua đúng 1 điểm —
+    `WalletMutationExecutor` — nên đây là điểm publish DUY NHẤT cho mọi loại giao dịch, thay vì N
+    service tự publish rải rác (tránh lặp lại sai lầm "mỗi service tự quyết enum/field" đã cảnh báo
+    trong CLAUDE.md). Publish chạy **sau khi** transaction DB đã commit — **không** nằm trong cùng
+    `@Transactional`, **không** blocking response cho client. Publish lỗi/timeout: log WARN, **không**
+    rollback, **không** trả lỗi cho người dùng — mất 1 thông báo chấp nhận được, mất 1 dòng ledger
+    không chấp nhận được (đúng Nguyên lý 7: đây là bước mà trì hoãn/mất không tạo/xoá giá trị tiêu được).
+  - **Subscriber**: 1 consumer đọc SQS, log/giả lập gửi thông báo (push/SMS/email đều chỉ là log có
+    cấu trúc trong lab, không gọi dịch vụ gửi thật). **Chưa quyết là service mới hay service có sẵn**
+    — xem mục "Chưa quyết" dưới.
+  - **Naming**: SNS topic `ewallet-lab-payment-completed` (region `ap-southeast-1`). SQS queue
+    `ewallet-lab-payment-completed-notify` subscribe topic trên; DLQ
+    `ewallet-lab-payment-completed-notify-dlq` (`maxReceiveCount=5`) — bản thân DLQ là 1 bài học AWS
+    thật: tin "độc" (consumer luôn lỗi) không trôi vô hạn mà rơi vào DLQ để soi tay.
+  - **Schema** (tối thiểu, có version, tái dùng enum thật của `wallet-service` — **không bịa field/giá
+    trị mới** theo đúng quy ước CLAUDE.md):
+    ```json
+    {
+      "schemaVersion": 1,
+      "eventId": "<uuid — idempotency key cho consumer>",
+      "eventType": "payment.completed",
+      "occurredAt": "<ISO-8601>",
+      "transactionId": "<uuid, Transaction.id thật của wallet-service>",
+      "userId": "<uuid>",
+      "transactionType": "<TransactionType enum value thật, ví dụ TOPUP/TRANSFER_OUT/BILL_PAYMENT>",
+      "direction": "IN|OUT",
+      "amount": "<string decimal>",
+      "reference": "<Transaction.reference thật>"
+    }
+    ```
+    `eventId` là idempotency key — SQS standard queue chỉ bảo đảm at-least-once (có thể trùng), consumer
+    **phải** tự dedupe (đã xử lý `eventId` nào thì bỏ qua), không giả định exactly-once.
+  - **Credential vào pod trong minikube**: dùng **k8s Secret** giữ `AWS_ACCESS_KEY_ID` /
+    `AWS_SECRET_ACCESS_KEY`, mount qua `envFrom.secretRef` vào đúng 2 Deployment (`wallet-service` +
+    consumer). Cân nhắc khác (IRSA/`kube2iam`/STS AssumeRole): không khả dụng — minikube không có OIDC
+    provider thật để liên kết với AWS IAM, nên k8s Secret tĩnh là lựa chọn khả thi duy nhất cho 1 lab
+    local, không phải vì nó là best practice (nó không phải, trong production thật nên dùng
+    workload identity ngắn hạn). **Rủi ro bắt buộc phải tránh**: tuyệt đối không đặt key của IAM user
+    `admin` hiện có (full quyền, static, operator đã tự đánh dấu rủi ro cao) vào Secret này. Phải tạo
+    **1 IAM user mới**, policy scoped xuống đúng: `sns:Publish` trên ARN đúng 1 topic
+    `ewallet-lab-payment-completed`; `sqs:ReceiveMessage`/`sqs:DeleteMessage`/`sqs:GetQueueAttributes`
+    trên ARN đúng 1 queue (+ quyền đọc DLQ nếu cần soi lỗi). Secret tạo bằng
+    `kubectl create secret generic` chạy trực tiếp (imperative) hoặc từ 1 file cục bộ **không commit**
+    — đừng lặp lại kiểu lỗi đang tồn tại ở `engineering/poc/VISA` (file khoá bị track trong git, operator
+    đã quyết giữ nguyên nhưng không nên tạo thêm 1 trường hợp mới với AWS key thật của account cá nhân).
+
+- **Ngân sách tài nguyên & chi phí.** SNS free tier 1.000.000 publish/tháng — mỗi giao dịch tiền
+  (1 debit hoặc credit) tối đa sinh 1 publish; vài trăm lần test/ngày trong nhiều tuần vẫn thấp hơn
+  ngưỡng vài bậc độ lớn. SQS free tier 1.000.000 request/tháng — **rủi ro thật nằm ở polling liên tục
+  khi hàng đợi rỗng**: poll ngắn (vd mỗi 1-2 giây) chạy 24/7 có thể tự vượt ngưỡng chỉ bằng request
+  rỗng (ước lượng: 1 request/2s × 30 ngày ≈ 1,3 triệu). Bắt buộc: dùng **long polling**
+  (`WaitTimeSeconds=20`, giảm số request rỗng khoảng 20 lần) và/hoặc chỉ chạy consumer lúc chủ động
+  test (replica=0 khi không test, cùng cách `mock-bank-gateway` đang 0 replica trong `values-local.yaml`).
+  Thiết kế này không dùng Lambda/DynamoDB/Step Functions — không động tới ngân sách free-tier của các
+  dịch vụ AWS khác.
+
+- **Helm/resources (issue #53).** Nếu operator chọn hướng "service mới" cho consumer: đây LÀ 1
+  Deployment mới → **bắt buộc** thêm entry vào map `resources:` trong
+  `deploy/helm/ewallet-lab/values.yaml` và gọi helper `ewallet-lab.resources` trong container (thiếu
+  thì `helm template` lỗi, đúng rule CLAUDE.md); nếu viết bằng Spring Boot thì thêm
+  `JAVA_TOOL_OPTIONS` qua helper `ewallet-lab.javaToolOptions`. Ngân sách RAM hiện **đang căng thật**,
+  không chỉ lý thuyết: `requests` hiện 4800 MiB trên ngưỡng ước lượng ~6 GiB, `limits` 8128 MiB đã
+  **vượt** allocatable 7936 MiB khoảng 192 MiB (xem mục "Ngân sách RAM"). Thêm 1 JVM mới (256-512Mi)
+  siết ngân sách hơn nữa. Khuyến nghị nếu phải là service mới: viết bằng runtime nhẹ (Go/Python, theo
+  đúng tiền lệ `mock-bank-gateway`, 32-64Mi) chứ không phải Spring Boot. `wallet-service`'s Deployment
+  hiện có **không** cần entry resources mới (không thêm container, chỉ thêm 1 lệnh gọi SDK ra ngoài),
+  nhưng cần ghi chú thêm vào bảng resources: "có phụ thuộc mạng ra AWS (SNS publish); lỗi/timeout
+  không chặn response, chỉ log WARN" — để ai đọc bảng không hiểu nhầm `wallet-service` thuần chỉ nói
+  chuyện với Postgres/Kafka trong cluster.
+
+- **Hệ quả nếu được approve.** Kafka giữ nguyên vai trò domain-event trong-cluster cho mọi Outbox
+  hiện có (#22/#56/#66/#67 không đổi gì). SNS/SQS là lớp async THỨ HAI, vai trò khác hẳn (managed
+  notification fan-out ra ngoài biên hệ thống), không route lại bất cứ luồng tiền nào qua nó. Muốn
+  sau này cho SNS/SQS đóng vai outbox-transport thật (thay Kafka) cho 1 flow cụ thể là quyết định
+  khác, cần 1 ADR riêng xét lại rủi ro đưa network-ra-Internet vào critical path tiền — không được
+  suy ra sẵn từ ADR này.
+
+- **2 điểm đã quyết (qua `AskUserQuestion` trong phiên Claude Code, 2026-10-29):**
+  1. **Service mới `notification-service`**, không gộp vào service có sẵn. Operator chọn phương án
+     "New notification-service (Go, Recommended)" — đúng khuyến nghị runtime nhẹ ở mục Helm/resources
+     trên (tiền lệ `mock-bank-gateway`, 32-64Mi) để không siết thêm ngân sách RAM đang vượt
+     allocatable (TD-01).
+  2. **IAM user scoped-down do operator tự tạo**, bằng CLI máy mình, không giao agent nào chạy lệnh
+     IAM bằng profile admin. Operator chọn phương án "Give me exact AWS CLI commands to run" — các
+     lệnh đó được đóng gói thành `scripts/init-aws-infra.sh` (tạo SNS topic, SQS queue + DLQ, subscribe,
+     IAM policy scoped đúng 2 ARN, IAM user, access key) để operator tự chạy bằng profile admin của
+     chính họ, không có agent nào cầm access key admin.
+- **Bằng chứng**: 2 câu trả lời `AskUserQuestion` trong phiên Claude Code, 2026-10-29 (nội dung: "New
+  notification-service (Go, Recommended)" và "Give me exact AWS CLI commands to run"). Chưa có comment
+  GitHub thật trên #57 (bị permission classifier của phiên chặn khi thử đăng — "External System
+  Writes"); nếu cần bằng chứng public, operator tự đăng hoặc chạy
+  `gh issue comment 57 --repo h1epnh/fullstack-engineering-learning`.
+- **Ticket thực hiện**: `agent-dev` triển khai trực tiếp theo ADR này (operator đã chốt cả 2 điểm mở),
+  không cần `agent-ba` tạo ticket riêng cho slice đầu tiên.
+- **Hạn chế bằng chứng**: không áp dụng.
+- **Đã triển khai (2026-10-29)**: `scripts/init-aws-infra.sh` (operator tự chạy, chưa chạy —
+  xem phần dưới); `notification-service/` (Go — `main.go`/`consumer.go`/`event.go`/
+  `idempotency.go`, 4 unit test PASS cho parse schema trực tiếp + envelope SNS + dedupe bounded
+  cache); `wallet-service`'s `PaymentNotificationPublisher` (publish sau commit, fire-and-forget,
+  virtual-thread executor, fail-open nếu thiếu credential) nối vào `WalletService.credit`/`debit`
+  qua `WalletMutationExecutor.MutationResult` (null `transaction` = short-circuit idempotent, không
+  publish lại); Helm: `templates/notification-service.yaml` mới (resources 32-64Mi, `replicas: 0`
+  trên local), `wallet-service.yaml` thêm `envFrom.secretRef: ewallet-lab-aws-notify` +
+  `SNS_TOPIC_ARN`, `values.yaml`'s `aws:` block (ARN/URL không secret) + resources entry +
+  ghi chú mạng-ra-AWS. `./gradlew build` (wallet-service, 31 test PASS) và `go build`/`go test`
+  (notification-service, 4 test PASS) đều sạch; `docker build` cả 2 image thành công; `helm
+  template . -f values-local.yaml` không lỗi. **Chưa verify được**: publish/consume AWS thật —
+  phụ thuộc operator tự chạy `scripts/init-aws-infra.sh` bằng profile admin của họ rồi tạo Secret
+  `ewallet-lab-aws-notify` theo lệnh script in ra.
+
+### Góc học tập (ADR-06: hai broker, hai vai trò — khi nào là bổ sung, khi nào là nợ kỹ thuật)
+
+- **Khái niệm: SNS+SQS "fan-out" khác Kafka's consumer-group thế nào.** Kafka: nhiều consumer trong
+  cùng 1 group chia nhau đọc các partition của 1 topic (mỗi message chỉ 1 consumer trong group xử lý).
+  SNS+SQS: SNS là lớp publish 1-tới-nhiều (fan-out) — 1 message gửi tới SNS topic được gửi tiếp tới
+  MỌI subscriber đã đăng ký (có thể là nhiều SQS queue khác nhau, mỗi queue có 1 nhóm consumer riêng,
+  độc lập hoàn toàn với các queue khác). Lab này hiện chỉ có 1 SQS subscribe 1 SNS topic nên fan-out
+  chưa "lộ" giá trị thật của nó — giá trị thật hiện ra khi thêm 1 SQS queue thứ hai (ví dụ: 1 queue
+  cho "log thống kê", 1 queue cho "giả lập push notification") subscribe CÙNG 1 topic mà không sửa gì
+  ở `wallet-service` — đây chính là lý do SNS tồn tại tách biệt với SQS, không chỉ là "SQS có thêm 1
+  lớp trung gian cho vui".
+- **Khái niệm: vì sao 2 công nghệ pub/sub cùng tồn tại trong 1 hệ thống thật không phải lúc nào cũng
+  là dư thừa.** Nó hợp lý khi phục vụ 2 "bounded context" khác nhau với yêu cầu khác nhau: Kafka ở
+  đây là "sổ cái sự kiện nội bộ" (latency thấp, cùng cluster, cần atomicity với DB qua Outbox) — mất 1
+  event domain có thể làm sai lệch ledger. SNS/SQS ở đây là "thông báo ra biên hệ thống" (có thể chậm
+  vài giây, chạy trên hạ tầng managed, không cần atomicity với DB vì không ai tiêu được "giá trị" từ 1
+  cái thông báo) — mất 1 thông báo chỉ làm phiền UX. Ranh giới mờ mới là lúc 2 công nghệ biến thành nợ
+  kỹ thuật (2 nơi cùng làm đúng 1 việc, không ai biết cái nào là "sự thật"); đây chính là lý do ADR
+  này cấm tuyệt đối việc SNS/SQS "lấn" vào vai trò Outbox-Kafka hiện có.
+- **Doanh nghiệp/ngân hàng thật xử lý vấn đề này thế nào.** Các hệ thống thanh toán lớn thường tách
+  rõ lớp "core banking/ledger event" (nội bộ, MQ/Kafka riêng, trong datacenter, SLA chặt) khỏi lớp
+  "notification/channel" (push, SMS, email — thường qua dịch vụ managed hoặc nhà cung cấp thứ ba như
+  AWS SNS, Firebase Cloud Messaging, Twilio), chính vì 2 lớp có yêu cầu độ tin cậy khác hẳn nhau: mất
+  1 bản ghi ledger là không thể chấp nhận, mất 1 thông báo kênh là chấp nhận được và dễ bù (gửi lại,
+  hoặc người dùng tự vào app xem lịch sử) [SL: mô hình chung của ngành thanh toán, tôi chưa fetch được
+  nguồn công khai riêng của MoMo/ZaloPay/VNPay mô tả chi tiết kiến trúc notification nội bộ của họ —
+  không suy diễn thêm]. AWS's own Well-Architected guidance khuyến nghị đúng pattern "SNS fan-out +
+  SQS cho mỗi consumer, kèm DLQ" cho event notification [SL: kiến thức chung về AWS reference
+  architecture, chưa fetch lại trang chính thức lượt này].
+- **Câu hỏi tự suy nghĩ.** (1) Nếu AWS SNS "tạm chết" đúng 5 phút ngay lúc 10.000 giao dịch hoàn tất
+  trong lab, hệ thống mất gì thật, và có cách nào để không mất vĩnh viễn mà KHÔNG cần đem Outbox+DB
+  vào (vốn là công cụ dành cho tiền, không phải cho thông báo)? Gợi ý: nghĩ về sự khác nhau giữa "cần
+  đảm bảo gửi được" và "cần đảm bảo không mất tiền". (2) Vì sao "dùng chung 1 IAM user admin cho mọi
+  việc trên 1 tài khoản AWS" là một lỗi kiến trúc, không chỉ là vấn đề bảo mật đơn thuần — nó phá vỡ
+  đúng tinh thần nguyên lý nào trong 7 nguyên lý kiến trúc hiện có của CLAUDE.md, nếu bạn coi
+  "least privilege" là một dạng của "Resource Isolation" (nguyên lý 5) áp cho identity/quyền hạn thay
+  vì áp cho CPU/RAM?

@@ -14,6 +14,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -42,19 +44,34 @@ public class PaymentRequestService {
     private final UserServiceClient userServiceClient;
     private final TransferServiceClient transferServiceClient;
     private final PaymentRequestMutationExecutor mutationExecutor;
+    private final WalletServiceClient walletServiceClient;
     private final long linkTtlHours;
+    private final long payingTtlSeconds;
 
     public PaymentRequestService(
             PaymentRequestRepository repository,
             UserServiceClient userServiceClient,
             TransferServiceClient transferServiceClient,
             PaymentRequestMutationExecutor mutationExecutor,
-            @Value("${ewallet-lab.payment-link.ttl-hours}") long linkTtlHours) {
+            long linkTtlHours) {
+        this(repository, userServiceClient, transferServiceClient, mutationExecutor, null, linkTtlHours, 60);
+    }
+
+    public PaymentRequestService(
+            PaymentRequestRepository repository,
+            UserServiceClient userServiceClient,
+            TransferServiceClient transferServiceClient,
+            PaymentRequestMutationExecutor mutationExecutor,
+            WalletServiceClient walletServiceClient,
+            @Value("${ewallet-lab.payment-link.ttl-hours}") long linkTtlHours,
+            @Value("${ewallet-lab.paying-ttl-seconds:60}") long payingTtlSeconds) {
         this.repository = repository;
         this.userServiceClient = userServiceClient;
         this.transferServiceClient = transferServiceClient;
         this.mutationExecutor = mutationExecutor;
+        this.walletServiceClient = walletServiceClient;
         this.linkTtlHours = linkTtlHours;
+        this.payingTtlSeconds = payingTtlSeconds;
     }
 
     // ---- Issue #3: payment link ----
@@ -69,6 +86,9 @@ public class PaymentRequestService {
 
     public PaymentRequest getLink(UUID token) {
         PaymentRequest r = findLinkOrThrow(token);
+        if (r.getStatus() == PaymentRequestStatus.PAYING) {
+            r = reconcileIfExpired(r);
+        }
         return checkExpiry(r);
     }
 
@@ -141,11 +161,13 @@ public class PaymentRequestService {
     }
 
     public List<PaymentRequest> listSentReminders(UUID creatorUserId) {
-        return repository.findByCreatorUserIdAndKindOrderByCreatedAtDesc(creatorUserId, PaymentRequestKind.REMINDER);
+        return repository.findByCreatorUserIdAndKindOrderByCreatedAtDesc(creatorUserId, PaymentRequestKind.REMINDER)
+            .stream().map(this::reconcileIfExpired).toList();
     }
 
     public List<PaymentRequest> listReceivedReminders(UUID targetUserId) {
-        return repository.findByTargetUserIdAndKindOrderByCreatedAtDesc(targetUserId, PaymentRequestKind.REMINDER);
+        return repository.findByTargetUserIdAndKindOrderByCreatedAtDesc(targetUserId, PaymentRequestKind.REMINDER)
+            .stream().map(this::reconcileIfExpired).toList();
     }
 
     /** Only the reminded user ({@code targetUserId}) may pay — unlike a LINK, a REMINDER already
@@ -240,14 +262,26 @@ public class PaymentRequestService {
      * transition PENDING -> PAID is now claimed FIRST, atomically (optimistic-lock protected via
      * {@link PaymentRequestMutationExecutor#claimPendingOnce}), and only the single winner of that
      * claim is allowed to call transfer-service's real {@code /transfers} at all. If that call then
-     * fails, the claim is released back to PENDING so the request isn't stuck "PAID" with no money
-     * actually moved.
+    /**
+     * Issue #67 (TD-04c) Honest State Machine:
+     * 1. The status transition PENDING -> PAYING is claimed atomically FIRST (optimistic-lock protected
+     *    via claimPayingOnce), preventing concurrent duplicate debit.
+     * 2. Calls transfer-service synchronously outside @Transactional so caller gets real-time step-up (428) or errors.
+     * 3. On success, transitions PAYING -> PAID via markPaid.
+     * 4. On deterministic client errors (4xx: insufficient balance 409, step-up 428, recipient not found 404),
+     *    safely rolls back PAYING -> PENDING via releaseClaim so user can retry.
+     * 5. On ambiguous server/network errors (503 Service Unavailable, timeout), STAYS in PAYING state
+     *    to prevent duplicate payment attempts from double-debiting.
      */
     private PaymentRequest pay(PaymentRequest r, UUID payerUserId, boolean stepUpConfirmed) {
+        if (r.getStatus() == PaymentRequestStatus.PAYING) {
+            r = reconcileIfExpired(r);
+        }
         if (r.getStatus() != PaymentRequestStatus.PENDING) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                 switch (r.getStatus()) {
                     case PAID -> "Yêu cầu này đã được thanh toán rồi";
+                    case PAYING -> "Yêu cầu này đang được xử lý thanh toán";
                     case CANCELLED -> "Yêu cầu này đã bị huỷ";
                     case EXPIRED -> "Yêu cầu này đã hết hạn";
                     case PENDING -> "Không thể thanh toán yêu cầu này";
@@ -259,11 +293,12 @@ public class PaymentRequestService {
 
         UUID id = r.getId();
         PaymentRequest claimed = withOptimisticLockRetry("pay", id,
-            () -> mutationExecutor.claimPendingOnce(id, payerUserId));
+            () -> mutationExecutor.claimPayingOnce(id, payerUserId));
 
+        String idempotencyKey = "pay-req:" + id;
         TransferServiceClient.TransferResult result;
         try {
-            result = transferServiceClient.transfer(payerUserId, claimed.getCreatorPhone(), claimed.getAmount(), stepUpConfirmed);
+            result = transferServiceClient.transfer(payerUserId, claimed.getCreatorPhone(), claimed.getAmount(), stepUpConfirmed, idempotencyKey);
         } catch (HttpClientErrorException.Conflict e) {
             mutationExecutor.releaseClaim(id);
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Số dư không đủ để thanh toán");
@@ -272,18 +307,105 @@ public class PaymentRequestService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy người nhận (creator) của yêu cầu này");
         } catch (HttpClientErrorException e) {
             mutationExecutor.releaseClaim(id);
-            // Issue #15 interaction — see PayRequestDto's javadoc. Forward transfer-service's own
-            // sourced message instead of re-wording it; 428 (not a named HttpClientErrorException
-            // subclass) needs an explicit status check.
+            // Issue #15 interaction — Step-up (428) or Bad Request (400)
             if (e.getStatusCode().value() == 428) {
                 throw new ResponseStatusException(HttpStatus.valueOf(428), e.getResponseBodyAsString());
             }
+            if (e.getStatusCode().value() == 400) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getResponseBodyAsString());
+            }
             throw e;
+        } catch (HttpServerErrorException e) {
+            if (e.getStatusCode() == HttpStatus.SERVICE_UNAVAILABLE) {
+                // Issue #85 / Issue #126: Downstream 503 from wallet/transfer-service (Fail-Closed eKYC unavailable)
+                // Debit was rejected BEFORE execution, no money was moved. Safe to release claim to PENDING!
+                mutationExecutor.releaseClaim(id);
+                log.info("Released claim to PENDING for payment request id={} due to 503 Service Unavailable Fail-Closed", id);
+                String body = e.getResponseBodyAsString();
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    body != null && !body.isBlank() ? body : "Hệ thống xác minh tạm thời gián đoạn. Giao dịch chưa bị trừ tiền, vui lòng thử lại sau.");
+            }
+            // Other downstream 5xx errors (500, 502, 504): STAYS PAYING to prevent duplicate debit!
+            log.error("Transfer service server error {} for payment request id={}, keeping status PAYING", e.getStatusCode(), id);
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                "Hệ thống chuyển tiền đang gián đoạn. Giao dịch đang được xử lý, vui lòng không thanh toán lại.");
+        } catch (ResourceAccessException e) {
+            // Network timeout / connection drop: STAYS PAYING!
+            log.error("Network timeout/error during transfer for payment request id={}, keeping status PAYING", id, e);
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                "Giao dịch đang được xử lý. Vui lòng kiểm tra lại trạng thái sau ít phút.");
         } catch (RuntimeException e) {
-            mutationExecutor.releaseClaim(id);
-            throw e;
+            // Other server/runtime exceptions: STAYS PAYING to be fail-safe!
+            log.error("Unexpected error during transfer for payment request id={}, keeping status PAYING", id, e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                "Đã có lỗi xảy ra trong quá trình xử lý giao dịch. Vui lòng kiểm tra lại sau.");
         }
-        return mutationExecutor.attachTransferReference(id, result.newBalance().toString());
+        return mutationExecutor.markPaid(id, result.newBalance().toString());
+    }
+
+    // ---- Issue #126: Automated Reconciliation & TTL recovery for PAYING state ----
+
+    public PaymentRequest reconcileIfExpired(PaymentRequest r) {
+        if (r.getStatus() != PaymentRequestStatus.PAYING) {
+            return r;
+        }
+        Instant payingStartedAt = r.getPayingStartedAt();
+        if (payingStartedAt == null || Duration.between(payingStartedAt, Instant.now()).getSeconds() >= payingTtlSeconds) {
+            return reconcile(r);
+        }
+        return r;
+    }
+
+    public PaymentRequest reconcile(PaymentRequest r) {
+        if (r.getStatus() != PaymentRequestStatus.PAYING) {
+            return r;
+        }
+        UUID id = r.getId();
+        String idempotencyKey = "pay-req:" + id;
+        UUID payerUserId = r.getPaidByUserId();
+
+        if (payerUserId == null) {
+            log.info("Reconciling payment request id={} with null payerUserId -> reverting to PENDING", id);
+            mutationExecutor.releaseClaim(id);
+            return repository.findById(id).orElse(r);
+        }
+
+        if (walletServiceClient != null) {
+            try {
+                var txnOpt = walletServiceClient.findTransactionByIdempotencyKey(payerUserId, idempotencyKey);
+                if (txnOpt.isPresent()) {
+                    var txn = txnOpt.get();
+                    log.info("Reconciling payment request id={}: found transaction id={} with idempotencyKey -> marking PAID", id, txn.id());
+                    return mutationExecutor.markPaid(id, "reconciled:" + txn.id());
+                } else {
+                    log.info("Reconciling payment request id={}: transaction with idempotencyKey not found in wallet -> reverting to PENDING", id);
+                    mutationExecutor.releaseClaim(id);
+                    return repository.findById(id).orElse(r);
+                }
+            } catch (Exception e) {
+                log.warn("Reconciler failed to check wallet-service for payment request id={}: {}", id, e.getMessage());
+                return r;
+            }
+        } else {
+            log.info("Reconciling payment request id={} without walletServiceClient -> reverting to PENDING", id);
+            mutationExecutor.releaseClaim(id);
+            return repository.findById(id).orElse(r);
+        }
+    }
+
+    public int reconcileAllStuckPaying() {
+        Instant cutoff = Instant.now().minusSeconds(payingTtlSeconds);
+        List<PaymentRequest> stuck = repository.findByStatusAndPayingStartedAtBefore(PaymentRequestStatus.PAYING, cutoff);
+        int count = 0;
+        for (PaymentRequest r : stuck) {
+            try {
+                reconcile(r);
+                count++;
+            } catch (Exception e) {
+                log.error("Failed to reconcile stuck payment request id={}: {}", r.getId(), e.getMessage());
+            }
+        }
+        return count;
     }
 
     /** See issue #5's {@code WalletService.withOptimisticLockRetry} — same pattern: retries the

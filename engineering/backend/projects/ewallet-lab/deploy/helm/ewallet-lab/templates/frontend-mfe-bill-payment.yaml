@@ -4,7 +4,7 @@ metadata:
   name: mfe-bill-payment
   namespace: {{ .Values.namespace }}
 spec:
-  replicas: {{ .Values.frontend.replicas }}
+  replicas: {{ include "ewallet-lab.replicas" (dict "root" $ "name" "mfe-bill-payment" "default" .Values.frontend.replicas) }}
   selector:
     matchLabels: { app: mfe-bill-payment }
   template:
@@ -16,6 +16,7 @@ spec:
         - name: mfe-bill-payment
           image: {{ include "ewallet-lab.image" (dict "root" $ "name" "mfe-bill-payment") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "ewallet-lab.resources" (dict "root" $ "name" "mfe-bill-payment") | nindent 10 }}
           ports:
             - containerPort: {{ .Values.frontend.port }}
           readinessProbe:
