@@ -18,7 +18,7 @@
 | SNS → SQS subscription | `arn:aws:sns:ap-southeast-1:456021728709:ewallet-lab-payment-completed:f86a2e85-d604-4fe5-9491-464edbeeff5c` | RawMessageDelivery=true |
 | IAM policy `ewallet-lab-notify-policy` | `arn:aws:iam::456021728709:policy/ewallet-lab-notify-policy` | scoped: sns:Publish 1 topic + sqs:Receive/Delete/GetAttrs 2 queue |
 | IAM user `ewallet-lab-notify-svc` | `arn:aws:iam::456021728709:user/ewallet-lab-notify-svc` | KHÔNG phải admin key |
-| Access Key ID | `AKIA_REDACTED_ROTATED_20261116` | SecretAccessKey KHÔNG ghi ở đây — chỉ hiện 1 lần lúc tạo, đã dùng để tạo k8s Secret, không lưu ở đâu khác. **Lưu ý**: secret key này đã dán vào Claude Code chat (scrollback) khi báo kết quả — rủi ro thấp vì key chỉ scoped đúng 3 ARN trên (không phải admin), nhưng nếu muốn sạch tuyệt đối thì xoay vòng key (`aws iam create-access-key` mới + `delete-access-key` key cũ) sau khi đã tạo k8s Secret. |
+| Access Key ID | `AKIA************MASKED` (đã che — xem ghi chú vận hành riêng, KHÔNG commit lại giá trị thật) | **2026-11-16: key gốc đã bị phát hiện public trên GitHub (repo này là public repo) — cần coi là compromised, xoay vòng ngay (`aws iam create-access-key` mới + `delete-access-key` key cũ) và cập nhật lại k8s Secret, bất kể key chỉ scoped 3 ARN non-admin.** SecretAccessKey KHÔNG ghi ở đây — chỉ hiện 1 lần lúc tạo, dùng để tạo k8s Secret. |
 
 ## k8s Secret
 

@@ -41,6 +41,10 @@ __pycache__/
 # Secrets
 .env
 .env.*
+*.pem
+*.key
+*.p12
+*.pfx
 
 # Build outputs
 .gradle/
