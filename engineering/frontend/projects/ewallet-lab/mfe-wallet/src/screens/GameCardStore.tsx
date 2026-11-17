@@ -6,7 +6,7 @@ import {
 } from '@ewallet-lab/api-client';
 import type { Session } from '@ewallet-lab/session';
 import { Button, Card, EmptyState, Icon, ProgressBar, Screen, StepUpModal, formatVnd } from '@ewallet-lab/ui';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const PUBLISHERS: {
   key: GamePublisher;
@@ -54,6 +54,17 @@ export default function GameCardStore({
     walletService.getBalance(session.id).then((b) => setWalletBalance(b.balance)).catch(() => {});
   }, [session.id]);
 
+  // One key per purchase attempt: retries/double-clicks of the SAME selection reuse it, so the
+  // server never debits twice. Reset when the selection changes or the purchase succeeds.
+  const idemRef = useRef<{ sig: string; key: string } | null>(null);
+  function currentIdemKey(): string {
+    const sig = `${selectedPublisher}:${selectedDenom}`;
+    if (!idemRef.current || idemRef.current.sig !== sig) {
+      idemRef.current = { sig, key: crypto.randomUUID() };
+    }
+    return idemRef.current.key;
+  }
+
   const discountRate = 0.03; // 3%
   const finalPrice = Math.round(selectedDenom * (1 - discountRate));
   const savings = selectedDenom - finalPrice;
@@ -67,7 +78,9 @@ export default function GameCardStore({
         publisher: selectedPublisher,
         denomination: selectedDenom,
         stepUpConfirmed,
+        idempotencyKey: currentIdemKey(),
       });
+      idemRef.current = null;
       setPurchasedCard(order);
       setStepUpMsg(null);
       // update wallet balance
@@ -101,9 +114,16 @@ export default function GameCardStore({
   return (
     <Screen
       title="Mua Thẻ Game & Giải Trí"
-      subtitle="Nạp thẻ game chính hãng chiết khấu 3% tức thì"
+      subtitle="Thẻ game mô phỏng, chiết khấu 3% tức thì"
       onBack={showHistory ? () => setShowHistory(false) : onBack}
     >
+      <div
+        role="note"
+        style={{ background: 'var(--el-amber-soft)', color: 'var(--el-amber)', borderRadius: 8, padding: '8px 10px', fontSize: 12, marginBottom: 12 }}
+      >
+        <strong>Lưu ý học tập:</strong> Thẻ, mã PIN và số serial là dữ liệu mô phỏng của Ewallet Lab, không do các nhà phát hành game phát hành và không dùng được để nạp thật.
+      </div>
+
       {/* Header action: history */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -12, marginBottom: 12 }}>
         <button
@@ -146,7 +166,7 @@ export default function GameCardStore({
                     {new Date(order.createdAt).toLocaleString('vi-VN')}
                   </div>
 
-                  <div style={{ background: 'var(--el-line-subtle, #f5f5f5)', borderRadius: 8, padding: '8px 10px', fontSize: 12 }}>
+                  <div style={{ background: 'var(--el-surface-2)', borderRadius: 8, padding: '8px 10px', fontSize: 12 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                       <span>Mã PIN: <strong>{order.pinCode}</strong></span>
                       <button
@@ -197,7 +217,7 @@ export default function GameCardStore({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
                 <div style={{ fontSize: 12, color: 'var(--el-muted)', marginBottom: 4 }}>Mã PIN (Mã Nạp Thẻ):</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--el-line-subtle, #f5f5f5)', padding: '10px 12px', borderRadius: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--el-surface-2)', padding: '10px 12px', borderRadius: 8 }}>
                   <span style={{ fontFamily: 'monospace', fontSize: 15, fontWeight: 800, letterSpacing: 1 }}>
                     {purchasedCard.pinCode}
                   </span>
@@ -221,7 +241,7 @@ export default function GameCardStore({
 
               <div>
                 <div style={{ fontSize: 12, color: 'var(--el-muted)', marginBottom: 4 }}>Số Serial:</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--el-line-subtle, #f5f5f5)', padding: '10px 12px', borderRadius: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--el-surface-2)', padding: '10px 12px', borderRadius: 8 }}>
                   <span style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, letterSpacing: 1 }}>
                     {purchasedCard.serialNumber}
                   </span>
@@ -281,6 +301,7 @@ export default function GameCardStore({
                 return (
                   <button
                     key={pub.key}
+                    aria-pressed={isSelected}
                     onClick={() => setSelectedPublisher(pub.key)}
                     style={{
                       flex: '1 0 30%',
@@ -325,6 +346,7 @@ export default function GameCardStore({
                 return (
                   <button
                     key={denom}
+                    aria-pressed={isSelected}
                     onClick={() => setSelectedDenom(denom)}
                     style={{
                       flex: '1 0 45%',
@@ -362,7 +384,7 @@ export default function GameCardStore({
                       {formatVnd(denom)}
                     </span>
                     <div style={{ fontSize: 12, color: 'var(--el-accent-ink)', fontWeight: 600 }}>
-                      Giá: {formatVnd(price)} <span style={{ color: '#d32f2f' }}>(-3%)</span>
+                      Giá: {formatVnd(price)} <span style={{ color: 'var(--el-danger)' }}>(-3%)</span>
                     </div>
                   </button>
                 );
@@ -397,9 +419,9 @@ export default function GameCardStore({
           {error && (
             <div
               style={{
-                background: '#fff2f0',
-                border: '1px solid #ffccc7',
-                color: '#cf1322',
+                background: 'var(--el-danger-soft)',
+                border: '1px solid var(--el-danger)',
+                color: 'var(--el-danger)',
                 borderRadius: 8,
                 padding: '8px 12px',
                 fontSize: 12.5,

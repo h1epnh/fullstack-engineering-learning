@@ -13,6 +13,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sns.model.PublishRequest;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -55,12 +56,19 @@ class PaymentNotificationPublisher {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
-    PaymentNotificationPublisher(@Value("${ewallet-lab.aws.access-key-id:}") String accessKeyId,
+    PaymentNotificationPublisher(@Value("${ewallet-lab.notify.sns.enabled:false}") boolean enabled,
+                                  @Value("${ewallet-lab.aws.access-key-id:}") String accessKeyId,
                                   @Value("${ewallet-lab.aws.secret-access-key:}") String secretAccessKey,
                                   @Value("${ewallet-lab.aws.region:ap-southeast-1}") String region,
                                   @Value("${ewallet-lab.sns.topic-arn:}") String topicArn) {
         this.topicArn = topicArn;
-        if (accessKeyId.isBlank() || secretAccessKey.isBlank() || topicArn.isBlank()) {
+        if (!enabled) {
+            // ADR-06 phương án B (issue #131): OFF by default. Even if credentials/topic happen to be
+            // present in the environment, no SnsClient is ever built, so no AWS call can happen.
+            log.info("ADR-06 SNS publish DISABLED by flag ewallet-lab.notify.sns.enabled=false (default); " +
+                "no AWS client is created and credit/debit skip the payment.completed publish.");
+            this.snsClient = null;
+        } else if (accessKeyId.isBlank() || secretAccessKey.isBlank() || topicArn.isBlank()) {
             log.warn("ADR-06 SNS publish DISABLED: AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/SNS_TOPIC_ARN not " +
                 "fully configured (expected via k8s Secret ewallet-lab-aws-notify + Helm value aws.snsTopicArn, " +
                 "see scripts/init-aws-infra.sh). Every credit/debit will skip the payment.completed publish — " +
@@ -110,10 +118,16 @@ class PaymentNotificationPublisher {
      * {@code direction()}). No field or enum value is invented here (CLAUDE.md's explicit warning
      * about services inventing fields/values for data another service/consumer will read).
      */
-    private Map<String, Object> buildPayload(UUID userId, Transaction transaction) {
+    /** Stable name-based (v3) UUID derived from the transactionId, so a retried publish of the same
+     * transaction carries the same eventId and the consumer's dedupe (idempotencyCache) works. */
+    static String deterministicEventId(UUID transactionId) {
+        return UUID.nameUUIDFromBytes(("payment.completed:" + transactionId).getBytes(StandardCharsets.UTF_8)).toString();
+    }
+
+    Map<String, Object> buildPayload(UUID userId, Transaction transaction) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("schemaVersion", SCHEMA_VERSION);
-        payload.put("eventId", UUID.randomUUID().toString());
+        payload.put("eventId", deterministicEventId(transaction.getId()));
         payload.put("eventType", "payment.completed");
         payload.put("occurredAt", Instant.now().toString());
         payload.put("transactionId", transaction.getId().toString());

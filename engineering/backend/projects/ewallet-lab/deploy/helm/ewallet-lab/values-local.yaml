@@ -11,7 +11,8 @@ ingress:
 
 # Issue #54 — deliberately scaled to 0 on the local cluster (minikube RAM). Do not bring them up silently:
 # raise these to 1 only together with a RAM-budget check (DESIGN.md "Ngân sách RAM").
-# notification-service (ADR-06): 0 by default for a SECOND reason beyond RAM — it long-polls a
+# notification-service (ADR-06): no longer scaled here — with notify.sns.enabled=false (below) it is not
+# rendered at all (issue #131). Historical note: it was 0 for a SECOND reason beyond RAM — it long-polls a
 # real AWS SQS queue 24/7 if left running, and ADR-06's cost note is explicit that empty long-polls
 # running unattended for weeks can approach the SQS free-tier request quota on their own. Scale to
 # 1 only while actively testing: `kubectl -n ewallet-lab scale deploy/notification-service --replicas=1`,
@@ -20,5 +21,9 @@ replicaOverrides:
   mock-bank-gateway: 0
   mfe-bill-payment: 0
   mfe-topup: 0
-  notification-service: 0
 
+# Issue #131 (ADR-06 phương án B): SNS/SQS notification layer OFF on the local cluster. Keep false
+# unless the operator explicitly decides to run against real AWS.
+notify:
+  sns:
+    enabled: false

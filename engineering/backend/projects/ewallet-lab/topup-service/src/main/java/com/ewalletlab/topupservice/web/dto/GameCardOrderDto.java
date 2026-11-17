@@ -17,7 +17,8 @@ public record GameCardOrderDto(
     String pinCode,
     String serialNumber,
     String expiryDate,
-    Instant createdAt
+    Instant createdAt,
+    String status
 ) {
     public static GameCardOrderDto fromEntity(GameCardOrder entity) {
         String name = switch (entity.getPublisher()) {
@@ -41,7 +42,8 @@ public record GameCardOrderDto(
             entity.getPinCode(),
             entity.getSerialNumber(),
             entity.getExpiryDate(),
-            entity.getCreatedAt()
+            entity.getCreatedAt(),
+            entity.getStatus() == null ? null : entity.getStatus().name()
         );
     }
 }

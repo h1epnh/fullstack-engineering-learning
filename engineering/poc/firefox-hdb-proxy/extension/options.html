@@ -69,6 +69,11 @@
         <textarea id="patterns" spellcheck="false"></textarea>
         <small><code>*.hdbank.com.vn</code> covers hdbank.com.vn and every subdomain.</small>
       </label>
+      <label class="field">
+        <span>Excluded — always Wi-Fi (one per line)</span>
+        <textarea id="excludePatterns" spellcheck="false"></textarea>
+        <small>Checked before the list above. A host matching here stays on Wi-Fi even if it also matches a routed pattern, e.g. <code>grafana.hdbank.com.vn</code>.</small>
+      </label>
     </section>
 
     <section class="card">

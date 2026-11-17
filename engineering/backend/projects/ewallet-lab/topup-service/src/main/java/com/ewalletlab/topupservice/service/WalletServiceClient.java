@@ -38,7 +38,10 @@ public class WalletServiceClient {
     }
 
     private record AdjustBalanceRequest(BigDecimal amount, String type, String reference, String note,
-                                         Boolean stepUpConfirmed) {
+                                         Boolean stepUpConfirmed, String idempotencyKey) {
+        AdjustBalanceRequest(BigDecimal amount, String type, String reference, String note, Boolean stepUpConfirmed) {
+            this(amount, type, reference, note, stepUpConfirmed, null);
+        }
     }
 
     public DebitResult debit(UUID userId, BigDecimal amount, String note, boolean stepUpConfirmed) {
@@ -49,6 +52,29 @@ public class WalletServiceClient {
         AdjustBalanceRequest request = new AdjustBalanceRequest(amount, type, null, note, stepUpConfirmed);
         return restClient.post()
             .uri("/wallets/{userId}/debit", userId)
+            .body(request)
+            .retrieve()
+            .body(DebitResult.class);
+    }
+
+    /** Debit with ledger reference (principle 4) and wallet-side idempotency key: a replay of the
+     * same key is an idempotent no-op in wallet-service (never a second debit). */
+    public DebitResult debit(UUID userId, BigDecimal amount, String type, String reference, String note,
+                             boolean stepUpConfirmed, String idempotencyKey) {
+        AdjustBalanceRequest request = new AdjustBalanceRequest(amount, type, reference, note, stepUpConfirmed, idempotencyKey);
+        return restClient.post()
+            .uri("/wallets/{userId}/debit", userId)
+            .body(request)
+            .retrieve()
+            .body(DebitResult.class);
+    }
+
+    /** Idempotent compensating credit (refund) — same key twice credits once. */
+    public DebitResult credit(UUID userId, BigDecimal amount, String type, String reference, String note,
+                              String idempotencyKey) {
+        AdjustBalanceRequest request = new AdjustBalanceRequest(amount, type, reference, note, false, idempotencyKey);
+        return restClient.post()
+            .uri("/wallets/{userId}/credit", userId)
             .body(request)
             .retrieve()
             .body(DebitResult.class);

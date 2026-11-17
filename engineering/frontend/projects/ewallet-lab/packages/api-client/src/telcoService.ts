@@ -98,6 +98,8 @@ export const gameCardService = {
     publisher: GamePublisher;
     denomination: number;
     stepUpConfirmed?: boolean;
+    /** Giữ nguyên khi retry cùng một lần mua; server dedupe (không trừ ví / phát thẻ 2 lần). */
+    idempotencyKey?: string;
   }): Promise<GameCardOrder> {
     return http.post<GameCardOrder>(`${API_BASE.topup}/telco/game-cards`, req);
   },

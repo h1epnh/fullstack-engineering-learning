@@ -3,8 +3,9 @@
 A Firefox add-on plus a small macOS helper. Together they send `*.hdbank.com.vn` through the **wired RJ45 adapter**, and everything else keeps using **Wi-Fi**.
 
 ```
-Firefox ──proxy.onRequest──┬─ *.hdbank.com.vn ─► SOCKS5 127.0.0.1:1080 ─► hdb-proxy ─► en10 (RJ45) ─► HDBank LAN
-                           └─ anything else ───► direct ──────────────────────────────► default route (Wi-Fi en0)
+Firefox ──proxy.onRequest──┬─ *.hdbank.com.vn (minus excludes) ─► SOCKS5 127.0.0.1:1080 ─► hdb-proxy ─► en10 (RJ45) ─► HDBank LAN
+                           ├─ excluded (e.g. grafana.hdbank.com.vn) ─► direct ─────────────────────────► default route (Wi-Fi en0)
+                           └─ anything else ──────────────────────► direct ─────────────────────────► default route (Wi-Fi en0)
 ```
 
 ## Why two pieces
@@ -22,17 +23,38 @@ The helper finds the wired port on its own: the first `Ethernet`/`LAN` hardware 
 
 ## Install
 
+### 1. Start the helper (SOCKS5 server)
+
 ```bash
-# 1. Helper (launchd agent: starts at login, restarts if it crashes)
 cd helper && ./install.sh            # or ./install.sh -iface en10 -dns 10.0.26.77,10.0.26.88
 curl -s http://127.0.0.1:1081/status # {"up":true,"interface":"en10","ip":"10.0.117.84","dns":[...]}
-
-# 2. Add-on: open about:debugging#/runtime/this-firefox → "Load Temporary Add-on…" → extension/manifest.json
 ```
 
-A temporary add-on is removed when Firefox restarts. To keep it installed, sign it as an unlisted (self-distributed) add-on: `npx web-ext sign --channel unlisted` with AMO API keys, then install the `.xpi`. Firefox Developer Edition or Nightly can also install it unsigned if you set `xpinstall.signatures.required=false`.
+This installs a launchd agent that starts at login and restarts if it crashes — do this once. The `curl` above should return `"up":true`; if not, run `cd helper && ./install.sh` again and check the wired adapter is actually plugged in and has an IPv4 address.
 
-In private windows the add-on only routes traffic if you allow it to run there (Add-ons → HDB Proxy → *Run in Private Windows*).
+### 2. Load the add-on into Firefox
+
+**Quick way (temporary — removed when Firefox restarts):**
+
+1. Open Firefox, type `about:debugging#/runtime/this-firefox` in the address bar, press Enter.
+2. Click **"Load Temporary Add-on…"**.
+3. In the file picker, navigate to this folder's `extension/` subfolder and select **`manifest.json`**.
+4. The add-on now appears in the list with a toolbar icon (🔌/badge) — click it to see the popup status.
+
+Repeat step 2-4 every time Firefox restarts (temporary add-ons don't persist).
+
+**Persistent way (survives restarts) — pick one:**
+
+- **Sign it yourself**: `npx web-ext sign --channel unlisted` (needs free AMO API keys from [addons.mozilla.org/developers](https://addons.mozilla.org/developers/)), then double-click the resulting signed `.xpi` to install, or drag it into a Firefox window.
+- **Firefox Developer Edition / Nightly only**: set `xpinstall.signatures.required` to `false` in `about:config`, then install the existing `hdb-proxy.xpi` in this folder directly (drag it into the window, or `about:addons` → gear icon → "Install Add-on From File…").
+
+### 3. (Optional) Allow it in Private Windows
+
+Private windows don't run add-ons by default. If you need HDBank sites proxied there too: `about:addons` → **HDB Proxy** → enable **"Run in Private Windows"**.
+
+### 4. Check it's working
+
+Click the toolbar badge — it should read **LAN** (green) once the helper is up and a matching site is open. Open Settings (right-click the icon → *Manage Extension* → *Preferences*, or the gear in the popup) to review/edit the domain lists below.
 
 ## Settings
 
@@ -40,6 +62,7 @@ In private windows the add-on only routes traffic if you allow it to run there (
 | --- | --- | --- |
 | Enabled | on | ON/OFF switch in the popup header (also in Settings). OFF sends every site direct over Wi-Fi. |
 | Domains | `*.hdbank.com.vn` | `*.x` matches `x` and every subdomain. A bare host matches only itself. |
+| Excluded domains | `grafana.hdbank.com.vn` | Checked **before** Domains above — a match here always stays on Wi-Fi, even if it also matches a routed pattern. Same `*.x` syntax. |
 | Fall back to Wi-Fi | **off** | When off and the cable is unplugged, HDBank requests fail instead of leaving over Wi-Fi. When on, they go direct while the LAN is down. |
 | Helper host / port / status URL | `127.0.0.1:1080`, `http://127.0.0.1:1081/status` | Must match the helper's `-listen` / `-status` flags. |
 

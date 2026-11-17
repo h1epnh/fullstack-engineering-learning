@@ -127,7 +127,7 @@ export default function VoucherPass({
       >
         <Icon name="info" size={16} style={{ color: '#d46b08', flexShrink: 0, marginTop: 1 }} />
         <span>
-          <strong>Lưu ý học tập:</strong> Gói Voucher Pass và voucher giảm giá là tính năng mô phỏng trong Ewallet Lab (lấy cảm hứng từ Shopee Siêu Voucher / MoMo Student Pass). Không có đối tác hay thương hiệu thật đứng sau.
+          <strong>Lưu ý học tập:</strong> Gói Voucher Pass và voucher giảm giá là tính năng mô phỏng trong Ewallet Lab (lấy cảm hứng từ mô hình gói voucher của các ví điện tử). Không có đối tác hay thương hiệu thật đứng sau.
         </span>
       </div>
 

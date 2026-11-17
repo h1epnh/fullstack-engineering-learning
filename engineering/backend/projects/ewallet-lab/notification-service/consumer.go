@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
@@ -21,6 +22,46 @@ const waitTimeSeconds = 20
 
 const maxMessagesPerPoll = 10
 
+// ReceiveMessage error backoff: a successful long-poll naturally waits up to waitTimeSeconds, but
+// an ERROR (auth failure, throttling, network down) returns immediately — without a pause this is a
+// hot loop (log flood + burned SQS request quota). Exponential, capped, reset on first success.
+const (
+	backoffBase = 1 * time.Second
+	backoffMax  = 60 * time.Second
+)
+
+// backoffDelay returns the sleep before retry number `failures` (1 = first consecutive failure):
+// base * 2^(failures-1), capped at max. Pure function so it is unit-testable without AWS.
+func backoffDelay(failures int, base, max time.Duration) time.Duration {
+	if failures < 1 {
+		return 0
+	}
+	d := base
+	for i := 1; i < failures; i++ {
+		d *= 2
+		if d >= max {
+			return max
+		}
+	}
+	if d > max {
+		return max
+	}
+	return d
+}
+
+// sleepCtx sleeps for d but returns false immediately if ctx is cancelled first (shutdown must
+// not be delayed by a backoff in progress).
+func sleepCtx(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
+}
+
 // runConsumeLoop long-polls queueURL until ctx is cancelled. Each received message is parsed,
 // deduped by eventId, and on successful "delivery" (logged, simulated — see main.go's doc
 // comment) explicitly deleted. On any failure (parse error, unknown schema) the message is left
@@ -29,6 +70,7 @@ const maxMessagesPerPoll = 10
 // (ewallet-lab-payment-completed-notify-dlq) on its own — this process never manually routes to
 // the DLQ itself.
 func runConsumeLoop(ctx context.Context, client *sqs.Client, queueURL string, cache *idempotencyCache) {
+	failures := 0
 	for {
 		if ctx.Err() != nil {
 			return
@@ -42,9 +84,15 @@ func runConsumeLoop(ctx context.Context, client *sqs.Client, queueURL string, ca
 			if ctx.Err() != nil {
 				return // shutting down, the Receive call's own context cancellation caused this error
 			}
-			log.Printf("ReceiveMessage error: %v (will retry after the next long-poll wait)", err)
+			failures++
+			delay := backoffDelay(failures, backoffBase, backoffMax)
+			log.Printf("ReceiveMessage error (consecutive=%d): %v (retrying in %s)", failures, err, delay)
+			if !sleepCtx(ctx, delay) {
+				return
+			}
 			continue
 		}
+		failures = 0
 		for _, msg := range out.Messages {
 			handleMessage(ctx, client, queueURL, msg, cache)
 		}

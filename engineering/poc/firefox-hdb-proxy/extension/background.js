@@ -7,7 +7,9 @@ let lanStatus = { up: false, error: "not checked yet", checkedAt: 0 };
 
 // Returns "lan", "wifi", or "blocked" (matched, LAN down, no fallback).
 function routeFor(host) {
-  if (!settings.enabled || !hostMatches(host, settings.patterns)) return "wifi";
+  if (!settings.enabled) return "wifi";
+  if (hostMatches(host, settings.excludePatterns || [])) return "wifi";
+  if (!hostMatches(host, settings.patterns)) return "wifi";
   if (lanStatus.up) return "lan";
   return settings.fallbackToWifi ? "wifi" : "blocked";
 }

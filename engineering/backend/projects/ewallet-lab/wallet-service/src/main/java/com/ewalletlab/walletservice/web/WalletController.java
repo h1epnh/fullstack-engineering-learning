@@ -53,6 +53,9 @@ public class WalletController {
         this(walletService, null);
     }
 
+    // Two constructors exist; without @Autowired Spring finds neither unambiguous and falls back to a
+    // (nonexistent) default constructor -> context fails to start (found deploying #131).
+    @org.springframework.beans.factory.annotation.Autowired
     public WalletController(WalletService walletService, SpendingService spendingService) {
         this.walletService = walletService;
         this.spendingService = spendingService;

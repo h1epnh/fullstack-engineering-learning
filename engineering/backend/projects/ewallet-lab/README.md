@@ -95,15 +95,14 @@ tắt vận hành:
   tạo bằng CLI profile admin của chính họ, qua `scripts/init-aws-infra.sh` — không agent nào chạy
   lệnh IAM bằng key admin. Script đó in ra lệnh `kubectl create secret` cuối cùng để tạo Secret
   `ewallet-lab-aws-notify` (giữ `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_DEFAULT_REGION`),
-  mount vào CẢ `wallet-service` VÀ `notification-service` qua `envFrom.secretRef` — không giá trị
-  nào nằm trong repo.
-- `notification-service` mặc định `replicas: 0` trên local (`values-local.yaml`) — long-poll SQS
-  24/7 không test gì tốn quota free-tier một cách vô ích. Bật lên khi test:
-  ```bash
-  kubectl -n ewallet-lab scale deploy/notification-service --replicas=1
-  # ... test xong ...
-  kubectl -n ewallet-lab scale deploy/notification-service --replicas=0
-  ```
+  mount vào CẢ `wallet-service` VÀ `notification-service` qua `envFrom.secretRef` (`optional: true`, chỉ khi
+  `notify.sns.enabled=true`) — không giá trị nào nằm trong repo.
+- **Mặc định TẮT (issue #131, ADR-06 phương án B):** cờ Helm `notify.sns.enabled: false` (values.yaml và
+  values-local.yaml). Khi tắt: `notification-service` (Deployment + Service) KHÔNG được render,
+  `wallet-service` nhận `NOTIFY_SNS_ENABLED=false` và không có `SNS_TOPIC_ARN`/`secretRef` AWS; publisher
+  là no-op kể cả khi credential tồn tại. Khi bật (`--set notify.sns.enabled=true`, cần operator quyết định
+  dùng AWS thật), cả hai `secretRef` đều `optional: true` nên thiếu Secret không làm sập `wallet-service`.
+  Không bật cờ này trên cluster nếu chưa có quyết định của operator.
 - Account id/ARN/queue URL không phải secret (đã ghi trong DESIGN.md ADR-06 và
   `deploy/helm/ewallet-lab/values.yaml`'s `aws:` block) — chỉ access key pair là secret.
 

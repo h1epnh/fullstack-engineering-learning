@@ -6,7 +6,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "game_card_orders")
+@Table(name = "game_card_orders", uniqueConstraints = @UniqueConstraint(name = "uk_game_card_orders_idem", columnNames = "idempotencyKey"))
 public class GameCardOrder {
 
     @Id
@@ -29,14 +29,33 @@ public class GameCardOrder {
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal finalPrice;
 
-    @Column(nullable = false, length = 32)
+    @Column(length = 32)
     private String pinCode;
 
-    @Column(nullable = false, length = 32)
+    @Column(length = 32)
     private String serialNumber;
 
-    @Column(nullable = false, length = 32)
+    @Column(length = 32)
     private String expiryDate;
+
+    /** Wallet debit key, scoped per user: "gamecard:<userId>:<clientKey>". UNIQUE = the claim. */
+    @Column(length = 200)
+    private String idempotencyKey;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 32)
+    private GameCardOrderStatus status;
+
+    @Column(length = 500)
+    private String failureReason;
+
+    /** Fulfiller claim token. Every state transition out of PENDING is a conditional UPDATE on
+     * (id, status=PENDING, fulfillToken=<mine>), so exactly one fulfiller can ever issue the card
+     * or decide to refund. A takeover of a stale claim swaps the token, fencing the old holder out. */
+    @Column(length = 36)
+    private String fulfillToken;
+
+    private Instant fulfillStartedAt;
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -47,18 +66,57 @@ public class GameCardOrder {
     public GameCardOrder() {
     }
 
+    /** Claim row (PENDING) created BEFORE the wallet debit. */
     public GameCardOrder(UUID userId, GamePublisher publisher, BigDecimal denomination,
-                         BigDecimal discountRate, BigDecimal finalPrice,
-                         String pinCode, String serialNumber, String expiryDate) {
+                         BigDecimal discountRate, BigDecimal finalPrice, String idempotencyKey) {
         this.userId = userId;
         this.publisher = publisher;
         this.denomination = denomination;
         this.discountRate = discountRate;
         this.finalPrice = finalPrice;
+        this.idempotencyKey = idempotencyKey;
+        this.status = GameCardOrderStatus.PENDING;
+        this.fulfillToken = java.util.UUID.randomUUID().toString();
+        this.fulfillStartedAt = Instant.now();
+        this.createdAt = this.fulfillStartedAt;
+    }
+
+    // Mutators below mirror the conditional UPDATEs in GameCardOrderRepository (used by in-memory fakes).
+    public void applyTakeOver(String newToken, Instant at) {
+        this.fulfillToken = newToken;
+        this.fulfillStartedAt = at;
+    }
+
+    public void applyComplete(String pinCode, String serialNumber, String expiryDate) {
         this.pinCode = pinCode;
         this.serialNumber = serialNumber;
         this.expiryDate = expiryDate;
-        this.createdAt = Instant.now();
+        this.status = GameCardOrderStatus.COMPLETED;
+    }
+
+    public void applyFailedRefunded(String reason) {
+        this.status = GameCardOrderStatus.FAILED_REFUNDED;
+        this.failureReason = reason;
+    }
+
+    public String getFulfillToken() {
+        return fulfillToken;
+    }
+
+    public Instant getFulfillStartedAt() {
+        return fulfillStartedAt;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public GameCardOrderStatus getStatus() {
+        return status;
+    }
+
+    public String getFailureReason() {
+        return failureReason;
     }
 
     public UUID getId() {

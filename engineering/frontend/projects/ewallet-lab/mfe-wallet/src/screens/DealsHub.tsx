@@ -32,8 +32,8 @@ interface FlashDeal {
 
 const STATIC_FLASH_DEALS: FlashDeal[] = [
   {
-    id: 'deal-highlands',
-    brand: 'Highlands Coffee',
+    id: 'deal-coffee-a',
+    brand: 'Quán cà phê mẫu A',
     title: 'Giảm 30.000đ cho đơn từ 69.000đ',
     discountNote: 'Áp dụng mọi chi nhánh toàn quốc',
     remainingSlots: 45,
@@ -43,8 +43,8 @@ const STATIC_FLASH_DEALS: FlashDeal[] = [
     routeKey: 'qr-pay',
   },
   {
-    id: 'deal-phuclong',
-    brand: 'Phúc Long Tea & Coffee',
+    id: 'deal-tea-b',
+    brand: 'Quán trà & cà phê mẫu B',
     title: 'Mua 1 tặng 1 Trà Đào Hồng Đài',
     discountNote: 'Áp dụng thứ 4 hàng tuần',
     remainingSlots: 28,
@@ -54,8 +54,8 @@ const STATIC_FLASH_DEALS: FlashDeal[] = [
     routeKey: 'qr-pay',
   },
   {
-    id: 'deal-cgv',
-    brand: 'CGV Cinemas',
+    id: 'deal-cinema',
+    brand: 'Rạp chiếu phim mẫu',
     title: 'Vé xem phim 2D đồng giá 79.000đ',
     discountNote: 'Tặng kèm 1 bắp ngọt khi quét QR',
     remainingSlots: 15,
@@ -65,8 +65,8 @@ const STATIC_FLASH_DEALS: FlashDeal[] = [
     routeKey: 'bill-payment',
   },
   {
-    id: 'deal-winmart',
-    brand: 'WinMart / WinMart+',
+    id: 'deal-supermarket',
+    brand: 'Siêu thị mẫu',
     title: 'Giảm 40.000đ hoá đơn từ 200.000đ',
     discountNote: 'Áp dụng cho rau củ quả & thực phẩm tươi',
     remainingSlots: 50,
@@ -76,8 +76,8 @@ const STATIC_FLASH_DEALS: FlashDeal[] = [
     routeKey: 'qr-pay',
   },
   {
-    id: 'deal-kfc',
-    brand: 'KFC Vietnam',
+    id: 'deal-fastfood',
+    brand: 'Quán gà rán mẫu',
     title: 'Combo gà giòn 2 miếng + Khoai chỉ 65.000đ',
     discountNote: 'Tiết kiệm 30.000đ so với giá gốc',
     remainingSlots: 32,
@@ -188,6 +188,13 @@ export default function DealsHub({
         </div>
       )}
 
+      <div
+        role="note"
+        style={{ background: 'var(--el-amber-soft)', color: 'var(--el-amber)', borderRadius: 8, padding: '8px 10px', fontSize: 12, marginBottom: 12 }}
+      >
+        <strong>Lưu ý học tập:</strong> Các ưu đãi bên dưới là dữ liệu mô phỏng của Ewallet Lab, không có thương hiệu hay đối tác thật đứng sau.
+      </div>
+
       {/* Header action: my vouchers */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -12, marginBottom: 12 }}>
         <button
@@ -261,6 +268,7 @@ export default function DealsHub({
               return (
                 <button
                   key={cat.key}
+                  aria-pressed={isSelected}
                   onClick={() => setSelectedCategory(cat.key)}
                   style={{
                     display: 'flex',
@@ -291,15 +299,15 @@ export default function DealsHub({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 15 }}>⚡</span>
-                <span style={{ fontSize: 13.5, fontWeight: 800, color: '#d32f2f', textTransform: 'uppercase' }}>
+                <span style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--el-danger)', textTransform: 'uppercase' }}>
                   Flash Deals Giờ Vàng
                 </span>
               </div>
               <div
                 style={{
-                  background: '#ffebee',
-                  color: '#d32f2f',
-                  border: '1px solid #ffcdd2',
+                  background: 'var(--el-danger-soft)',
+                  color: 'var(--el-danger)',
+                  border: '1px solid var(--el-danger)',
                   borderRadius: 12,
                   padding: '3px 8px',
                   fontSize: 11.5,
@@ -398,7 +406,7 @@ export default function DealsHub({
                       </div>
 
                       {/* Vouchers inside package preview */}
-                      <div style={{ background: 'var(--el-line-subtle, #fafafa)', borderRadius: 8, padding: '8px 10px', marginBottom: 12 }}>
+                      <div style={{ background: 'var(--el-surface-2)', borderRadius: 8, padding: '8px 10px', marginBottom: 12 }}>
                         {pkg.voucherTemplates.map((t, idx) => (
                           <div
                             key={idx}

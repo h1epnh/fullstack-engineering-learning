@@ -6,6 +6,7 @@ async function load() {
   const s = await browser.storage.local.get(DEFAULTS);
   $("enabled").checked = s.enabled;
   $("patterns").value = s.patterns.join("\n");
+  $("excludePatterns").value = (s.excludePatterns || []).join("\n");
   $("proxyHost").value = s.proxyHost;
   $("proxyPort").value = s.proxyPort;
   $("statusUrl").value = s.statusUrl;
@@ -38,6 +39,7 @@ $("save").addEventListener("click", async () => {
   await browser.storage.local.set({
     enabled: $("enabled").checked,
     patterns: normalizePatterns($("patterns").value.split("\n")),
+    excludePatterns: normalizePatterns($("excludePatterns").value.split("\n")),
     proxyHost: $("proxyHost").value.trim() || DEFAULTS.proxyHost,
     proxyPort: Number($("proxyPort").value) || DEFAULTS.proxyPort,
     statusUrl: $("statusUrl").value.trim() || DEFAULTS.statusUrl,

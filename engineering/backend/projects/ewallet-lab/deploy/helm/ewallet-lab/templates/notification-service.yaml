@@ -1,3 +1,5 @@
+{{- if .Values.notify.sns.enabled }}
+# ADR-06 phương án B (issue #131): rendered ONLY when notify.sns.enabled=true (default false).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -31,6 +33,7 @@ spec:
           envFrom:
             - secretRef:
                 name: ewallet-lab-aws-notify
+                optional: true
           env:
             - name: HTTP_PORT
               value: {{ .Values.notificationService.port | quote }}
@@ -59,3 +62,4 @@ spec:
   ports:
     - port: {{ .Values.notificationService.port }}
       targetPort: {{ .Values.notificationService.port }}
+{{- end }}

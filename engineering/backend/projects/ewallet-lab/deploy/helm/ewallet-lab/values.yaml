@@ -167,6 +167,14 @@ investmentFundService:
 # and that lives in the k8s Secret `ewallet-lab-aws-notify` created out-of-band by the operator via
 # scripts/init-aws-infra.sh (see that script + README for the exact kubectl command). Update these
 # 2 ARNs/URL here if the operator ever re-runs the script against a different AWS account.
+# Issue #131 (ADR-06 phương án B, operator decision on #129): master switch, default OFF. Off =>
+# wallet-service gets NOTIFY_SNS_ENABLED=false and no AWS Secret/SNS_TOPIC_ARN reference, and the
+# notification-service Deployment+Service are not rendered. Turning it on additionally needs the
+# operator-created Secret `ewallet-lab-aws-notify` and a decision on live AWS; never enable by default.
+notify:
+  sns:
+    enabled: false
+
 aws:
   region: ap-southeast-1
   snsTopicArn: "arn:aws:sns:ap-southeast-1:456021728709:ewallet-lab-payment-completed"
